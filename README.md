@@ -1,7 +1,7 @@
 
-  # Healthcare User Interface (Copy)
+  # Healthcare User Interface
 
-  This is a code bundle for Healthcare User Interface (Copy). The original project is available at https://www.figma.com/design/2uqAFhu2HMZRcn7Z185TZB/Healthcare-User-Interface--Copy-.
+  This is a code bundle for Healthcare User Interface.
 
   ## Running the code
 
