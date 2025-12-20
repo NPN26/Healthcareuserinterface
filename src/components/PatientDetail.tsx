@@ -69,7 +69,7 @@ export function PatientDetail({ patient, biomarkers, alerts, onBack }: PatientDe
   const unreadAlerts = alerts.filter(a => !a.read);
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-green-50 via-white to-blue-50 p-4 md:p-8">
+    <div className="min-h-screen bg-gradient-to-br from-green-50 via-white to-blue-50 dark:from-gray-950 dark:via-gray-900 dark:to-gray-950 p-4 md:p-8">
       <div className="max-w-7xl mx-auto space-y-6">
         {/* Header */}
         <div className="flex items-center gap-4">
@@ -95,7 +95,7 @@ export function PatientDetail({ patient, biomarkers, alerts, onBack }: PatientDe
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
           <Card className="p-6">
             <div className="flex items-center gap-3">
-              <div className="p-3 rounded-xl bg-blue-100">
+              <div className="p-3 rounded-xl bg-blue-100 dark:bg-blue-900">
                 <User className="w-6 h-6 text-blue-600" />
               </div>
               <div>
@@ -144,7 +144,7 @@ export function PatientDetail({ patient, biomarkers, alerts, onBack }: PatientDe
 
         {/* Alerts Summary */}
         {unreadAlerts.length > 0 && (
-          <Card className="p-4 border-l-4 border-amber-500 bg-amber-50">
+          <Card className="p-4 border-l-4 border-amber-500 bg-amber-50 dark:bg-amber-600">
             <div className="flex items-start justify-between">
               <div>
                 <h3 className="text-gray-900 mb-2">Active Alerts ({unreadAlerts.length})</h3>
@@ -175,7 +175,7 @@ export function PatientDetail({ patient, biomarkers, alerts, onBack }: PatientDe
               const trend = getTrendAnalysis(type);
               
               return (
-                <div key={type} className="p-4 bg-gray-50 rounded-lg">
+                <div key={type} className="p-4 bg-gray-50 dark:bg-gray-900 rounded-lg">
                   <p className="text-sm text-gray-600 mb-1">{getBiomarkerLabel(type)}</p>
                   <p className="text-xl text-gray-900">
                     {avg ? avg.toFixed(1) : '--'}
@@ -227,7 +227,7 @@ export function PatientDetail({ patient, biomarkers, alerts, onBack }: PatientDe
         <Card className="p-6">
           <h3 className="text-gray-900 mb-4">Clinical Notes</h3>
           <div className="space-y-4">
-            <div className="p-4 bg-gray-50 rounded-lg">
+            <div className="p-4 bg-gray-50 dark:bg-gray-900 rounded-lg">
               <p className="text-sm text-gray-600 mb-1">
                 {new Date().toLocaleDateString()} - Dr. {patient.name}
               </p>

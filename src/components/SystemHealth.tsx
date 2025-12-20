@@ -61,7 +61,7 @@ export function SystemHealth({ biomarkers, devices, users }: SystemHealthProps) 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <Card className="p-6">
           <div className="flex items-center gap-3 mb-4">
-            <div className="p-3 rounded-xl bg-blue-100">
+            <div className="p-3 rounded-xl bg-blue-100 dark:bg-blue-900">
               <Cpu className="w-6 h-6 text-blue-600" />
             </div>
             <div className="flex-1">
@@ -77,7 +77,7 @@ export function SystemHealth({ biomarkers, devices, users }: SystemHealthProps) 
 
         <Card className="p-6">
           <div className="flex items-center gap-3 mb-4">
-            <div className="p-3 rounded-xl bg-purple-100">
+            <div className="p-3 rounded-xl bg-purple-100 dark:bg-purple-900">
               <Activity className="w-6 h-6 text-purple-600" />
             </div>
             <div className="flex-1">
@@ -93,7 +93,7 @@ export function SystemHealth({ biomarkers, devices, users }: SystemHealthProps) 
 
         <Card className="p-6">
           <div className="flex items-center gap-3 mb-4">
-            <div className="p-3 rounded-xl bg-green-100">
+            <div className="p-3 rounded-xl bg-green-100 dark:bg-green-900">
               <HardDrive className="w-6 h-6 text-green-600" />
             </div>
             <div className="flex-1">
@@ -112,7 +112,7 @@ export function SystemHealth({ biomarkers, devices, users }: SystemHealthProps) 
       <Card className="p-6">
         <div className="flex items-center justify-between mb-4">
           <div>
-            <h3 className="text-gray-900">Data Throughput (24h)</h3>
+            <h3 className="text-foreground">Data Throughput (24h)</h3>
             <p className="text-sm text-gray-600">Biomarker readings per hour</p>
           </div>
           <Badge variant="outline">
@@ -155,7 +155,7 @@ export function SystemHealth({ biomarkers, devices, users }: SystemHealthProps) 
       {/* Device Status & Data Quality */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <Card className="p-6">
-          <h3 className="text-gray-900 mb-4">Device Status Distribution</h3>
+          <h3 className="text-foreground mb-4">Device Status Distribution</h3>
           <div className="h-64">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={deviceStats}>
@@ -176,7 +176,7 @@ export function SystemHealth({ biomarkers, devices, users }: SystemHealthProps) 
         </Card>
 
         <Card className="p-6">
-          <h3 className="text-gray-900 mb-4">Data Quality Metrics</h3>
+          <h3 className="text-foreground mb-4">Data Quality Metrics</h3>
           <div className="space-y-6">
             <div>
               <div className="flex items-center justify-between mb-2">
@@ -187,7 +187,7 @@ export function SystemHealth({ biomarkers, devices, users }: SystemHealthProps) 
             </div>
 
             <div className="grid grid-cols-2 gap-4 pt-4">
-              <div className="p-4 bg-green-50 rounded-lg">
+              <div className="p-4 bg-green-50 dark:bg-green-950 rounded-lg">
                 <div className="flex items-center gap-2 mb-1">
                   <CheckCircle className="w-4 h-4 text-green-600" />
                   <p className="text-sm text-gray-600">Valid Readings</p>
@@ -197,7 +197,7 @@ export function SystemHealth({ biomarkers, devices, users }: SystemHealthProps) 
                 </p>
               </div>
 
-              <div className="p-4 bg-red-50 rounded-lg">
+              <div className="p-4 bg-red-50 dark:bg-red-950 rounded-lg">
                 <div className="flex items-center gap-2 mb-1">
                   <Server className="w-4 h-4 text-red-600" />
                   <p className="text-sm text-gray-600">Faulty Readings</p>
@@ -219,7 +219,7 @@ export function SystemHealth({ biomarkers, devices, users }: SystemHealthProps) 
 
       {/* System Information */}
       <Card className="p-6">
-        <h3 className="text-gray-900 mb-4">System Information</h3>
+        <h3 className="text-foreground mb-4">System Information</h3>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
           <div>
             <p className="text-sm text-gray-600 mb-1">Database Version</p>

@@ -93,7 +93,7 @@ export function DeviceCard({ device, onUpdate }: DeviceCardProps) {
   const getStatusColor = () => {
     switch (device.status) {
       case 'active': return 'bg-green-500';
-      case 'inactive': return 'bg-gray-400';
+      case 'inactive': return 'bg-gray-400 dark:bg-gray-600';
       case 'faulty': return 'bg-red-500';
     }
   };
@@ -127,7 +127,7 @@ export function DeviceCard({ device, onUpdate }: DeviceCardProps) {
       </div>
 
       {device.status === 'faulty' && (
-        <div className="p-3 bg-red-50 border border-red-200 rounded-lg flex items-center gap-2">
+        <div className="p-3 bg-red-50 dark:bg-red-950 border border-red-200 rounded-lg flex items-center gap-2">
           <AlertCircle className="w-4 h-4 text-red-600" />
           <p className="text-sm text-red-700">Device malfunction detected. Please check device.</p>
         </div>

@@ -143,13 +143,13 @@ export function PatternAnalysis({ patients, biomarkers }: PatternAnalysisProps) 
 
       {/* High Risk Patients */}
       {highRiskPatients.length > 0 && (
-        <Card className="p-6 border-l-4 border-red-500 bg-red-50">
+        <Card className="p-6 border-l-4 border-red-500 bg-red-50 dark:bg-red-950">
           <div className="flex items-start gap-3">
-            <div className="p-3 rounded-xl bg-red-100">
+            <div className="p-3 rounded-xl bg-red-100 dark:bg-red-900">
               <Users className="w-6 h-6 text-red-600" />
             </div>
             <div className="flex-1">
-              <h3 className="text-gray-900 mb-2">High-Risk Patients Identified</h3>
+              <h3 className="text-foreground mb-2">High-Risk Patients Identified</h3>
               <p className="text-sm text-gray-600 mb-3">
                 {highRiskPatients.length} patient{highRiskPatients.length !== 1 ? 's' : ''} with abnormal biomarker patterns
               </p>
@@ -169,7 +169,7 @@ export function PatternAnalysis({ patients, biomarkers }: PatternAnalysisProps) 
       <Card className="p-6">
         <div className="flex items-center justify-between mb-4">
           <div>
-            <h3 className="text-gray-900">Population Trend Analysis</h3>
+            <h3 className="text-foreground">Population Trend Analysis</h3>
             <p className="text-sm text-gray-600">Average values over last 14 days</p>
           </div>
           <Select value={selectedMetric} onValueChange={(value) => setSelectedMetric(value as Biomarker['type'])}>
@@ -239,7 +239,7 @@ export function PatternAnalysis({ patients, biomarkers }: PatternAnalysisProps) 
       {/* Correlation Analysis */}
       <Card className="p-6">
         <div className="mb-4">
-          <h3 className="text-gray-900">Heart Rate vs Glucose Correlation</h3>
+          <h3 className="text-foreground">Heart Rate vs Glucose Correlation</h3>
           <p className="text-sm text-gray-600">Scatter plot showing relationship between metrics</p>
         </div>
 
@@ -284,7 +284,7 @@ export function PatternAnalysis({ patients, biomarkers }: PatternAnalysisProps) 
           </ResponsiveContainer>
         </div>
 
-        <div className="mt-4 p-4 bg-purple-50 rounded-lg">
+        <div className="mt-4 p-4 bg-purple-50 dark:bg-purple-950 rounded-lg">
           <h4 className="text-sm text-gray-900 mb-2">Pattern Insights</h4>
           <ul className="space-y-1 text-sm text-gray-600">
             <li>• {correlationData.length} patients analyzed</li>
@@ -297,9 +297,9 @@ export function PatternAnalysis({ patients, biomarkers }: PatternAnalysisProps) 
 
       {/* Key Findings */}
       <Card className="p-6">
-        <h3 className="text-gray-900 mb-4">Key Clinical Findings</h3>
+        <h3 className="text-foreground mb-4">Key Clinical Findings</h3>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div className="p-4 bg-blue-50 rounded-lg">
+          <div className="p-4 bg-blue-50 dark:bg-blue-950 rounded-lg">
             <div className="flex items-start gap-3">
               <Activity className="w-5 h-5 text-blue-600 mt-0.5" />
               <div>
@@ -311,7 +311,7 @@ export function PatternAnalysis({ patients, biomarkers }: PatternAnalysisProps) 
             </div>
           </div>
 
-          <div className="p-4 bg-green-50 rounded-lg">
+          <div className="p-4 bg-green-50 dark:bg-green-950 rounded-lg">
             <div className="flex items-start gap-3">
               <TrendingUp className="w-5 h-5 text-green-600 mt-0.5" />
               <div>
@@ -324,7 +324,7 @@ export function PatternAnalysis({ patients, biomarkers }: PatternAnalysisProps) 
           </div>
 
           {highRiskPatients.length > 0 && (
-            <div className="p-4 bg-red-50 rounded-lg">
+            <div className="p-4 bg-red-50 dark:bg-red-950 rounded-lg">
               <div className="flex items-start gap-3">
                 <TrendingDown className="w-5 h-5 text-red-600 mt-0.5" />
                 <div>

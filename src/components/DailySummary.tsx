@@ -54,10 +54,10 @@ export function DailySummary({ biomarkers }: DailySummaryProps) {
   }
 
   return (
-    <Card className="p-6 bg-gradient-to-br from-blue-50 to-purple-50">
+    <Card className="p-6 bg-card">
       <div className="space-y-6">
         <div>
-          <h3 className="text-gray-900 mb-1">Daily Health Summary</h3>
+          <h3 className="text-foreground mb-1">Daily Health Summary</h3>
           <p className="text-sm text-gray-600">{new Date().toLocaleDateString('en-US', { 
             weekday: 'long', 
             year: 'numeric', 
@@ -67,11 +67,11 @@ export function DailySummary({ biomarkers }: DailySummaryProps) {
         </div>
 
         {/* Health Score */}
-        <div className="p-4 bg-white rounded-xl">
+        <div className="p-4 rounded-xl bg-gray-100">
           <div className="flex items-center justify-between mb-3">
             <div>
-              <p className="text-sm text-gray-600">Health Score</p>
-              <p className="text-2xl text-gray-900">{healthScore}/100</p>
+              <p className="text-sm text-gray-650">Health Score</p>
+              <p className="text-2xl text-gray-950">{healthScore}/100</p>
             </div>
             <div className={`text-4xl ${
               healthScore >= 80 ? 'text-green-500' :
@@ -86,7 +86,7 @@ export function DailySummary({ biomarkers }: DailySummaryProps) {
 
         {/* Goals Progress */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div className="p-4 bg-white rounded-xl">
+          <div className="p-4 bg-gray-100 rounded-xl">
             <div className="flex items-center justify-between mb-2">
               <p className="text-sm text-gray-600">Steps Goal</p>
               <Badge variant={stepsProgress >= 100 ? 'default' : 'secondary'}>
@@ -99,7 +99,7 @@ export function DailySummary({ biomarkers }: DailySummaryProps) {
             </p>
           </div>
 
-          <div className="p-4 bg-white rounded-xl">
+          <div className="p-4 bg-gray-100 rounded-xl">
             <div className="flex items-center justify-between mb-2">
               <p className="text-sm text-gray-600">Sleep Goal</p>
               <Badge variant={sleepProgress >= 100 ? 'default' : 'secondary'}>
@@ -114,7 +114,7 @@ export function DailySummary({ biomarkers }: DailySummaryProps) {
         </div>
 
         {/* Vitals Status */}
-        <div className="p-4 bg-white rounded-xl">
+        <div className="p-4 bg-gray-100 rounded-xl">
           <p className="text-sm text-gray-600 mb-3">Vital Signs Status</p>
           <div className="space-y-2">
             <div className="flex items-center justify-between">
@@ -148,7 +148,7 @@ export function DailySummary({ biomarkers }: DailySummaryProps) {
 
         {/* Recommendations */}
         {recommendations.length > 0 && (
-          <div className="p-4 bg-white rounded-xl">
+          <div className="p-4 bg-gray-100 rounded-xl">
             <div className="flex items-center gap-2 mb-3">
               <Target className="w-4 h-4 text-blue-600" />
               <p className="text-sm text-gray-900">Today's Recommendations</p>

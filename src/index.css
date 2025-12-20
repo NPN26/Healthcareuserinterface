@@ -84,6 +84,7 @@
     --color-red-500: oklch(.637 .237 25.331);
     --color-red-600: oklch(.577 .245 27.325);
     --color-red-700: oklch(.505 .213 27.518);
+    --color-red-900: oklch(.397 .196 25.723);
     --color-red-950: oklch(.258 .092 26.042);
     --color-orange-50: oklch(.98 .016 73.684);
     --color-orange-400: oklch(.75 .183 55.934);
@@ -104,6 +105,8 @@
     --color-green-400: oklch(.792 .209 151.711);
     --color-green-500: oklch(.723 .219 149.579);
     --color-green-600: oklch(.627 .194 149.214);
+    --color-green-700: oklch(.517 .161 150.176);
+    --color-green-800: oklch(.443 .13 151.192);
     --color-green-900: oklch(.393 .095 152.535);
     --color-green-950: oklch(.266 .065 152.934);
     --color-emerald-50: oklch(.979 .021 166.113);
@@ -461,24 +464,28 @@
     font-size: var(--text-2xl);
     font-weight: var(--font-weight-medium);
     line-height: 1.5;
+    color: var(--foreground);
   }
 
   :where(:not(:has([class*=" text-"]), :not(:has([class^="text-"])))) h2 {
     font-size: var(--text-xl);
     font-weight: var(--font-weight-medium);
     line-height: 1.5;
+    color: var(--foreground);
   }
 
   :where(:not(:has([class*=" text-"]), :not(:has([class^="text-"])))) h3 {
     font-size: var(--text-lg);
     font-weight: var(--font-weight-medium);
     line-height: 1.5;
+    color: var(--foreground);
   }
 
   :where(:not(:has([class*=" text-"]), :not(:has([class^="text-"])))) h4 {
     font-size: var(--text-base);
     font-weight: var(--font-weight-medium);
     line-height: 1.5;
+    color: var(--foreground);
   }
 
   :where(:not(:has([class*=" text-"]), :not(:has([class^="text-"])))) p {
@@ -2165,6 +2172,10 @@
     color: var(--color-white);
   }
 
+  .dark\:text-white:is(.dark *) {
+    color: var(--color-white);
+  }
+
   .text-white\/90 {
     color: #ffffffe6;
   }
@@ -2177,6 +2188,235 @@
 
   .text-yellow-500 {
     color: var(--color-yellow-500);
+  }
+
+  /* Custom gray scale using font variables - 50 to 950 in 50 increments */
+  .text-gray-50 {
+    color: var(--font-50);
+  }
+
+  .text-gray-100 {
+    color: var(--font-100);
+  }
+
+  .text-gray-150 {
+    color: var(--font-150);
+  }
+
+  .text-gray-200 {
+    color: var(--font-200);
+  }
+
+  .text-gray-250 {
+    color: var(--font-250);
+  }
+
+  .text-gray-300 {
+    color: var(--font-300);
+  }
+
+  .text-gray-350 {
+    color: var(--font-350);
+  }
+
+  .text-gray-400 {
+    color: var(--font-400);
+  }
+
+  .text-gray-450 {
+    color: var(--font-450);
+  }
+
+  .text-gray-500 {
+    color: var(--font-500);
+  }
+
+  .text-gray-550 {
+    color: var(--font-550);
+  }
+
+  .text-gray-600 {
+    color: var(--font-600);
+  }
+
+  .text-gray-650 {
+    color: var(--font-650);
+  }
+
+  .text-gray-700 {
+    color: var(--font-700);
+  }
+
+  .text-gray-750 {
+    color: var(--font-750);
+  }
+
+  .text-gray-800 {
+    color: var(--font-800);
+  }
+
+  .text-gray-850 {
+    color: var(--font-850);
+  }
+
+  .text-gray-900 {
+    color: var(--font-900);
+  }
+
+  .text-gray-950 {
+    color: var(--font-950);
+  }
+
+  .bg-gray-50 {
+    background-color: var(--font-50);
+  }
+
+  .bg-gray-100 {
+    background-color: var(--font-100);
+  }
+
+  .bg-gray-150 {
+    background-color: var(--font-150);
+  }
+
+  .bg-gray-200 {
+    background-color: var(--font-200);
+  }
+
+  .bg-gray-250 {
+    background-color: var(--font-250);
+  }
+
+  .bg-gray-300 {
+    background-color: var(--font-300);
+  }
+
+  .bg-gray-350 {
+    background-color: var(--font-350);
+  }
+
+  .bg-gray-400 {
+    background-color: var(--font-400);
+  }
+
+  .bg-gray-450 {
+    background-color: var(--font-450);
+  }
+
+  .bg-gray-500 {
+    background-color: var(--font-500);
+  }
+
+  .bg-gray-550 {
+    background-color: var(--font-550);
+  }
+
+  .bg-gray-600 {
+    background-color: var(--font-600);
+  }
+
+  .bg-gray-650 {
+    background-color: var(--font-650);
+  }
+
+  .bg-gray-700 {
+    background-color: var(--font-700);
+  }
+
+  .bg-gray-750 {
+    background-color: var(--font-750);
+  }
+
+  .bg-gray-800 {
+    background-color: var(--font-800);
+  }
+
+  .bg-gray-850 {
+    background-color: var(--font-850);
+  }
+
+  .bg-gray-900 {
+    background-color: var(--font-900);
+  }
+
+  .bg-gray-950 {
+    background-color: var(--font-950);
+  }
+
+  .border-gray-50 {
+    border-color: var(--font-50);
+  }
+
+  .border-gray-100 {
+    border-color: var(--font-100);
+  }
+
+  .border-gray-150 {
+    border-color: var(--font-150);
+  }
+
+  .border-gray-200 {
+    border-color: var(--font-200);
+  }
+
+  .border-gray-250 {
+    border-color: var(--font-250);
+  }
+
+  .border-gray-300 {
+    border-color: var(--font-300);
+  }
+
+  .border-gray-350 {
+    border-color: var(--font-350);
+  }
+
+  .border-gray-400 {
+    border-color: var(--font-400);
+  }
+
+  .border-gray-450 {
+    border-color: var(--font-450);
+  }
+
+  .border-gray-500 {
+    border-color: var(--font-500);
+  }
+
+  .border-gray-550 {
+    border-color: var(--font-550);
+  }
+
+  .border-gray-600 {
+    border-color: var(--font-600);
+  }
+
+  .border-gray-650 {
+    border-color: var(--font-650);
+  }
+
+  .border-gray-700 {
+    border-color: var(--font-700);
+  }
+
+  .border-gray-750 {
+    border-color: var(--font-750);
+  }
+
+  .border-gray-800 {
+    border-color: var(--font-800);
+  }
+
+  .border-gray-850 {
+    border-color: var(--font-850);
+  }
+
+  .border-gray-900 {
+    border-color: var(--font-900);
+  }
+
+  .border-gray-950 {
+    border-color: var(--font-950);
   }
 
   .capitalize {
@@ -3335,6 +3575,10 @@
     border-color: var(--input);
   }
 
+  .dark\:bg-amber-600:is(.dark *) {
+    background-color: var(--color-amber-600);
+  }
+
   .dark\:bg-amber-900\/20:is(.dark *) {
     background-color: color-mix(in srgb, oklch(.414 .112 45.904) 20%, transparent);
   }
@@ -3351,6 +3595,14 @@
 
   .dark\:bg-blue-950:is(.dark *) {
     background-color: var(--color-blue-950);
+  }
+
+  .dark\:bg-red-950:is(.dark *) {
+    background-color: var(--color-red-950);
+  }
+
+  .dark\:bg-green-950:is(.dark *) {
+    background-color: var(--color-green-950);
   }
 
   .dark\:bg-destructive\/60:is(.dark *) {
@@ -3399,6 +3651,10 @@
 
   .dark\:bg-purple-900:is(.dark *) {
     background-color: var(--color-purple-900);
+  }
+
+  .dark\:bg-purple-950:is(.dark *) {
+    background-color: var(--color-purple-950);
   }
 
   .dark\:from-blue-950:is(.dark *) {
@@ -3480,6 +3736,10 @@
     color: var(--color-green-400);
   }
 
+  .dark\:text-green-700:is(.dark *) {
+    color: var(--color-green-700);
+  }
+
   .dark\:text-muted-foreground:is(.dark *) {
     color: var(--muted-foreground);
   }
@@ -3490,6 +3750,10 @@
 
   .dark\:text-purple-400:is(.dark *) {
     color: var(--color-purple-400);
+  }
+
+  .dark\:text-red-400:is(.dark *) {
+    color: var(--color-red-400);
   }
 
   .dark\:text-red-400:is(.dark *) {
@@ -3797,9 +4061,33 @@
   --sidebar-accent-foreground: oklch(.205 0 0);
   --sidebar-border: oklch(.922 0 0);
   --sidebar-ring: oklch(.708 0 0);
+  
+  /* Complete gray scale: 50-950 */
+  --font-50: oklch(.967 .003 264.542);
+  --font-100: oklch(.95 .005 264.5);
+  --font-150: oklch(.92 .007 262);
+  --font-200: oklch(.872 .01 258.338);
+  --font-250: oklch(.82 .015 260);
+  --font-300: oklch(.77 .018 261);
+  --font-350: oklch(.707 .022 261.325);
+  --font-400: oklch(.65 .024 262);
+  --font-450: oklch(.6 .026 263);
+  --font-500: oklch(.551 .027 264.364);
+  --font-550: oklch(.5 .028 259);
+  --font-600: oklch(.446 .03 256.802);
+  --font-650: oklch(.41 .032 258);
+  --font-700: oklch(.373 .034 259.733);
+  --font-750: oklch(.325 .033 258);
+  --font-800: oklch(.278 .033 256.848);
+  --font-850: oklch(.244 .033 261);
+  --font-900: oklch(.21 .034 264.665);
+  --font-950: oklch(.18 .034 265);
+  /* Custom gradient colors */
+  --gradient1-from: #eff6ff; /* blue-50 */
+  --gradient1-to: #faf5ff; /* purple-50 */
 }
 
-.dark {
+ .dark{
   --background: oklch(.145 0 0);
   --foreground: oklch(.985 0 0);
   --card: oklch(.145 0 0);
@@ -3834,6 +4122,30 @@
   --sidebar-accent-foreground: oklch(.985 0 0);
   --sidebar-border: oklch(.269 0 0);
   --sidebar-ring: oklch(.439 0 0);
+  
+  /* Complete gray scale for dark mode (inverted) */
+  --font-50: oklch(.18 .034 265);
+  --font-100: oklch(.21 .034 264.665);
+  --font-150: oklch(.244 .033 261);
+  --font-200: oklch(.278 .033 256.848);
+  --font-250: oklch(.325 .033 258);
+  --font-300: oklch(.373 .034 259.733);
+  --font-350: oklch(.41 .032 258);
+  --font-400: oklch(.446 .03 256.802);
+  --font-450: oklch(.5 .028 259);
+  --font-500: oklch(.551 .027 264.364);
+  --font-550: oklch(.6 .026 263);
+  --font-600: oklch(.65 .024 262);
+  --font-650: oklch(.707 .022 261.325);
+  --font-700: oklch(.77 .018 261);
+  --font-750: oklch(.82 .015 260);
+  --font-800: oklch(.872 .01 258.338);
+  --font-850: oklch(.92 .007 262);
+  --font-900: oklch(.95 .005 264.5);
+  --font-950: oklch(.967 .003 264.542);
+  /* Custom gradient colors for dark mode */
+  --gradient1-from: #1f2937; /* gray-800 */
+  --gradient1-to: #111827; /* gray-900 */
 }
 
 html {

@@ -196,7 +196,7 @@ export function GoalsManager({ isOpen, onClose, userId, biomarkers }: GoalsManag
 
               {showAddGoal && (
                 <Card className="p-6 border-2 border-primary">
-                  <h3 className="mb-4">Create New Goal</h3>
+                  <h3 className="text-foreground mb-4">Create New Goal</h3>
                   <div className="space-y-4">
                     <div className="grid grid-cols-2 gap-4">
                       <div>

@@ -43,8 +43,8 @@ export function BiomarkerChart({ biomarkers, type, showDetails }: BiomarkerChart
       <div className="space-y-4">
         <div className="flex items-center justify-between">
           <div>
-            <h3 className="text-gray-900">{getBiomarkerLabel(type)}</h3>
-            <p className="text-sm text-gray-600">Last {sortedData.length} readings</p>
+            <h3 className="text-foreground">{getBiomarkerLabel(type)}</h3>
+            <p className="text-sm text-muted-foreground">Last {sortedData.length} readings</p>
           </div>
           <div className="flex items-center gap-2">
             {recentTrend > 0 ? (
@@ -62,23 +62,23 @@ export function BiomarkerChart({ biomarkers, type, showDetails }: BiomarkerChart
         </div>
 
         {showDetails && (
-          <div className="grid grid-cols-3 gap-4 p-4 bg-gray-50 rounded-lg">
+          <div className="grid grid-cols-3 gap-4 p-4 bg-muted rounded-lg">
             <div>
-              <p className="text-sm text-gray-600">Average</p>
-              <p className="text-gray-900">
-                {type === 'steps' ? Math.round(average) : average.toFixed(1)} <span className="text-sm text-gray-500">{getBiomarkerUnit(type)}</span>
+              <p className="text-sm text-muted-foreground">Average</p>
+              <p className="text-foreground">
+                {type === 'steps' ? Math.round(average) : average.toFixed(1)} <span className="text-sm text-muted-foreground">{getBiomarkerUnit(type)}</span>
               </p>
             </div>
             <div>
-              <p className="text-sm text-gray-600">Min</p>
-              <p className="text-gray-900">
-                {type === 'steps' ? Math.round(min) : min.toFixed(1)} <span className="text-sm text-gray-500">{getBiomarkerUnit(type)}</span>
+              <p className="text-sm text-muted-foreground">Min</p>
+              <p className="text-foreground">
+                {type === 'steps' ? Math.round(min) : min.toFixed(1)} <span className="text-sm text-muted-foreground">{getBiomarkerUnit(type)}</span>
               </p>
             </div>
             <div>
-              <p className="text-sm text-gray-600">Max</p>
-              <p className="text-gray-900">
-                {type === 'steps' ? Math.round(max) : max.toFixed(1)} <span className="text-sm text-gray-500">{getBiomarkerUnit(type)}</span>
+              <p className="text-sm text-muted-foreground">Max</p>
+              <p className="text-foreground">
+                {type === 'steps' ? Math.round(max) : max.toFixed(1)} <span className="text-sm text-muted-foreground">{getBiomarkerUnit(type)}</span>
               </p>
             </div>
           </div>

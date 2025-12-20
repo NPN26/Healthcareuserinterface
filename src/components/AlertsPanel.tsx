@@ -40,10 +40,10 @@ export function AlertsPanel({ alerts, onUpdate }: AlertsPanelProps) {
 
   const getAlertColor = (type: AlertType['type']) => {
     switch (type) {
-      case 'critical': return 'border-red-500 bg-red-50';
-      case 'warning': return 'border-amber-500 bg-amber-50';
-      case 'fault': return 'border-purple-500 bg-purple-50';
-      case 'info': return 'border-blue-500 bg-blue-50';
+      case 'critical': return 'border-red-500 bg-red-50 dark:bg-red-950';
+      case 'warning': return 'border-amber-500 bg-amber-50 dark:bg-amber-950';
+      case 'fault': return 'border-purple-500 bg-purple-50 dark:bg-purple-950';
+      case 'info': return 'border-blue-500 bg-blue-50 dark:bg-blue-950';
     }
   };
 
@@ -60,11 +60,11 @@ export function AlertsPanel({ alerts, onUpdate }: AlertsPanelProps) {
     return (
       <Card className="p-12 text-center">
         <div className="flex flex-col items-center gap-4">
-          <div className="w-16 h-16 rounded-full bg-green-100 flex items-center justify-center">
+          <div className="w-16 h-16 rounded-full bg-green-100 dark:bg-green-900 flex items-center justify-center">
             <CheckCircle className="w-8 h-8 text-green-600" />
           </div>
           <div>
-            <h3 className="text-gray-900">All Clear!</h3>
+            <h3 className="text-foreground">All Clear!</h3>
             <p className="text-gray-600">You have no active alerts</p>
           </div>
         </div>
@@ -75,7 +75,7 @@ export function AlertsPanel({ alerts, onUpdate }: AlertsPanelProps) {
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <h3 className="text-gray-900">Active Alerts ({alerts.length})</h3>
+        <h3 className="text-foreground">Active Alerts ({alerts.length})</h3>
         <Button variant="outline" size="sm" onClick={clearAll}>
           Clear All
         </Button>

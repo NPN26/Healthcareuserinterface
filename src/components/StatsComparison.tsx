@@ -104,7 +104,7 @@ export function StatsComparison({ biomarkers }: StatsComparisonProps) {
   return (
     <div className="space-y-6">
       <Card className="p-6">
-        <h3 className="text-gray-900 mb-4">Compare Your Health Metrics</h3>
+        <h3 className="text-foreground mb-4">Compare Your Health Metrics</h3>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
             <label className="text-sm text-gray-600 mb-2 block">Select Metric</label>
@@ -141,7 +141,7 @@ export function StatsComparison({ biomarkers }: StatsComparisonProps) {
       <Card className="p-6">
         <div className="flex items-center justify-between mb-6">
           <div>
-            <h3 className="text-gray-900">{getBiomarkerLabel(selectedType)} Comparison</h3>
+            <h3 className="text-foreground">{getBiomarkerLabel(selectedType)} Comparison</h3>
             <p className="text-sm text-gray-600">
               {comparisonType === 'day' ? 'Today vs Yesterday' : 
                comparisonType === 'week' ? 'This Week vs Last Week' : 
@@ -189,7 +189,7 @@ export function StatsComparison({ biomarkers }: StatsComparisonProps) {
           </ResponsiveContainer>
         </div>
 
-        <div className="mt-6 p-4 bg-gray-50 rounded-lg">
+        <div className="mt-6 p-4 bg-gray-50 dark:bg-gray-900 rounded-lg">
           <h4 className="text-sm text-gray-900 mb-2">Insights</h4>
           <p className="text-sm text-gray-600">
             {comparisonResult.change > 0 

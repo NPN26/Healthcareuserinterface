@@ -72,7 +72,7 @@ export function ProviderDashboard({ user, onLogout }: ProviderDashboardProps) {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-green-50 via-white to-blue-50 p-4 md:p-8">
+    <div className="min-h-screen bg-gradient-to-br from-green-50 via-white to-blue-50 dark:from-gray-950 dark:via-gray-900 dark:to-gray-950 p-4 md:p-8">
       <div className="max-w-7xl mx-auto space-y-6">
         {/* Header */}
         <div className="flex items-center justify-between">
@@ -90,7 +90,7 @@ export function ProviderDashboard({ user, onLogout }: ProviderDashboardProps) {
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
           <Card className="p-6">
             <div className="flex items-center gap-3">
-              <div className="p-3 rounded-xl bg-blue-100">
+              <div className="p-3 rounded-xl bg-blue-100 dark:bg-blue-900">
                 <Users className="w-6 h-6 text-blue-600" />
               </div>
               <div>
@@ -102,7 +102,7 @@ export function ProviderDashboard({ user, onLogout }: ProviderDashboardProps) {
 
           <Card className="p-6">
             <div className="flex items-center gap-3">
-              <div className="p-3 rounded-xl bg-red-100">
+              <div className="p-3 rounded-xl bg-red-100 dark:bg-red-950">
                 <AlertTriangle className="w-6 h-6 text-red-600" />
               </div>
               <div>
@@ -114,7 +114,7 @@ export function ProviderDashboard({ user, onLogout }: ProviderDashboardProps) {
 
           <Card className="p-6">
             <div className="flex items-center gap-3">
-              <div className="p-3 rounded-xl bg-green-100">
+              <div className="p-3 rounded-xl bg-green-100 dark:bg-green-900">
                 <TrendingUp className="w-6 h-6 text-green-600" />
               </div>
               <div>
@@ -126,7 +126,7 @@ export function ProviderDashboard({ user, onLogout }: ProviderDashboardProps) {
 
           <Card className="p-6">
             <div className="flex items-center gap-3">
-              <div className="p-3 rounded-xl bg-purple-100">
+              <div className="p-3 rounded-xl bg-purple-100 dark:bg-purple-900">
                 <FileText className="w-6 h-6 text-purple-600" />
               </div>
               <div>
@@ -184,7 +184,7 @@ export function ProviderDashboard({ user, onLogout }: ProviderDashboardProps) {
                     const hasCritical = patientAlerts.some(a => a.type === 'critical' || a.type === 'fault');
 
                     return (
-                      <TableRow key={patient.id} className={hasCritical ? 'bg-red-50' : ''}>
+                      <TableRow key={patient.id} className={hasCritical ? 'bg-red-50 dark:bg-red-950' : ''}>
                         <TableCell>
                           <div className="flex items-center gap-3">
                             <Avatar>
@@ -201,8 +201,8 @@ export function ProviderDashboard({ user, onLogout }: ProviderDashboardProps) {
                           {heartRate ? (
                             <span className={
                               heartRate.value >= 60 && heartRate.value <= 100 
-                                ? 'text-green-600' 
-                                : 'text-red-600'
+                                ? 'text-green-600 dark:text-green-700' 
+                                : 'text-red-600 dark:text-red-400'
                             }>
                               {heartRate.value} bpm
                             </span>
@@ -214,8 +214,8 @@ export function ProviderDashboard({ user, onLogout }: ProviderDashboardProps) {
                           {glucose ? (
                             <span className={
                               glucose.value >= 70 && glucose.value <= 130 
-                                ? 'text-green-600' 
-                                : 'text-red-600'
+                                ? 'text-green-600 dark:text-green-700' 
+                                : 'text-red-600 dark:text-red-400'
                             }>
                               {glucose.value} mg/dL
                             </span>
@@ -250,7 +250,7 @@ export function ProviderDashboard({ user, onLogout }: ProviderDashboardProps) {
 
           <TabsContent value="alerts">
             <Card className="p-6">
-              <h3 className="text-gray-900 mb-4">Critical Patient Alerts</h3>
+              <h3 className="text-foreground mb-4">Critical Patient Alerts</h3>
               <div className="space-y-4">
                 {criticalPatients.length === 0 ? (
                   <div className="text-center py-12">
@@ -260,7 +260,7 @@ export function ProviderDashboard({ user, onLogout }: ProviderDashboardProps) {
                   criticalPatients.map(patient => {
                     const patientAlerts = getPatientAlerts(patient.id);
                     return (
-                      <Card key={patient.id} className="p-4 border-l-4 border-red-500 bg-red-50">
+                      <Card key={patient.id} className="p-4 border-l-4 border-red-500 bg-red-50 dark:bg-red-950">
                         <div className="flex items-start justify-between">
                           <div className="flex items-center gap-3">
                             <Avatar>
@@ -271,7 +271,7 @@ export function ProviderDashboard({ user, onLogout }: ProviderDashboardProps) {
                               <p className="text-sm text-gray-600">{patient.age} years old</p>
                               <div className="mt-2 space-y-1">
                                 {patientAlerts.slice(0, 3).map(alert => (
-                                  <p key={alert.id} className="text-sm text-red-700">
+                                  <p key={alert.id} className="text-sm text-red-700 dark:text-white">
                                     • {alert.message}
                                   </p>
                                 ))}

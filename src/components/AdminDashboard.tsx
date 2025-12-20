@@ -169,7 +169,7 @@ export function AdminDashboard({ user, onLogout }: AdminDashboardProps) {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
           <Card className="p-6">
             <div className="flex items-center gap-3">
-              <div className="p-3 rounded-xl bg-blue-100">
+              <div className="p-3 rounded-xl bg-blue-100 dark:bg-blue-900">
                 <Users className="w-6 h-6 text-blue-600" />
               </div>
               <div>
@@ -193,7 +193,7 @@ export function AdminDashboard({ user, onLogout }: AdminDashboardProps) {
 
           <Card className="p-6">
             <div className="flex items-center gap-3">
-              <div className="p-3 rounded-xl bg-purple-100">
+              <div className="p-3 rounded-xl bg-purple-100 dark:bg-purple-900">
                 <Database className="w-6 h-6 text-purple-600" />
               </div>
               <div>
@@ -205,7 +205,7 @@ export function AdminDashboard({ user, onLogout }: AdminDashboardProps) {
 
           <Card className="p-6">
             <div className="flex items-center gap-3">
-              <div className="p-3 rounded-xl bg-red-100">
+              <div className="p-3 rounded-xl bg-red-100 dark:bg-red-900">
                 <AlertTriangle className="w-6 h-6 text-red-600" />
               </div>
               <div>
@@ -217,7 +217,7 @@ export function AdminDashboard({ user, onLogout }: AdminDashboardProps) {
 
           <Card className="p-6">
             <div className="flex items-center gap-3">
-              <div className="p-3 rounded-xl bg-green-100">
+              <div className="p-3 rounded-xl bg-green-100 dark:bg-green-900">
                 <Server className="w-6 h-6 text-green-600" />
               </div>
               <div>
@@ -230,7 +230,7 @@ export function AdminDashboard({ user, onLogout }: AdminDashboardProps) {
 
         {/* Quick Actions */}
         <Card className="p-6">
-          <h3 className="text-gray-900 mb-4">Quick Actions</h3>
+          <h3 className="text-foreground mb-4">Quick Actions</h3>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
             <Button onClick={generateBulkData} variant="outline">
               <RefreshCw className="w-4 h-4 mr-2" />
@@ -253,11 +253,11 @@ export function AdminDashboard({ user, onLogout }: AdminDashboardProps) {
 
         {/* System Alerts */}
         {(faultyDevices.length > 0 || criticalAlerts.length > 0) && (
-          <Card className="p-4 border-l-4 border-red-500 bg-red-50">
+          <Card className="p-4 border-l-4 border-red-500 bg-red-50 dark:bg-red-950">
             <div className="flex items-start gap-3">
               <AlertTriangle className="w-5 h-5 text-red-600 mt-0.5" />
               <div>
-                <h3 className="text-gray-900 mb-2">System Alerts</h3>
+                <h3 className="text-foreground mb-2">System Alerts</h3>
                 <ul className="space-y-1 text-sm text-red-700">
                   {faultyDevices.length > 0 && (
                     <li>• {faultyDevices.length} device{faultyDevices.length !== 1 ? 's' : ''} reporting faults</li>
@@ -285,7 +285,7 @@ export function AdminDashboard({ user, onLogout }: AdminDashboardProps) {
             <Card>
               <div className="p-6 border-b">
                 <div className="flex items-center justify-between">
-                  <h3 className="text-gray-900">User Management</h3>
+                  <h3 className="text-foreground">User Management</h3>
                   <Button>
                     <UserPlus className="w-4 h-4 mr-2" />
                     Add User
@@ -349,7 +349,7 @@ export function AdminDashboard({ user, onLogout }: AdminDashboardProps) {
           <TabsContent value="devices">
             <Card>
               <div className="p-6 border-b">
-                <h3 className="text-gray-900">Device Management</h3>
+                <h3 className="text-foreground">Device Management</h3>
                 <p className="text-sm text-gray-600 mt-1">
                   {devices.length} total devices • {devices.filter(d => d.status === 'active').length} active • {faultyDevices.length} faulty
                 </p>
@@ -370,7 +370,7 @@ export function AdminDashboard({ user, onLogout }: AdminDashboardProps) {
                   {devices.map(device => {
                     const deviceUser = users.find(u => u.id === device.userId);
                     return (
-                      <TableRow key={device.id} className={device.status === 'faulty' ? 'bg-red-50' : ''}>
+                      <TableRow key={device.id} className={device.status === 'faulty' ? 'bg-red-50 dark:bg-red-950' : ''}>
                         <TableCell>{device.name}</TableCell>
                         <TableCell className="capitalize">
                           {device.type.replace(/([A-Z])/g, ' $1').trim()}
@@ -420,7 +420,7 @@ export function AdminDashboard({ user, onLogout }: AdminDashboardProps) {
           <TabsContent value="settings">
             <div className="space-y-6">
               <Card className="p-6">
-                <h3 className="text-gray-900 mb-4">System Configuration</h3>
+                <h3 className="text-foreground mb-4">System Configuration</h3>
                 <div className="space-y-4">
                   <div className="flex items-center justify-between">
                     <div>
@@ -454,7 +454,7 @@ export function AdminDashboard({ user, onLogout }: AdminDashboardProps) {
               </Card>
 
               <Card className="p-6">
-                <h3 className="text-gray-900 mb-4">Data Retention</h3>
+                <h3 className="text-foreground mb-4">Data Retention</h3>
                 <div className="space-y-4">
                   <div>
                     <label className="text-sm text-gray-600 mb-2 block">Biomarker Data Retention</label>

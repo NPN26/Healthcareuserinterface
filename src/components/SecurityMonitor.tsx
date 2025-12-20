@@ -92,7 +92,7 @@ export function SecurityMonitor({ users, alerts }: SecurityMonitorProps) {
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <Card className="p-6">
           <div className="flex items-center gap-3">
-            <div className="p-3 rounded-xl bg-green-100">
+            <div className="p-3 rounded-xl bg-green-100 dark:bg-green-900">
               <Shield className="w-6 h-6 text-green-600" />
             </div>
             <div>
@@ -104,7 +104,7 @@ export function SecurityMonitor({ users, alerts }: SecurityMonitorProps) {
 
         <Card className="p-6">
           <div className="flex items-center gap-3">
-            <div className="p-3 rounded-xl bg-blue-100">
+            <div className="p-3 rounded-xl bg-blue-100 dark:bg-blue-900">
               <Eye className="w-6 h-6 text-blue-600" />
             </div>
             <div>
@@ -116,7 +116,7 @@ export function SecurityMonitor({ users, alerts }: SecurityMonitorProps) {
 
         <Card className="p-6">
           <div className="flex items-center gap-3">
-            <div className="p-3 rounded-xl bg-red-100">
+            <div className="p-3 rounded-xl bg-red-100 dark:bg-red-900">
               <AlertTriangle className="w-6 h-6 text-red-600" />
             </div>
             <div>
@@ -128,7 +128,7 @@ export function SecurityMonitor({ users, alerts }: SecurityMonitorProps) {
 
         <Card className="p-6">
           <div className="flex items-center gap-3">
-            <div className="p-3 rounded-xl bg-purple-100">
+            <div className="p-3 rounded-xl bg-purple-100 dark:bg-purple-900">
               <Lock className="w-6 h-6 text-purple-600" />
             </div>
             <div>
@@ -143,7 +143,7 @@ export function SecurityMonitor({ users, alerts }: SecurityMonitorProps) {
       <Card className="p-6">
         <h3 className="text-gray-900 mb-4">Active Security Features</h3>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div className="flex items-start gap-3 p-4 bg-green-50 rounded-lg">
+          <div className="flex items-start gap-3 p-4 bg-green-50 dark:bg-green-950 rounded-lg">
             <CheckCircle className="w-5 h-5 text-green-600 mt-0.5" />
             <div>
               <p className="text-sm text-gray-900">End-to-End Encryption</p>
@@ -151,7 +151,7 @@ export function SecurityMonitor({ users, alerts }: SecurityMonitorProps) {
             </div>
           </div>
 
-          <div className="flex items-start gap-3 p-4 bg-green-50 rounded-lg">
+          <div className="flex items-start gap-3 p-4 bg-green-50 dark:bg-green-950 rounded-lg">
             <CheckCircle className="w-5 h-5 text-green-600 mt-0.5" />
             <div>
               <p className="text-sm text-gray-900">Role-Based Access Control</p>
@@ -159,7 +159,7 @@ export function SecurityMonitor({ users, alerts }: SecurityMonitorProps) {
             </div>
           </div>
 
-          <div className="flex items-start gap-3 p-4 bg-green-50 rounded-lg">
+          <div className="flex items-start gap-3 p-4 bg-green-50 dark:bg-green-950 rounded-lg">
             <CheckCircle className="w-5 h-5 text-green-600 mt-0.5" />
             <div>
               <p className="text-sm text-gray-900">Audit Logging</p>
@@ -167,7 +167,7 @@ export function SecurityMonitor({ users, alerts }: SecurityMonitorProps) {
             </div>
           </div>
 
-          <div className="flex items-start gap-3 p-4 bg-green-50 rounded-lg">
+          <div className="flex items-start gap-3 p-4 bg-green-50 dark:bg-green-950 rounded-lg">
             <CheckCircle className="w-5 h-5 text-green-600 mt-0.5" />
             <div>
               <p className="text-sm text-gray-900">HIPAA Compliance</p>
@@ -175,7 +175,7 @@ export function SecurityMonitor({ users, alerts }: SecurityMonitorProps) {
             </div>
           </div>
 
-          <div className="flex items-start gap-3 p-4 bg-green-50 rounded-lg">
+          <div className="flex items-start gap-3 p-4 bg-green-50 dark:bg-green-950 rounded-lg">
             <CheckCircle className="w-5 h-5 text-green-600 mt-0.5" />
             <div>
               <p className="text-sm text-gray-900">Two-Factor Authentication</p>
@@ -183,7 +183,7 @@ export function SecurityMonitor({ users, alerts }: SecurityMonitorProps) {
             </div>
           </div>
 
-          <div className="flex items-start gap-3 p-4 bg-green-50 rounded-lg">
+          <div className="flex items-start gap-3 p-4 bg-green-50 dark:bg-green-950 rounded-lg">
             <CheckCircle className="w-5 h-5 text-green-600 mt-0.5" />
             <div>
               <p className="text-sm text-gray-900">Regular Security Audits</p>
@@ -212,7 +212,7 @@ export function SecurityMonitor({ users, alerts }: SecurityMonitorProps) {
           </TableHeader>
           <TableBody>
             {securityEvents.map(event => (
-              <TableRow key={event.id} className={event.status === 'blocked' ? 'bg-red-50' : ''}>
+              <TableRow key={event.id} className={event.status === 'blocked' ? 'bg-red-50 dark:bg-red-950' : ''}>
                 <TableCell>
                   <div className="flex items-center gap-2">
                     {getEventIcon(event.type)}
@@ -224,7 +224,7 @@ export function SecurityMonitor({ users, alerts }: SecurityMonitorProps) {
                   {new Date(event.timestamp).toLocaleString()}
                 </TableCell>
                 <TableCell>
-                  <code className="text-xs bg-gray-100 px-2 py-1 rounded">{event.ip}</code>
+                  <code className="text-xs bg-gray-100 dark:bg-gray-800 px-2 py-1 rounded">{event.ip}</code>
                 </TableCell>
                 <TableCell>{event.location}</TableCell>
                 <TableCell>

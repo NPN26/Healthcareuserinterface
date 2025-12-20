@@ -303,7 +303,7 @@ export function UserDashboard({ user, onLogout }: UserDashboardProps) {
         return (
           <div className="space-y-6">
             <Card className="p-6">
-              <h3 className="mb-4">Heart Rate Monitoring</h3>
+              <h3 className="text-foreground mb-4">Heart Rate Monitoring</h3>
               <BiomarkerChart 
                 biomarkers={biomarkers.filter(b => b.type === 'heartRate')}
                 type="heartRate"
@@ -317,7 +317,7 @@ export function UserDashboard({ user, onLogout }: UserDashboardProps) {
         return (
           <div className="space-y-6">
             <Card className="p-6">
-              <h3 className="mb-4">Blood Pressure Monitoring</h3>
+              <h3 className="text-foreground mb-4">Blood Pressure Monitoring</h3>
               <BiomarkerChart 
                 biomarkers={biomarkers.filter(b => b.type === 'bloodPressure')}
                 type="bloodPressure"
@@ -331,7 +331,7 @@ export function UserDashboard({ user, onLogout }: UserDashboardProps) {
         return (
           <div className="space-y-6">
             <Card className="p-6">
-              <h3 className="mb-4">Activity Tracking</h3>
+              <h3 className="text-foreground mb-4">Activity Tracking</h3>
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 <BiomarkerChart 
                   biomarkers={biomarkers.filter(b => b.type === 'steps')}
@@ -352,7 +352,7 @@ export function UserDashboard({ user, onLogout }: UserDashboardProps) {
         return (
           <div className="space-y-6">
             <Card className="p-6">
-              <h3 className="mb-4">Calorie Tracking</h3>
+              <h3 className="text-foreground mb-4">Calorie Tracking</h3>
               <p className="text-muted-foreground mb-6">Track your daily calorie intake and expenditure</p>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div className="p-6 bg-gradient-to-br from-orange-50 to-red-50 dark:from-orange-950 dark:to-red-950 rounded-lg">
@@ -394,7 +394,7 @@ export function UserDashboard({ user, onLogout }: UserDashboardProps) {
         return (
           <div className="space-y-6">
             <Card className="p-6">
-              <h3 className="mb-6">Settings</h3>
+              <h3 className="text-foreground mb-6">Settings</h3>
               <div className="space-y-3">
                 <button onClick={() => setShowProfile(true)} className="w-full p-4 border border-border rounded-lg hover:bg-accent transition-colors text-left">
                   <div className="flex items-center gap-3">
