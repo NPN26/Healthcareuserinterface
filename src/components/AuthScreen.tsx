@@ -93,11 +93,11 @@ export function AuthScreen({ onLogin, users, setUsers }: AuthScreenProps) {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-500 via-purple-500 to-pink-500 flex items-center justify-center p-4">
+    <div className="min-h-screen bg-gradient-to-br from-blue-500 via-purple-500 to-pink-500 dark:from-custom-blue dark:via-custom-purple dark:to-custom-pink flex items-center justify-center p-4">
       <Card className="w-full max-w-md p-8">
         <div className="text-center mb-8">
-          <div className="inline-block p-4 rounded-2xl bg-gradient-to-br from-blue-500 to-purple-600 mb-4">
-            <Activity className="w-12 h-12 text-white" />
+          <div className="inline-block p-4 rounded-2xl bg-gradient-to-br from-blue-500 to-purple-600 dark:from-custom-blue dark:to-custom-purple mb-4">
+            <Activity className="w-12 h-12 text-white dark:text-custom-white" />
           </div>
           <h1 className="mb-2">HealthSync</h1>
           <p className="text-muted-foreground">

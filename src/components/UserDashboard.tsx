@@ -463,7 +463,7 @@ export function UserDashboard({ user, onLogout }: UserDashboardProps) {
         <Sidebar>
           <SidebarHeader className="border-b p-4">
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center">
+              <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-blue-500 to-purple-600 dark:from-custom-blue dark:to-custom-purple flex items-center justify-center">
                 <Activity className="w-5 h-5 text-white" />
               </div>
               <div>
@@ -608,7 +608,7 @@ export function UserDashboard({ user, onLogout }: UserDashboardProps) {
                   <DropdownMenuTrigger asChild>
                     <Button variant="ghost" className="h-9 px-2">
                       <Avatar className="h-7 w-7">
-                        <AvatarFallback className="bg-gradient-to-br from-blue-500 to-purple-600 text-white text-xs">
+                        <AvatarFallback className="bg-gradient-to-br from-blue-500 to-purple-600 dark:from-custom-blue dark:to-custom-purple text-white text-xs">
                           {user.name[0]}
                         </AvatarFallback>
                       </Avatar>

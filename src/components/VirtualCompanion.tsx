@@ -196,7 +196,7 @@ export function VirtualCompanion({ isOpen, onClose, biomarkers, devices, user }:
       <DialogContent className="max-w-2xl h-[600px] flex flex-col p-0">
         <DialogHeader className="p-6 pb-4 border-b flex-shrink-0">
           <div className="flex items-center gap-3">
-            <div className="w-12 h-12 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white">
+            <div className="w-12 h-12 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 dark:from-custom-blue dark:to-custom-purple flex items-center justify-center text-white">
               <Bot className="w-6 h-6" />
             </div>
             <div>
@@ -215,7 +215,7 @@ export function VirtualCompanion({ isOpen, onClose, biomarkers, devices, user }:
                   className={`flex gap-3 ${message.sender === 'user' ? 'flex-row-reverse' : ''}`}
                 >
                   {message.sender === 'assistant' && (
-                    <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white flex-shrink-0">
+                    <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 dark:from-custom-blue dark:to-custom-purple flex items-center justify-center text-white flex-shrink-0">
                       <Bot className="w-4 h-4" />
                     </div>
                   )}
@@ -242,7 +242,7 @@ export function VirtualCompanion({ isOpen, onClose, biomarkers, devices, user }:
               ))}
               {isTyping && (
                 <div className="flex gap-3">
-                  <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white">
+                  <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 dark:from-custom-blue dark:to-custom-purple flex items-center justify-center text-white">
                     <Bot className="w-4 h-4" />
                   </div>
                   <div className="bg-gray-100 dark:bg-gray-800 rounded-2xl px-4 py-3">

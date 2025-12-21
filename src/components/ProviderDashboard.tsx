@@ -6,7 +6,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
 import { Badge } from './ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from './ui/table';
 import { Avatar, AvatarFallback } from './ui/avatar';
-import { Search, Users, TrendingUp, AlertTriangle, FileText, Download, LogOut } from 'lucide-react';
+import { Search, Users, TrendingUp, AlertTriangle, FileText, Download, LogOut, Sun, MoonIcon } from 'lucide-react';
 import { PatientDetail } from './PatientDetail';
 import { PatternAnalysis } from './PatternAnalysis';
 import { Biomarker, User, Alert } from '../utils/mockData';
@@ -22,6 +22,7 @@ export function ProviderDashboard({ user, onLogout }: ProviderDashboardProps) {
   const [searchTerm, setSearchTerm] = useState('');
   const [biomarkers, setBiomarkers] = useState<Biomarker[]>([]);
   const [alerts, setAlerts] = useState<Alert[]>([]);
+  const [isDarkMode, setIsDarkMode] = useState(false);
 
   useEffect(() => {
     loadData();
@@ -37,6 +38,13 @@ export function ProviderDashboard({ user, onLogout }: ProviderDashboardProps) {
 
     const allAlerts = JSON.parse(localStorage.getItem('healthApp_alerts') || '[]');
     setAlerts(allAlerts);
+  };
+
+  const toggleDarkMode = () => {
+    const newMode = !isDarkMode;
+    setIsDarkMode(newMode);
+    localStorage.setItem('healthApp_darkMode', String(newMode));
+    document.documentElement.classList.toggle('dark', newMode);
   };
 
   const filteredPatients = patients.filter(p => 
@@ -80,10 +88,20 @@ export function ProviderDashboard({ user, onLogout }: ProviderDashboardProps) {
             <h1 className="text-gray-900">Healthcare Provider Dashboard</h1>
             <p className="text-gray-600">Welcome, {user.name}</p>
           </div>
-          <Button variant="outline" onClick={onLogout}>
-            <LogOut className="w-4 h-4 mr-2" />
-            Logout
-          </Button>
+          <div className="flex items-center gap-4">
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={toggleDarkMode}
+              className="h-9 w-9"
+            >
+              {isDarkMode ? (<Sun className="w-4 h-4" />) : (<MoonIcon className="w-4 h-4" />)}
+            </Button>
+            <Button variant="outline" onClick={onLogout}>
+              <LogOut className="w-4 h-4 mr-2" />
+              Logout
+            </Button>
+          </div>
         </div>
 
         {/* Stats Overview */}
@@ -107,7 +125,9 @@ export function ProviderDashboard({ user, onLogout }: ProviderDashboardProps) {
               </div>
               <div>
                 <p className="text-sm text-gray-600">Critical Alerts</p>
-                <p className="text-2xl text-gray-900">{criticalPatients.length}</p>
+                <p className="text-2xl text-gray-900">
+                  {criticalPatients.length}
+                </p>
               </div>
             </div>
           </Card>
@@ -177,14 +197,21 @@ export function ProviderDashboard({ user, onLogout }: ProviderDashboardProps) {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {filteredPatients.map(patient => {
+                  {filteredPatients.map((patient) => {
                     const patientAlerts = getPatientAlerts(patient.id);
-                    const heartRate = getLatestReading(patient.id, 'heartRate');
-                    const glucose = getLatestReading(patient.id, 'glucose');
-                    const hasCritical = patientAlerts.some(a => a.type === 'critical' || a.type === 'fault');
+                    const heartRate = getLatestReading(patient.id, "heartRate");
+                    const glucose = getLatestReading(patient.id, "glucose");
+                    const hasCritical = patientAlerts.some(
+                      (a) => a.type === "critical" || a.type === "fault"
+                    );
 
                     return (
-                      <TableRow key={patient.id} className={hasCritical ? 'bg-red-50 dark:bg-red-950' : ''}>
+                      <TableRow
+                        key={patient.id}
+                        className={
+                          hasCritical ? "bg-red-50 dark:bg-red-950" : ""
+                        }
+                      >
                         <TableCell>
                           <div className="flex items-center gap-3">
                             <Avatar>
@@ -192,18 +219,22 @@ export function ProviderDashboard({ user, onLogout }: ProviderDashboardProps) {
                             </Avatar>
                             <div>
                               <p className="text-gray-900">{patient.name}</p>
-                              <p className="text-sm text-gray-600">{patient.email}</p>
+                              <p className="text-sm text-gray-600">
+                                {patient.email}
+                              </p>
                             </div>
                           </div>
                         </TableCell>
                         <TableCell>{patient.age}</TableCell>
                         <TableCell>
                           {heartRate ? (
-                            <span className={
-                              heartRate.value >= 60 && heartRate.value <= 100 
-                                ? 'text-green-600 dark:text-green-700' 
-                                : 'text-red-600 dark:text-red-400'
-                            }>
+                            <span
+                              className={
+                                heartRate.value >= 60 && heartRate.value <= 100
+                                  ? "text-green-600 dark:text-green-700"
+                                  : "text-red-600 dark:text-red-400"
+                              }
+                            >
                               {heartRate.value} bpm
                             </span>
                           ) : (
@@ -212,11 +243,13 @@ export function ProviderDashboard({ user, onLogout }: ProviderDashboardProps) {
                         </TableCell>
                         <TableCell>
                           {glucose ? (
-                            <span className={
-                              glucose.value >= 70 && glucose.value <= 130 
-                                ? 'text-green-600 dark:text-green-700' 
-                                : 'text-red-600 dark:text-red-400'
-                            }>
+                            <span
+                              className={
+                                glucose.value >= 70 && glucose.value <= 130
+                                  ? "text-green-600 dark:text-green-700"
+                                  : "text-red-600 dark:text-red-400"
+                              }
+                            >
                               {glucose.value} mg/dL
                             </span>
                           ) : (
@@ -225,15 +258,20 @@ export function ProviderDashboard({ user, onLogout }: ProviderDashboardProps) {
                         </TableCell>
                         <TableCell>
                           {patientAlerts.length > 0 ? (
-                            <Badge variant={hasCritical ? 'destructive' : 'secondary'}>
-                              {patientAlerts.length} alert{patientAlerts.length !== 1 ? 's' : ''}
+                            <Badge
+                              variant={
+                                hasCritical ? "destructive" : "secondary"
+                              }
+                            >
+                              {patientAlerts.length} alert
+                              {patientAlerts.length !== 1 ? "s" : ""}
                             </Badge>
                           ) : (
                             <Badge variant="outline">None</Badge>
                           )}
                         </TableCell>
                         <TableCell>
-                          <Button 
+                          <Button
                             size="sm"
                             onClick={() => setSelectedPatient(patient)}
                           >
@@ -257,10 +295,13 @@ export function ProviderDashboard({ user, onLogout }: ProviderDashboardProps) {
                     <p className="text-gray-600">No critical alerts</p>
                   </div>
                 ) : (
-                  criticalPatients.map(patient => {
+                  criticalPatients.map((patient) => {
                     const patientAlerts = getPatientAlerts(patient.id);
                     return (
-                      <Card key={patient.id} className="p-4 border-l-4 border-red-500 bg-red-50 dark:bg-red-950">
+                      <Card
+                        key={patient.id}
+                        className="p-4 border-l-4 border-red-500 bg-red-50 dark:bg-red-950"
+                      >
                         <div className="flex items-start justify-between">
                           <div className="flex items-center gap-3">
                             <Avatar>
@@ -268,17 +309,22 @@ export function ProviderDashboard({ user, onLogout }: ProviderDashboardProps) {
                             </Avatar>
                             <div>
                               <p className="text-gray-900">{patient.name}</p>
-                              <p className="text-sm text-gray-600">{patient.age} years old</p>
+                              <p className="text-sm text-gray-600">
+                                {patient.age} years old
+                              </p>
                               <div className="mt-2 space-y-1">
-                                {patientAlerts.slice(0, 3).map(alert => (
-                                  <p key={alert.id} className="text-sm text-red-700 dark:text-white">
+                                {patientAlerts.slice(0, 3).map((alert) => (
+                                  <p
+                                    key={alert.id}
+                                    className="text-sm text-red-700 dark:text-white"
+                                  >
                                     • {alert.message}
                                   </p>
                                 ))}
                               </div>
                             </div>
                           </div>
-                          <Button 
+                          <Button
                             size="sm"
                             onClick={() => setSelectedPatient(patient)}
                           >
@@ -294,10 +340,7 @@ export function ProviderDashboard({ user, onLogout }: ProviderDashboardProps) {
           </TabsContent>
 
           <TabsContent value="patterns">
-            <PatternAnalysis 
-              patients={patients}
-              biomarkers={biomarkers}
-            />
+            <PatternAnalysis patients={patients} biomarkers={biomarkers} />
           </TabsContent>
         </Tabs>
       </div>

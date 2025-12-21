@@ -19,7 +19,9 @@ import {
   Settings,
   Database,
   Lock,
-  LogOut
+  LogOut,
+  Sun,
+  MoonIcon
 } from 'lucide-react';
 import { User, Device, Biomarker, Alert, generateBiomarkerData } from '../utils/mockData';
 import { toast } from 'sonner@2.0.3';
@@ -36,6 +38,7 @@ export function AdminDashboard({ user, onLogout }: AdminDashboardProps) {
   const [devices, setDevices] = useState<Device[]>([]);
   const [biomarkers, setBiomarkers] = useState<Biomarker[]>([]);
   const [alerts, setAlerts] = useState<Alert[]>([]);
+  const [isDarkMode, setIsDarkMode] = useState(false);
   const [systemStatus, setSystemStatus] = useState({
     uptime: '99.9%',
     activeUsers: 0,
@@ -65,6 +68,13 @@ export function AdminDashboard({ user, onLogout }: AdminDashboardProps) {
       totalDevices: storedDevices.length,
       dataPoints: storedBiomarkers.length,
     }));
+  };
+
+  const toggleDarkMode = () => {
+    const newMode = !isDarkMode;
+    setIsDarkMode(newMode);
+    localStorage.setItem('healthApp_darkMode', String(newMode));
+    document.documentElement.classList.toggle('dark', newMode);
   };
 
   const simulateFaultForAllDevices = () => {
@@ -159,10 +169,20 @@ export function AdminDashboard({ user, onLogout }: AdminDashboardProps) {
             <h1 className="text-gray-900">System Administration</h1>
             <p className="text-gray-600">Welcome, {user.name}</p>
           </div>
-          <Button variant="outline" onClick={onLogout}>
-            <LogOut className="w-4 h-4 mr-2" />
-            Logout
-          </Button>
+          <div className="flex items-center gap-4">
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={toggleDarkMode}
+              className="h-9 w-9"
+            >
+              {isDarkMode ? (<Sun className="w-4 h-4" />) : (<MoonIcon className="w-4 h-4" />)}
+            </Button>
+            <Button variant="outline" onClick={onLogout}>
+              <LogOut className="w-4 h-4 mr-2" />
+              Logout
+            </Button>
+          </div>
         </div>
 
         {/* System Overview */}
@@ -181,7 +201,7 @@ export function AdminDashboard({ user, onLogout }: AdminDashboardProps) {
 
           <Card className="p-6">
             <div className="flex items-center gap-3">
-              <div className="p-3 rounded-xl bg-green-100">
+              <div className="p-3 rounded-xl bg-green-100 dark:bg-green-900">
                 <Activity className="w-6 h-6 text-green-600" />
               </div>
               <div>
@@ -258,7 +278,7 @@ export function AdminDashboard({ user, onLogout }: AdminDashboardProps) {
               <AlertTriangle className="w-5 h-5 text-red-600 mt-0.5" />
               <div>
                 <h3 className="text-foreground mb-2">System Alerts</h3>
-                <ul className="space-y-1 text-sm text-red-700">
+                <ul className="space-y-1 text-sm text-red-700 dark:text-white">
                   {faultyDevices.length > 0 && (
                     <li>• {faultyDevices.length} device{faultyDevices.length !== 1 ? 's' : ''} reporting faults</li>
                   )}

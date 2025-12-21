@@ -110,7 +110,7 @@ export function DeviceCard({ device, onUpdate }: DeviceCardProps) {
     <Card className="p-6 space-y-4">
       <div className="flex items-start justify-between">
         <div className="flex items-center gap-3">
-          <div className="p-3 rounded-xl bg-gradient-to-br from-blue-500 to-purple-600 text-white">
+          <div className="p-3 rounded-xl bg-gradient-to-br from-blue-500 to-purple-600 dark:from-custom-blue dark:to-custom-purple text-white">
             <Icon className="w-6 h-6" />
           </div>
           <div>

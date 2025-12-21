@@ -123,7 +123,7 @@ export function ProfilePage({ user, onBack, onUpdate }: ProfilePageProps) {
   ];
 
   return (
-    <div className="min-h-screen w-full bg-gradient-to-br from-blue-500 via-purple-500 to-pink-500 overflow-x-hidden">
+    <div className="min-h-screen w-full bg-gradient-to-br from-blue-500 via-purple-500 to-pink-500 dark:from-custom-blue dark:via-custom-purple dark:to-custom-pink overflow-x-hidden">
       {/* Header Section */}
       <div className="w-full text-white p-6 md:p-8 pt-8">
         <div className="max-w-4xl mx-auto">
@@ -177,7 +177,7 @@ export function ProfilePage({ user, onBack, onUpdate }: ProfilePageProps) {
             {/* Personal Information */}
             <Card className="p-6">
               <div className="flex items-center gap-3 mb-6">
-                <div className="w-12 h-12 rounded-lg bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center">
+                <div className="w-12 h-12 rounded-lg bg-gradient-to-br from-blue-500 to-purple-600 dark:from-custom-blue dark:to-custom-purple flex items-center justify-center">
                   <UserCircle2 className="w-6 h-6 text-white" />
                 </div>
                 <div>
@@ -253,7 +253,7 @@ export function ProfilePage({ user, onBack, onUpdate }: ProfilePageProps) {
                 <div className="mt-6 pt-6 border-t">
                   <Label className="mb-3 block">Assigned Healthcare Provider</Label>
                   <div className="flex items-center gap-3 p-4 bg-gradient-to-br from-blue-50 to-purple-50 dark:from-blue-950 dark:to-purple-950 rounded-lg">
-                    <div className="w-12 h-12 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center">
+                    <div className="w-12 h-12 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 dark:from-custom-blue dark:to-custom-purple flex items-center justify-center">
                       <Stethoscope className="w-6 h-6 text-white" />
                     </div>
                     <div>
@@ -265,7 +265,7 @@ export function ProfilePage({ user, onBack, onUpdate }: ProfilePageProps) {
               )}
 
               <div className="flex justify-end mt-6">
-                <Button onClick={handleSavePersonalInfo} className="bg-gradient-to-r from-blue-500 to-purple-600">
+                <Button onClick={handleSavePersonalInfo} className="bg-gradient-to-r from-blue-500 to-purple-600 dark:from-custom-blue dark:to-custom-purple">
                   <Save className="w-4 h-4 mr-2" />
                   Save Changes
                 </Button>
