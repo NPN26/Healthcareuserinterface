@@ -116,7 +116,7 @@ export function SecurityMonitor({ users, alerts }: SecurityMonitorProps) {
 
         <Card className="p-6">
           <div className="flex items-center gap-3">
-            <div className="p-3 rounded-xl bg-red-100 dark:bg-red-900">
+            <div className="p-3 rounded-xl bg-red-100 dark:bg-red-950">
               <AlertTriangle className="w-6 h-6 text-red-600" />
             </div>
             <div>

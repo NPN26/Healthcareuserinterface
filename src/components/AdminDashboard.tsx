@@ -151,7 +151,7 @@ export function AdminDashboard({ user, onLogout }: AdminDashboardProps) {
   const criticalAlerts = alerts.filter(a => a.type === 'critical' && !a.read);
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-purple-50 via-white to-blue-50 p-4 md:p-8">
+    <div className="min-h-screen bg-gradient-to-br from-purple-50 via-white to-blue-50 dark:from-gray-950 dark:via-gray-900 dark:to-gray-950 p-4 md:p-8">
       <div className="max-w-7xl mx-auto space-y-6">
         {/* Header */}
         <div className="flex items-center justify-between">
@@ -205,7 +205,7 @@ export function AdminDashboard({ user, onLogout }: AdminDashboardProps) {
 
           <Card className="p-6">
             <div className="flex items-center gap-3">
-              <div className="p-3 rounded-xl bg-red-100 dark:bg-red-900">
+              <div className="p-3 rounded-xl bg-red-100 dark:bg-red-950">
                 <AlertTriangle className="w-6 h-6 text-red-600" />
               </div>
               <div>
