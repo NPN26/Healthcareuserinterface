@@ -20,3 +20,27 @@ Run `npm run dev` to start the development server.
   - Improve the structure and organization of the dashboard components for maintainability and performance.
 - [x] fix darkmode toggle(Nirup)
   - Resolve issues related to the dark mode toggle functionality to ensure it works seamlessly.
+
+### Sprint 1: Development Environment Setup
+
+- [x] Development Environment Setup
+- [ ] Database Initial Setup
+- - [x] Create initial database schema
+- - [ ] Seed initial data
+- - [ ] Write database setup documentation
+- [ ] Update UI Mock-ups
+
+### Sprint 2: User & Provider Management Services
+
+- [ ] Implement User & Provider Management Services
+- [ ] Continue User & Provider Management Services
+
+### Sprint 3: Biomarker Data & Testing
+
+- [ ] Biomarker Data & Manual Entry Service
+- [ ] Testing User & Provider Management Services
+
+### Sprint 4: Dashboard & Visualization
+
+- [ ] Testing Biomarker Data & Manual Entry Service
+- [ ] Dashboard & Visualization Service
