@@ -1,8 +1,8 @@
-import { Card } from './ui/card';
-import { Badge } from './ui/badge';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from './ui/table';
+import { Card } from '../ui/card';
+import { Badge } from '../ui/badge';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../ui/table';
 import { Shield, Lock, Eye, AlertTriangle, CheckCircle, Key } from 'lucide-react';
-import { User, Alert } from '../utils/mockData';
+import { User, Alert } from '../../utils/mockData';
 
 interface SecurityMonitorProps {
   users: User[];

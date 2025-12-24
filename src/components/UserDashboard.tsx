@@ -1,83 +1,44 @@
 import { useState, useEffect } from 'react';
 import { Card } from './ui/card';
-import { Button } from './ui/button';
-import { Badge } from './ui/badge';
-import { Input } from './ui/input';
+import { Activity, Flame, Droplet, Settings, Smartphone, Bell, User, Heart, Wind, Footprints, Moon } from 'lucide-react';
 import { 
-  Activity, 
-  Heart, 
-  Droplet, 
-  Wind, 
-  Footprints, 
-  Moon, 
-  TrendingUp,
-  TrendingDown,
-  Minus,
-  Bell,
-  Share2,
-  Download,
-  MessageCircle,
-  LayoutDashboard,
-  TrendingUpIcon,
-  Smartphone,
-  Bot,
-  Settings,
-  Flame,
-  User,
-  LogOut,
-  Search,
-  Sun,
-  MoonIcon,
-  Plus,
-  Calendar,
-  FileText,
-  AlertCircle
-} from 'lucide-react';
-import { BiomarkerChart } from './BiomarkerChart';
-import { DeviceCard } from './DeviceCard';
-import { VirtualCompanion } from './VirtualCompanion';
-import { AlertsPanel } from './AlertsPanel';
-import { StatsComparison } from './StatsComparison';
-import { DailySummary } from './DailySummary';
-import { ProfilePage } from './ProfilePage';
+  BiomarkerChart, 
+  DeviceCard, 
+  VirtualCompanion, 
+  DailySummary, 
+  ProfilePage,
+  GoalsManager,
+  ManualDataEntry,
+  SidebarBranding,
+  MainMenuSection,
+  HealthMetricsSection,
+  QuickActionsGrid,
+  QuickStatsGrid,
+  DashboardHeader,
+  SidebarFooterAlerts
+} from './user';
 import { 
   Biomarker, 
   Device, 
   Alert,
   generateBiomarkerData,
+  isAbnormalReading,
   getBiomarkerLabel,
-  getBiomarkerUnit,
-  isAbnormalReading
+  getBiomarkerUnit
 } from '../utils/mockData';
-import { toast } from 'sonner@2.0.3';
+import { toast } from 'sonner';
 import {
   Sidebar,
   SidebarContent,
-  SidebarFooter,
+  SidebarInset,
+  SidebarProvider,
+  SidebarSeparator,
   SidebarGroup,
   SidebarGroupContent,
-  SidebarGroupLabel,
-  SidebarHeader,
-  SidebarInset,
   SidebarMenu,
-  SidebarMenuButton,
   SidebarMenuItem,
-  SidebarProvider,
-  SidebarTrigger,
-  SidebarSeparator,
+  SidebarMenuButton,
 } from './ui/sidebar';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from './ui/dropdown-menu';
-import { Avatar, AvatarFallback } from './ui/avatar';
-import { GoalsManager } from './GoalsManager';
-import { ManualDataEntry } from './ManualDataEntry';
-import { Target } from 'lucide-react';
 
 interface UserDashboardProps {
   user: any;
@@ -191,22 +152,6 @@ export function UserDashboard({ user, onLogout }: UserDashboardProps) {
     return 'stable';
   };
 
-  const shareStats = async () => {
-    const latest = getLatestBiomarker('steps');
-    const text = `Today I walked ${latest?.value || 0} steps! 🚶 #HealthTracking`;
-    
-    if (navigator.share) {
-      try {
-        await navigator.share({ text });
-      } catch (err) {
-        toast.success('Stats copied to clipboard!');
-      }
-    } else {
-      navigator.clipboard.writeText(text);
-      toast.success('Stats copied to clipboard!');
-    }
-  };
-
   const downloadReport = () => {
     toast.success('Daily report downloaded!');
   };
@@ -220,6 +165,12 @@ export function UserDashboard({ user, onLogout }: UserDashboardProps) {
     setCurrentUser(updatedUser);
   };
 
+  const handleCardClick = (type: Biomarker['type']) => {
+    if (type === 'heartRate') setActiveView('heartRate');
+    if (type === 'bloodPressure') setActiveView('bloodPressure');
+    if (type === 'steps') setActiveView('activities');
+  };
+
   const biomarkerCards = [
     { type: 'heartRate' as const, icon: Heart, color: 'text-red-500' },
     { type: 'bloodPressure' as const, icon: Activity, color: 'text-purple-500' },
@@ -227,26 +178,6 @@ export function UserDashboard({ user, onLogout }: UserDashboardProps) {
     { type: 'oxygen' as const, icon: Wind, color: 'text-cyan-500' },
     { type: 'steps' as const, icon: Footprints, color: 'text-green-500' },
     { type: 'sleep' as const, icon: Moon, color: 'text-indigo-500' },
-  ];
-
-  const mainMenuItems = [
-    { id: 'overview' as const, label: 'Dashboard', icon: LayoutDashboard },
-    { id: 'trends' as const, label: 'Analytics', icon: TrendingUpIcon },
-    { id: 'devices' as const, label: 'My Devices', icon: Smartphone },
-  ];
-
-  const healthStatusItems = [
-    { id: 'heartRate' as const, label: 'Heart Rate', icon: Heart, color: 'text-red-500', unit: 'bpm' },
-    { id: 'bloodPressure' as const, label: 'Blood Pressure', icon: Activity, color: 'text-purple-500', unit: 'mmHg' },
-    { id: 'activities' as const, label: 'Activity', icon: Footprints, color: 'text-green-500', unit: 'steps' },
-    { id: 'calories' as const, label: 'Calories', icon: Flame, color: 'text-orange-500', unit: 'kcal' },
-  ];
-
-  const quickActions = [
-    { label: 'Log Reading', icon: Plus, action: () => setShowManualEntry(true) },
-    { label: 'Set Goals', icon: Target, action: () => setShowGoals(true) },
-    { label: 'Report', icon: FileText, action: downloadReport },
-    { label: 'AI Assistant', icon: Bot, action: () => setShowCompanion(true) },
   ];
 
   const renderContent = () => {
@@ -461,79 +392,23 @@ export function UserDashboard({ user, onLogout }: UserDashboardProps) {
       ) : (
       <div className="flex min-h-screen w-full">
         <Sidebar className="flex flex-col h-screen">
-          <SidebarHeader className="border-b p-4 flex-shrink-0">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-blue-500 to-purple-600 dark:from-custom-blue dark:to-custom-purple flex items-center justify-center">
-                <Activity className="w-5 h-5 text-white" />
-              </div>
-              <div>
-                <p className="font-semibold">HealthSync</p>
-                <p className="text-xs text-muted-foreground">Health Monitoring</p>
-              </div>
-            </div>
-          </SidebarHeader>
+          <SidebarBranding />
 
-          <SidebarContent className="flex-1 overflow-y-auto">
-            <SidebarGroup>
-              <SidebarGroupLabel>Main Menu</SidebarGroupLabel>
-              <SidebarGroupContent>
-                <SidebarMenu>
-                  {mainMenuItems.map((item) => (
-                    <SidebarMenuItem key={item.id}>
-                      <SidebarMenuButton
-                        isActive={activeView === item.id}
-                        onClick={() => setActiveView(item.id)}
-                      >
-                        <item.icon className="w-4 h-4" />
-                        <span>{item.label}</span>
-                      </SidebarMenuButton>
-                    </SidebarMenuItem>
-                  ))}
-                </SidebarMenu>
-              </SidebarGroupContent>
-            </SidebarGroup>
+          <SidebarContent className="flex-1 overflow-y-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
+            <MainMenuSection 
+              activeView={activeView}
+              onViewChange={setActiveView}
+            />
 
-            <SidebarSeparator className="mx-auto" />
+            <SidebarSeparator className="w-[90%] mx-auto" />
 
-            <SidebarGroup>
-              <SidebarGroupLabel>Health Metrics</SidebarGroupLabel>
-              <SidebarGroupContent>
-                <SidebarMenu>
-                  {healthStatusItems.map((item) => {
-                    const latest = item.id === 'heartRate' 
-                      ? getLatestBiomarker('heartRate')
-                      : item.id === 'bloodPressure' 
-                      ? getLatestBiomarker('bloodPressure')
-                      : item.id === 'activities'
-                      ? getLatestBiomarker('steps')
-                      : null;
+            <HealthMetricsSection
+              activeView={activeView}
+              onViewChange={setActiveView}
+              getLatestBiomarker={getLatestBiomarker}
+            />
 
-                    return (
-                      <SidebarMenuItem key={item.id}>
-                        <SidebarMenuButton
-                          isActive={activeView === item.id}
-                          onClick={() => setActiveView(item.id)}
-                        >
-                          <item.icon className={`w-4 h-4 ${item.color}`} />
-                          <span>{item.label}</span>
-                          {latest && (
-                            <span className="ml-auto text-xs text-muted-foreground">
-                              {item.id === 'bloodPressure' && latest.systolic
-                                ? `${latest.systolic}/${latest.diastolic}`
-                                : item.id === 'calories'
-                                ? '2.3k'
-                                : latest.value?.toFixed(0)}
-                            </span>
-                          )}
-                        </SidebarMenuButton>
-                      </SidebarMenuItem>
-                    );
-                  })}
-                </SidebarMenu>
-              </SidebarGroupContent>
-            </SidebarGroup>
-
-            <SidebarSeparator className="mx-auto" />
+            <SidebarSeparator className="w-[90%] mx-auto" />
 
             <SidebarGroup>
               <SidebarGroupContent>
@@ -552,160 +427,41 @@ export function UserDashboard({ user, onLogout }: UserDashboardProps) {
             </SidebarGroup>
           </SidebarContent>
 
-          <SidebarFooter className="border-t p-4 flex-shrink-0">
-            {alerts.length > 0 && (
-              <div className="flex items-center gap-2 p-3 bg-amber-100 dark:bg-amber-900/20 rounded-lg">
-                <AlertCircle className="w-4 h-4 text-amber-600 dark:text-amber-400" />
-                <span className="text-xs text-amber-900 dark:text-amber-300 font-medium">{alerts.length} Active Alert{alerts.length !== 1 ? 's' : ''}</span>
-              </div>
-            )}
-          </SidebarFooter>
+          <SidebarFooterAlerts alerts={alerts} />
         </Sidebar>
 
         <SidebarInset>
           <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50 dark:from-gray-950 dark:via-gray-900 dark:to-gray-950">
-            <header className="sticky top-0 z-10 flex h-16 shrink-0 items-center gap-4 border-b bg-white/80 dark:bg-gray-900/80 backdrop-blur-xl px-4">
-              <SidebarTrigger className="-ml-1" />
-              
-              {/* Search Bar */}
-              <div className="flex-1 max-w-md">
-                <div className="relative">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                  <Input
-                    type="search"
-                    placeholder="Search health metrics, devices..."
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    className="pl-9 h-9"
-                  />
-                </div>
-              </div>
-
-              {/* Right Side Actions */}
-              <div className="flex items-center gap-2 ml-auto">
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={toggleDarkMode}
-                  className="h-9 w-9"
-                >
-                  {isDarkMode ? <Sun className="w-4 h-4" /> : <MoonIcon className="w-4 h-4" />}
-                </Button>
-
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-9 w-9 relative"
-                >
-                  <Bell className="w-4 h-4" />
-                  {alerts.length > 0 && (
-                    <span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full"></span>
-                  )}
-                </Button>
-
-                {/* Profile Dropdown */}
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button variant="ghost" className="h-9 px-2">
-                      <Avatar className="h-7 w-7">
-                        <AvatarFallback className="bg-gradient-to-br from-blue-500 to-purple-600 dark:from-custom-blue dark:to-custom-purple text-white text-xs">
-                          {user.name[0]}
-                        </AvatarFallback>
-                      </Avatar>
-                      <span className="ml-2 hidden md:inline">{user.name}</span>
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end" className="w-56">
-                    <DropdownMenuLabel>
-                      <div className="flex flex-col">
-                        <p className="font-medium">{user.name}</p>
-                        <p className="text-xs text-muted-foreground">{user.email}</p>
-                      </div>
-                    </DropdownMenuLabel>
-                    <DropdownMenuSeparator />
-                    <DropdownMenuItem onClick={() => setShowProfile(true)}>
-                      <User className="mr-2 h-4 w-4" />
-                      <span>Profile</span>
-                    </DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => setActiveView('settings')}>
-                      <Settings className="mr-2 h-4 w-4" />
-                      <span>Settings</span>
-                    </DropdownMenuItem>
-                    <DropdownMenuSeparator />
-                    <DropdownMenuItem onClick={handleLogout} className="text-red-600 dark:text-red-400">
-                      <LogOut className="mr-2 h-4 w-4" />
-                      <span>Log out</span>
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
-              </div>
-            </header>
+            <DashboardHeader
+              user={user}
+              searchQuery={searchQuery}
+              onSearchChange={setSearchQuery}
+              isDarkMode={isDarkMode}
+              onToggleDarkMode={toggleDarkMode}
+              alertCount={alerts.length}
+              onProfileClick={() => setShowProfile(true)}
+              onSettingsClick={() => setActiveView('settings')}
+              onLogout={handleLogout}
+            />
 
             <div className="p-4 md:p-8">
               <div className="max-w-7xl mx-auto space-y-6">
                 {/* Quick Actions */}
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                  {quickActions.map((action) => (
-                    <Button
-                      key={action.label}
-                      variant="outline"
-                      onClick={action.action}
-                      className="h-auto flex-col gap-2 p-4"
-                    >
-                      <action.icon className="w-5 h-5" />
-                      <span className="text-xs">{action.label}</span>
-                    </Button>
-                  ))}
-                </div>
+                <QuickActionsGrid
+                  onLogReading={() => setShowManualEntry(true)}
+                  onSetGoals={() => setShowGoals(true)}
+                  onReport={downloadReport}
+                  onAIAssistant={() => setShowCompanion(true)}
+                />
 
                 {/* Quick Stats Grid - Only on Overview */}
                 {activeView === 'overview' && (
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                    {biomarkerCards.map(({ type, icon: Icon, color }) => {
-                      const latest = getLatestBiomarker(type);
-                      const trend = getTrend(type);
-                      const TrendIcon = trend === 'up' ? TrendingUp : trend === 'down' ? TrendingDown : Minus;
-
-                      return (
-                        <Card key={type} className="p-6 hover:shadow-lg transition-shadow cursor-pointer"
-                          onClick={() => {
-                            if (type === 'heartRate') setActiveView('heartRate');
-                            if (type === 'bloodPressure') setActiveView('bloodPressure');
-                            if (type === 'steps') setActiveView('activities');
-                          }}
-                        >
-                          <div className="flex items-start justify-between">
-                            <div className="flex items-center gap-3">
-                              <div className={`p-3 rounded-xl bg-gradient-to-br from-background to-accent ${color}`}>
-                                <Icon className="w-6 h-6" />
-                              </div>
-                              <div>
-                                <p className="text-sm text-muted-foreground">{getBiomarkerLabel(type)}</p>
-                                <p className="mt-1">
-                                  {type === 'bloodPressure' && latest 
-                                    ? `${latest.systolic}/${latest.diastolic}`
-                                    : type === 'steps' 
-                                    ? Math.round(latest?.value || 0)
-                                    : latest?.value.toFixed(1) || '--'}
-                                  <span className="text-sm text-muted-foreground ml-1">
-                                    {getBiomarkerUnit(type)}
-                                  </span>
-                                </p>
-                              </div>
-                            </div>
-                            <div className={`flex items-center gap-1 text-sm ${
-                              trend === 'up' ? 'text-red-500' : trend === 'down' ? 'text-green-500' : 'text-muted-foreground'
-                            }`}>
-                              <TrendIcon className="w-4 h-4" />
-                            </div>
-                          </div>
-                          {latest?.isFaulty && (
-                            <Badge variant="destructive" className="mt-3">Faulty Reading</Badge>
-                          )}
-                        </Card>
-                      );
-                    })}
-                  </div>
+                  <QuickStatsGrid
+                    biomarkers={biomarkers}
+                    getLatestBiomarker={getLatestBiomarker}
+                    getTrend={getTrend}
+                    onCardClick={handleCardClick}
+                  />
                 )}
 
                 {/* Main Content */}

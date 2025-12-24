@@ -1,8 +1,8 @@
-import { Card } from './ui/card';
-import { Badge } from './ui/badge';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
+import { Card } from '../ui/card';
+import { Badge } from '../ui/badge';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import { ScatterChart, Scatter, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ZAxis, LineChart, Line } from 'recharts';
-import { Biomarker, User, getBiomarkerLabel } from '../utils/mockData';
+import { Biomarker, User, getBiomarkerLabel } from '../../utils/mockData';
 import { TrendingUp, TrendingDown, Activity, Users } from 'lucide-react';
 import { useState } from 'react';
 

@@ -1,7 +1,7 @@
-import { Card } from './ui/card';
-import { Badge } from './ui/badge';
+import { Card } from '../ui/card';
+import { Badge } from '../ui/badge';
 import { LineChart, Line, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
-import { Biomarker, getBiomarkerLabel, getBiomarkerUnit, getBiomarkerColor } from '../utils/mockData';
+import { Biomarker, getBiomarkerLabel, getBiomarkerUnit, getBiomarkerColor } from '../../utils/mockData';
 import { TrendingUp, TrendingDown, AlertTriangle } from 'lucide-react';
 
 interface BiomarkerChartProps {

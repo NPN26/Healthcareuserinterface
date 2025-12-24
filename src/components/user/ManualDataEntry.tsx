@@ -1,12 +1,12 @@
 import { useState } from 'react';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from './ui/dialog';
-import { Button } from './ui/button';
-import { Input } from './ui/input';
-import { Label } from './ui/label';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '../ui/dialog';
+import { Button } from '../ui/button';
+import { Input } from '../ui/input';
+import { Label } from '../ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import { Plus, Heart, Activity, Droplet, Wind, Footprints, Moon } from 'lucide-react';
-import { toast } from 'sonner@2.0.3';
-import { Biomarker } from '../utils/mockData';
+import { toast } from 'sonner';
+import { Biomarker } from '../../utils/mockData';
 
 interface ManualDataEntryProps {
   isOpen: boolean;

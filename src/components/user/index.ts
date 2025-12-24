@@ -1,0 +1,15 @@
+export { DashboardHeader } from './DashboardHeader';
+export { MainMenuSection } from './MainMenuSection';
+export { HealthMetricsSection } from './HealthMetricsSection';
+export { QuickActionsGrid } from './QuickActionsGrid';
+export { QuickStatsGrid } from './QuickStatsGrid';
+export { SidebarBranding } from './SidebarBranding';
+export { SidebarFooterAlerts } from './SidebarFooterAlerts';
+export { AlertsPanel } from './AlertsPanel';
+export { BiomarkerChart } from './BiomarkerChart';
+export { DailySummary } from './DailySummary';
+export { DeviceCard } from './DeviceCard';
+export { GoalsManager } from './GoalsManager';
+export { ManualDataEntry } from './ManualDataEntry';
+export { ProfilePage } from './ProfilePage';
+export { VirtualCompanion } from './VirtualCompanion';

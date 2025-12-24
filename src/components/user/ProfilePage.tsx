@@ -1,10 +1,10 @@
 import { useState, useEffect } from 'react';
-import { Card } from './ui/card';
-import { Button } from './ui/button';
-import { Input } from './ui/input';
-import { Badge } from './ui/badge';
-import { Label } from './ui/label';
-import { Avatar, AvatarFallback } from './ui/avatar';
+import { Card } from '../ui/card';
+import { Button } from '../ui/button';
+import { Input } from '../ui/input';
+import { Badge } from '../ui/badge';
+import { Label } from '../ui/label';
+import { Avatar, AvatarFallback } from '../ui/avatar';
 import {
   ArrowLeft,
   User as UserIcon,
@@ -23,8 +23,8 @@ import {
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from './ui/select';
-import { toast } from 'sonner@2.0.3';
+} from '../ui/select';
+import { toast } from 'sonner';
 
 interface ProfilePageProps {
   user: any;

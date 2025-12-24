@@ -1,11 +1,11 @@
-import { Card } from './ui/card';
-import { Button } from './ui/button';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
-import { Badge } from './ui/badge';
+import { Card } from '../ui/card';
+import { Button } from '../ui/button';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
+import { Badge } from '../ui/badge';
 import { ArrowLeft, Download, Share2, User } from 'lucide-react';
-import { Biomarker, Alert, User as UserType, getBiomarkerLabel } from '../utils/mockData';
-import { BiomarkerChart } from './BiomarkerChart';
-import { toast } from 'sonner@2.0.3';
+import { Biomarker, Alert, User as UserType, getBiomarkerLabel } from '../../utils/mockData';
+import { BiomarkerChart } from '../user/BiomarkerChart';
+import { toast } from 'sonner';
 
 interface PatientDetailProps {
   patient: UserType;

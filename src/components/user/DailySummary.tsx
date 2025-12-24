@@ -1,8 +1,8 @@
-import { Card } from './ui/card';
-import { Badge } from './ui/badge';
-import { Progress } from './ui/progress';
+import { Card } from '../ui/card';
+import { Badge } from '../ui/badge';
+import { Progress } from '../ui/progress';
 import { CheckCircle, AlertCircle, Target, TrendingUp } from 'lucide-react';
-import { Biomarker, getBiomarkerLabel, getBiomarkerUnit } from '../utils/mockData';
+import { Biomarker, getBiomarkerLabel, getBiomarkerUnit } from '../../utils/mockData';
 
 interface DailySummaryProps {
   biomarkers: Biomarker[];

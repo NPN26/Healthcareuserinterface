@@ -1,9 +1,9 @@
-import { Card } from './ui/card';
-import { Button } from './ui/button';
-import { Badge } from './ui/badge';
+import { Card } from '../ui/card';
+import { Button } from '../ui/button';
+import { Badge } from '../ui/badge';
 import { Alert, AlertCircle, CheckCircle, Info, X } from 'lucide-react';
-import { Alert as AlertType } from '../utils/mockData';
-import { toast } from 'sonner@2.0.3';
+import { Alert as AlertType } from '../../utils/mockData';
+import { toast } from 'sonner';
 
 interface AlertsPanelProps {
   alerts: AlertType[];

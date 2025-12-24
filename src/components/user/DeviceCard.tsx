@@ -1,8 +1,8 @@
-import { Card } from './ui/card';
-import { Button } from './ui/button';
-import { Badge } from './ui/badge';
-import { Progress } from './ui/progress';
-import { Switch } from './ui/switch';
+import { Card } from '../ui/card';
+import { Button } from '../ui/button';
+import { Badge } from '../ui/badge';
+import { Progress } from '../ui/progress';
+import { Switch } from '../ui/switch';
 import { 
   Watch, 
   Activity, 
@@ -14,8 +14,8 @@ import {
   Power,
   Settings
 } from 'lucide-react';
-import { Device } from '../utils/mockData';
-import { toast } from 'sonner@2.0.3';
+import { Device } from '../../utils/mockData';
+import { toast } from 'sonner';
 
 interface DeviceCardProps {
   device: Device;

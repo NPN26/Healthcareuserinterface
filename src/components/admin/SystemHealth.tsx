@@ -1,9 +1,9 @@
-import { Card } from './ui/card';
-import { Progress } from './ui/progress';
-import { Badge } from './ui/badge';
+import { Card } from '../ui/card';
+import { Progress } from '../ui/progress';
+import { Badge } from '../ui/badge';
 import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { Server, HardDrive, Cpu, Activity, TrendingUp, CheckCircle } from 'lucide-react';
-import { Biomarker, Device, User } from '../utils/mockData';
+import { Biomarker, Device, User } from '../../utils/mockData';
 
 interface SystemHealthProps {
   biomarkers: Biomarker[];

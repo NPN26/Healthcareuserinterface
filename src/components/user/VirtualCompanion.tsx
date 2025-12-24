@@ -1,12 +1,12 @@
 import { useState, useRef, useEffect } from 'react';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from './ui/dialog';
-import { Button } from './ui/button';
-import { Input } from './ui/input';
-import { ScrollArea } from './ui/scroll-area';
-import { Avatar, AvatarFallback, AvatarImage } from './ui/avatar';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '../ui/dialog';
+import { Button } from '../ui/button';
+import { Input } from '../ui/input';
+import { ScrollArea } from '../ui/scroll-area';
+import { Avatar, AvatarFallback, AvatarImage } from '../ui/avatar';
 import { Send, Bot } from 'lucide-react';
-import { Biomarker, Device, getBiomarkerLabel, getBiomarkerUnit } from '../utils/mockData';
-import { ImageWithFallback } from './figma/ImageWithFallback';
+import { Biomarker, Device, getBiomarkerLabel, getBiomarkerUnit } from '../../utils/mockData';
+import { ImageWithFallback } from '../figma/ImageWithFallback';
 
 interface Message {
   id: string;
