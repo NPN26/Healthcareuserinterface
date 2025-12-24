@@ -10,11 +10,11 @@ Run `npm run dev` to start the development server.
 
 ## Todo List
 
-- [ ] Check color scheme
+- [ ] Check color scheme(all)
   - Review and update the application's color scheme for consistency and accessibility.
-- [ ] Fix sidebar overflow
-  - Resolve any overflow issues in the sidebar component to ensure proper display on all screen sizes.
-- [ ] Increase visibility
+- [x] Fix sidebar overflow(Nirup)
+  - Address the overflow issue in the sidebar to ensure proper display of content.
+- [ ] Increase visibility(anyone)
   - Enhance the visibility of key UI elements for better user experience and accessibility.
-- [ ] Split dashboard into separate pages
+- [ ] Split dashboard into separate pages(Nirup)
   - Refactor the dashboard to split it into multiple pages for better organization and navigation.

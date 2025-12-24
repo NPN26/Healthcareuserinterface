@@ -460,8 +460,8 @@ export function UserDashboard({ user, onLogout }: UserDashboardProps) {
         />
       ) : (
       <div className="flex min-h-screen w-full">
-        <Sidebar>
-          <SidebarHeader className="border-b p-4">
+        <Sidebar className="flex flex-col h-screen">
+          <SidebarHeader className="border-b p-4 flex-shrink-0">
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-blue-500 to-purple-600 dark:from-custom-blue dark:to-custom-purple flex items-center justify-center">
                 <Activity className="w-5 h-5 text-white" />
@@ -473,7 +473,7 @@ export function UserDashboard({ user, onLogout }: UserDashboardProps) {
             </div>
           </SidebarHeader>
 
-          <SidebarContent>
+          <SidebarContent className="flex-1 overflow-y-auto">
             <SidebarGroup>
               <SidebarGroupLabel>Main Menu</SidebarGroupLabel>
               <SidebarGroupContent>
@@ -493,7 +493,7 @@ export function UserDashboard({ user, onLogout }: UserDashboardProps) {
               </SidebarGroupContent>
             </SidebarGroup>
 
-            <SidebarSeparator />
+            <SidebarSeparator className="mx-auto" />
 
             <SidebarGroup>
               <SidebarGroupLabel>Health Metrics</SidebarGroupLabel>
@@ -533,7 +533,7 @@ export function UserDashboard({ user, onLogout }: UserDashboardProps) {
               </SidebarGroupContent>
             </SidebarGroup>
 
-            <SidebarSeparator />
+            <SidebarSeparator className="mx-auto" />
 
             <SidebarGroup>
               <SidebarGroupContent>
@@ -552,7 +552,7 @@ export function UserDashboard({ user, onLogout }: UserDashboardProps) {
             </SidebarGroup>
           </SidebarContent>
 
-          <SidebarFooter className="border-t p-4">
+          <SidebarFooter className="border-t p-4 flex-shrink-0">
             {alerts.length > 0 && (
               <div className="flex items-center gap-2 p-3 bg-amber-100 dark:bg-amber-900/20 rounded-lg">
                 <AlertCircle className="w-4 h-4 text-amber-600 dark:text-amber-400" />
