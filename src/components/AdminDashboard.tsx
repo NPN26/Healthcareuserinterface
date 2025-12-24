@@ -33,6 +33,12 @@ export function AdminDashboard({ user, onLogout }: AdminDashboardProps) {
 
   useEffect(() => {
     loadData();
+    // Check for dark mode preference
+    const darkMode = localStorage.getItem('healthApp_darkMode') === 'true';
+    setIsDarkMode(darkMode);
+    if (darkMode) {
+      document.documentElement.classList.add('dark');
+    }
   }, []);
 
   const loadData = () => {

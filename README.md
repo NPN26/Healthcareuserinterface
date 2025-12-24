@@ -18,5 +18,5 @@ Run `npm run dev` to start the development server.
   - Enhance the visibility of key UI elements for better user experience and accessibility.
 - [x] Refactor the dashboards(Nirup)
   - Improve the structure and organization of the dashboard components for maintainability and performance.
-- [ ] fix darkmode toggle(Nirup)
+- [x] fix darkmode toggle(Nirup)
   - Resolve issues related to the dark mode toggle functionality to ensure it works seamlessly.
