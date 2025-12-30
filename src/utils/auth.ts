@@ -1,0 +1,271 @@
+import { supabase } from './supabase'
+
+export interface User {
+  user_id: string
+  email: string
+  name: string
+  role: 'END_USER' | 'PROVIDER' | 'ADMIN'
+  age?: number
+  gender?: string
+  height?: number
+  weight?: number
+  health_preferences?: any
+  practice_id?: string
+  practice_name?: string
+  speciality?: string
+  is_verified?: boolean
+  created_at?: string
+  last_login?: string
+}
+
+// Mock accounts that bypass authentication
+const MOCK_ACCOUNTS = {
+  'john@example.com': {
+    user_id: 'mock-user-1',
+    email: 'john@example.com',
+    name: 'John Doe',
+    role: 'END_USER' as const,
+    age: 45,
+    gender: 'male',
+    password: 'password123'
+  },
+  'sarah@example.com': {
+    user_id: 'mock-user-2',
+    email: 'sarah@example.com',
+    name: 'Sarah Smith',
+    role: 'END_USER' as const,
+    age: 32,
+    gender: 'female',
+    password: 'password123'
+  },
+  'emily@healthcare.com': {
+    user_id: 'mock-provider-1',
+    email: 'emily@healthcare.com',
+    name: 'Dr. Emily Brown',
+    role: 'PROVIDER' as const,
+    age: 38,
+    gender: 'female',
+    password: 'password123'
+  },
+  'admin@system.com': {
+    user_id: 'mock-admin-1',
+    email: 'admin@system.com',
+    name: 'Admin User',
+    role: 'ADMIN' as const,
+    age: 40,
+    gender: 'male',
+    password: 'password123'
+  }
+}
+
+/**
+ * Check if an email is a mock account
+ */
+function isMockAccount(email: string): boolean {
+  return email in MOCK_ACCOUNTS
+}
+
+/**
+ * Authenticate mock account (bypass Supabase)
+ */
+function authenticateMockAccount(email: string, password: string): { user: User | null, error: string | null } {
+  const mockAccount = MOCK_ACCOUNTS[email as keyof typeof MOCK_ACCOUNTS]
+  
+  if (!mockAccount) {
+    return { user: null, error: 'Mock account not found' }
+  }
+  
+  if (mockAccount.password !== password) {
+    return { user: null, error: 'Invalid password' }
+  }
+  
+  // Return mock user without password
+  const { password: _, ...userWithoutPassword } = mockAccount
+  return { user: userWithoutPassword, error: null }
+}
+
+/**
+ * Sign up a new user
+ */
+export async function signUp(email: string, password: string, name: string) {
+  try {
+    // Prevent signup with mock account emails
+    if (isMockAccount(email)) {
+      throw new Error('This email is reserved for testing. Please use a different email or sign in with the test account.')
+    }
+
+    // First, create auth user in Supabase Auth
+    const { data: authData, error: authError } = await supabase.auth.signUp({
+      email,
+      password,
+    })
+
+    if (authError) throw authError
+    if (!authData.user) throw new Error('No user returned from signup')
+
+    // Then create user record in our users table
+    const { data: userData, error: userError } = await supabase
+      .from('users')
+      .insert({
+        user_id: authData.user.id,
+        email,
+        name,
+        role: 'END_USER',
+      })
+      .select()
+      .single()
+
+    if (userError) throw userError
+
+    return { user: userData, error: null }
+  } catch (error: any) {
+    console.error('Signup error:', error)
+    return { user: null, error: error.message }
+  }
+}
+
+/**
+ * Sign in an existing user
+ */
+export async function signIn(email: string, password: string) {
+  try {
+    // Check if this is a mock account first
+    if (isMockAccount(email)) {
+      console.log('🧪 Using mock authentication for:', email)
+      return authenticateMockAccount(email, password)
+    }
+
+    // Otherwise, use real Supabase Auth for new accounts
+    console.log('🔐 Using Supabase authentication for:', email)
+    const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
+      email,
+      password,
+    })
+
+    if (authError) throw authError
+    if (!authData.user) throw new Error('No user returned from signin')
+
+    // Get user details from our users table
+    const { data: userData, error: userError } = await supabase
+      .from('users')
+      .select('*')
+      .eq('user_id', authData.user.id)
+      .single()
+
+    if (userError) throw userError
+
+    // Update last login
+    await supabase
+      .from('users')
+      .update({ last_login: new Date().toISOString() })
+      .eq('user_id', authData.user.id)
+
+    return { user: userData, error: null }
+  } catch (error: any) {
+    console.error('Signin error:', error)
+    return { user: null, error: error.message }
+  }
+}
+
+/**
+ * Get list of mock accounts for testing (for quick login UI)
+ */
+export function getMockAccounts() {
+  return Object.values(MOCK_ACCOUNTS).map(({ password, ...account }) => ({
+    ...account,
+    isMock: true
+  }))
+}
+
+/**
+ * Sign out the current user
+ */
+export async function signOut() {
+  try {
+    const { error } = await supabase.auth.signOut()
+    if (error) throw error
+    return { error: null }
+  } catch (error: any) {
+    console.error('Signout error:', error)
+    return { error: error.message }
+  }
+}
+
+/**
+ * Get the current session
+ */
+export async function getCurrentSession() {
+  try {
+    const { data: { session }, error } = await supabase.auth.getSession()
+    if (error) throw error
+    return { session, error: null }
+  } catch (error: any) {
+    console.error('Get session error:', error)
+    return { session: null, error: error.message }
+  }
+}
+
+/**
+ * Get current user details
+ */
+export async function getCurrentUser() {
+  try {
+    const { data: { user: authUser }, error: authError } = await supabase.auth.getUser()
+    
+    if (authError) throw authError
+    if (!authUser) return { user: null, error: null }
+
+    const { data: userData, error: userError } = await supabase
+      .from('users')
+      .select('*')
+      .eq('user_id', authUser.id)
+      .single()
+
+    if (userError) throw userError
+
+    return { user: userData, error: null }
+  } catch (error: any) {
+    console.error('Get current user error:', error)
+    return { user: null, error: error.message }
+  }
+}
+
+/**
+ * Test database connection
+ */
+export async function testConnection() {
+  try {
+    // Try to query the users table
+    const { data, error } = await supabase
+      .from('users')
+      .select('user_id, email, name, role')
+      .limit(1)
+
+    if (error) throw error
+
+    console.log('✅ Database connection successful!')
+    return { connected: true, error: null }
+  } catch (error: any) {
+    console.error('❌ Database connection failed:', error)
+    return { connected: false, error: error.message }
+  }
+}
+
+/**
+ * Get all users (for testing/demo purposes)
+ */
+export async function getAllUsers() {
+  try {
+    const { data, error } = await supabase
+      .from('users')
+      .select('user_id, email, name, role')
+      .order('created_at', { ascending: false })
+
+    if (error) throw error
+
+    return { users: data, error: null }
+  } catch (error: any) {
+    console.error('Get all users error:', error)
+    return { users: null, error: error.message }
+  }
+}

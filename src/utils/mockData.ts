@@ -5,7 +5,7 @@ export interface User {
   name: string;
   email: string;
   password?: string;
-  role: 'user' | 'provider' | 'admin';
+  role: 'END_USER' | 'PROVIDER' | 'ADMIN';
   age?: number;
   avatar?: string;
   dateOfBirth?: string;
@@ -146,7 +146,7 @@ export const mockUsers: User[] = [
     name: 'John Doe',
     email: 'john@example.com',
     password: 'password123',
-    role: 'user',
+    role: 'END_USER',
     age: 45,
     dateOfBirth: '1978-05-15',
     gender: 'male',
@@ -161,7 +161,7 @@ export const mockUsers: User[] = [
     name: 'Sarah Smith',
     email: 'sarah@example.com',
     password: 'password123',
-    role: 'user',
+    role: 'END_USER',
     age: 32,
     dateOfBirth: '1991-08-22',
     gender: 'female',
@@ -176,7 +176,7 @@ export const mockUsers: User[] = [
     name: 'Dr. Emily Brown',
     email: 'emily@healthcare.com',
     password: 'password123',
-    role: 'provider',
+    role: 'PROVIDER',
     age: 38,
     dateOfBirth: '1985-03-10',
     gender: 'female',
@@ -191,7 +191,7 @@ export const mockUsers: User[] = [
     name: 'Admin User',
     email: 'admin@system.com',
     password: 'password123',
-    role: 'admin',
+    role: 'ADMIN',
     age: 40,
     dateOfBirth: '1983-11-05',
     gender: 'male',
