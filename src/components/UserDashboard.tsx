@@ -64,6 +64,9 @@ export function UserDashboard({ user, onLogout }: UserDashboardProps) {
   const [activeView, setActiveView] = useState<'overview' | 'trends' | 'devices' | 'heartRate' | 'bloodPressure' | 'activities' | 'calories' | 'settings'>('overview');
   const [isDarkMode, setIsDarkMode] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  
+  // Track last generation time for each biomarker type
+  const [lastGeneratedTime, setLastGeneratedTime] = useState<Record<string, number>>({});
 
   useEffect(() => {
     loadData();
@@ -73,14 +76,23 @@ export function UserDashboard({ user, onLogout }: UserDashboardProps) {
     if (darkMode) {
       document.documentElement.classList.add('dark');
     }
+  }, []);
 
+  // Separate effect for simulating readings - depends on devices
+  useEffect(() => {
+    if (devices.length === 0) {
+      return; // Don't set up interval if no devices yet
+    }
+
+    console.log('Setting up interval for', devices.length, 'devices');
+    
     // Simulate real-time updates
     const interval = setInterval(() => {
       simulateNewReading();
     }, 10000); // Every 10 seconds
 
     return () => clearInterval(interval);
-  }, []);
+  }, [devices]);
 
   const toggleDarkMode = () => {
     const newMode = !isDarkMode;
@@ -89,7 +101,31 @@ export function UserDashboard({ user, onLogout }: UserDashboardProps) {
     document.documentElement.classList.toggle('dark', newMode);
   };
 
-  const loadData = () => {
+  const loadData = async () => {
+    try {
+      // Try to load from Supabase first
+      const { fetchBiomarkers, fetchDevices, fetchAlerts } = await import('../utils/supabase');
+      
+      const [supabaseBiomarkers, supabaseDevices, supabaseAlerts] = await Promise.all([
+        fetchBiomarkers(user.user_id || user.id),
+        fetchDevices(user.user_id || user.id),
+        fetchAlerts(user.user_id || user.id)
+      ]);
+
+      // If we get data from Supabase, use it
+      if (supabaseBiomarkers.length > 0 || supabaseDevices.length > 0) {
+        console.log('Loading data from Supabase');
+        setBiomarkers(supabaseBiomarkers);
+        setDevices(supabaseDevices);
+        setAlerts(supabaseAlerts);
+        return;
+      }
+    } catch (error) {
+      console.error('Error loading from Supabase, falling back to localStorage:', error);
+    }
+
+    // Fallback to localStorage if Supabase fails or has no data
+    console.log('Loading data from localStorage');
     const storedBiomarkers = JSON.parse(localStorage.getItem('healthApp_biomarkers') || '[]');
     const storedDevices = JSON.parse(localStorage.getItem('healthApp_devices') || '[]');
     const storedAlerts = JSON.parse(localStorage.getItem('healthApp_alerts') || '[]');
@@ -100,18 +136,59 @@ export function UserDashboard({ user, onLogout }: UserDashboardProps) {
   };
 
   const simulateNewReading = async () => {
-    if (devices.length === 0) return;
+    console.log('simulateNewReading called - devices:', devices.length);
+    
+    if (devices.length === 0) {
+      console.log('No devices found, skipping reading generation');
+      return;
+    }
 
     const activeDevices = devices.filter(d => d.status === 'active');
-    if (activeDevices.length === 0) return;
+    console.log('Active devices:', activeDevices.length);
+    
+    if (activeDevices.length === 0) {
+      console.log('No active devices found, skipping reading generation');
+      return;
+    }
 
     const device = activeDevices[0];
-    const types: Biomarker['type'][] = ['heartRate', 'oxygen'];
-    const type = types[Math.floor(Math.random() * types.length)];
+    // Use device's supported biomarkers or fallback to default types
+    const types: Biomarker['type'][] = device.supportedBiomarkers || ['heartRate', 'oxygen'];
+    
+    // Filter types based on frequency rules
+    const now = Date.now();
+    const availableTypes = types.filter(type => {
+      const lastTime = lastGeneratedTime[type] || 0;
+      const timeSince = now - lastTime;
+      
+      // Steps: only generate every 10 minutes (600000 ms)
+      if (type === 'steps') {
+        return timeSince >= 600000; // 10 minutes
+      }
+      
+      // Sleep: only generate twice per day (12 hours = 43200000 ms)
+      if (type === 'sleep') {
+        return timeSince >= 43200000; // 12 hours
+      }
+      
+      // Other types can be generated on the normal interval
+      return true;
+    });
+    
+    if (availableTypes.length === 0) {
+      console.log('No biomarkers ready for generation based on frequency rules');
+      return;
+    }
+    
+    const type = availableTypes[Math.floor(Math.random() * availableTypes.length)];
 
     const newReading = generateBiomarkerData(user.id, device.id, type, new Date());
+    
+    // Update last generated time for this type
+    setLastGeneratedTime(prev => ({ ...prev, [type]: now }));
+    console.log('Generated new reading:', type, newReading.value, 'for device:', device.id);
 
-    // Save to database
+    // Dual-write: Save to Supabase database
     try {
       const { supabase } = await import('../utils/supabase');
       
@@ -142,6 +219,7 @@ export function UserDashboard({ user, onLogout }: UserDashboardProps) {
       if (dataPointError) {
         console.error('Error inserting data point:', dataPointError);
       } else if (dataPoint) {
+        console.log('Data point created:', dataPoint.data_point_id);
         // Then, create biomarker_data
         const { error: biomarkerError } = await supabase
           .from('biomarker_data')
@@ -155,6 +233,8 @@ export function UserDashboard({ user, onLogout }: UserDashboardProps) {
 
         if (biomarkerError) {
           console.error('Error inserting biomarker:', biomarkerError);
+        } else {
+          console.log('Biomarker data created successfully');
         }
       }
     } catch (error) {
@@ -164,8 +244,11 @@ export function UserDashboard({ user, onLogout }: UserDashboardProps) {
 
     // Check for abnormal reading
     if (isAbnormalReading(type, newReading.value) || newReading.isFaulty) {
+      // Import UUID generator
+      const { generateUUID } = await import('../utils/supabase');
+      
       const newAlert: Alert = {
-        id: `alert-${Date.now()}`,
+        id: generateUUID(), // Generate proper UUID for database compatibility
         userId: user.id,
         type: newReading.isFaulty ? 'fault' : 'warning',
         message: newReading.isFaulty 
@@ -176,6 +259,24 @@ export function UserDashboard({ user, onLogout }: UserDashboardProps) {
         read: false,
       };
 
+      // Dual-write: Save to Supabase
+      try {
+        const { supabase } = await import('../utils/supabase');
+        await supabase
+          .from('notifications')
+          .insert({
+            notification_id: newAlert.id,
+            user_id: user.user_id || user.id,
+            type: 'ALERT',
+            content: newAlert.message,
+            is_read: false,
+            timestamp: newAlert.timestamp
+          });
+      } catch (error) {
+        console.error('Error saving alert to database:', error);
+      }
+
+      // Dual-write: Also save to localStorage for safety
       const updatedAlerts = [...alerts, newAlert];
       setAlerts(updatedAlerts);
 
@@ -185,6 +286,7 @@ export function UserDashboard({ user, onLogout }: UserDashboardProps) {
       toast.error(newAlert.message);
     }
 
+    // Dual-write: Update local state and localStorage
     const updatedBiomarkers = [...biomarkers, newReading];
     setBiomarkers(updatedBiomarkers);
 
@@ -222,19 +324,23 @@ export function UserDashboard({ user, onLogout }: UserDashboardProps) {
     setCurrentUser(updatedUser);
   };
 
-  const handleAddDevice = async (deviceData: { name: string; type: Device['type'] }) => {
+  const handleAddDevice = async (deviceData: { name: string; type: Device['type']; supportedBiomarkers: Biomarker['type'][] }) => {
+    // Import UUID generator
+    const { generateUUID } = await import('../utils/supabase');
+    
     const newDevice: Device = {
-      id: `device-${Date.now()}`,
+      id: generateUUID(), // Generate proper UUID for database compatibility
       userId: user.id,
       name: deviceData.name,
       type: deviceData.type,
       status: 'active',
       batteryLevel: 100,
       lastSync: new Date().toISOString(),
-      autoMode: true
+      autoMode: true,
+      supportedBiomarkers: deviceData.supportedBiomarkers
     };
 
-    // Save to database
+    // Dual-write: Save to Supabase database
     try {
       const { supabase } = await import('../utils/supabase');
       
@@ -251,7 +357,8 @@ export function UserDashboard({ user, onLogout }: UserDashboardProps) {
             device_type: newDevice.type,
             battery_level: newDevice.batteryLevel,
             auto_mode: newDevice.autoMode,
-            status: newDevice.status
+            status: newDevice.status,
+            supported_biomarkers: newDevice.supportedBiomarkers
           }
         })
         .select()
@@ -264,6 +371,7 @@ export function UserDashboard({ user, onLogout }: UserDashboardProps) {
       console.error('Database error:', error);
     }
 
+    // Dual-write: Also save to localStorage for safety
     const allDevices = JSON.parse(localStorage.getItem('healthApp_devices') || '[]');
     const updatedDevices = [...allDevices, newDevice];
     localStorage.setItem('healthApp_devices', JSON.stringify(updatedDevices));
@@ -617,16 +725,32 @@ export function UserDashboard({ user, onLogout }: UserDashboardProps) {
 
       {/* Add Device Dialog */}
       <Dialog open={showAddDevice} onOpenChange={setShowAddDevice}>
-        <DialogContent>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Add New Device</DialogTitle>
           </DialogHeader>
           <form onSubmit={(e) => {
             e.preventDefault();
             const formData = new FormData(e.currentTarget);
+            const selectedBiomarkers: Biomarker['type'][] = [];
+            
+            // Collect selected biomarkers from checkboxes
+            const biomarkerTypes: Biomarker['type'][] = ['heartRate', 'bloodPressure', 'glucose', 'oxygen', 'steps', 'sleep', 'temperature', 'weight'];
+            biomarkerTypes.forEach(type => {
+              if (formData.get(type) === 'on') {
+                selectedBiomarkers.push(type);
+              }
+            });
+            
+            if (selectedBiomarkers.length === 0) {
+              toast.error('Please select at least one biomarker');
+              return;
+            }
+            
             handleAddDevice({
               name: formData.get('name') as string,
-              type: formData.get('type') as Device['type']
+              type: formData.get('type') as Device['type'],
+              supportedBiomarkers: selectedBiomarkers
             });
           }} className="space-y-4">
             <div className="space-y-2">
@@ -653,6 +777,44 @@ export function UserDashboard({ user, onLogout }: UserDashboardProps) {
                   <SelectItem value="sleepTracker">Sleep Tracker</SelectItem>
                 </SelectContent>
               </Select>
+            </div>
+            <div className="space-y-3">
+              <Label>Supported Biomarkers</Label>
+              <p className="text-sm text-gray-500">Select the biomarkers this device can measure</p>
+              <div className="grid grid-cols-2 gap-3 p-4 border rounded-lg">
+                <div className="flex items-center space-x-2">
+                  <input type="checkbox" id="heartRate" name="heartRate" className="w-4 h-4" aria-label="Heart Rate" />
+                  <Label htmlFor="heartRate" className="text-sm font-normal cursor-pointer">Heart Rate</Label>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <input type="checkbox" id="bloodPressure" name="bloodPressure" className="w-4 h-4" aria-label="Blood Pressure" />
+                  <Label htmlFor="bloodPressure" className="text-sm font-normal cursor-pointer">Blood Pressure</Label>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <input type="checkbox" id="glucose" name="glucose" className="w-4 h-4" aria-label="Glucose" />
+                  <Label htmlFor="glucose" className="text-sm font-normal cursor-pointer">Glucose</Label>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <input type="checkbox" id="oxygen" name="oxygen" className="w-4 h-4" aria-label="Blood Oxygen" />
+                  <Label htmlFor="oxygen" className="text-sm font-normal cursor-pointer">Blood Oxygen</Label>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <input type="checkbox" id="steps" name="steps" className="w-4 h-4" aria-label="Steps" />
+                  <Label htmlFor="steps" className="text-sm font-normal cursor-pointer">Steps</Label>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <input type="checkbox" id="sleep" name="sleep" className="w-4 h-4" aria-label="Sleep" />
+                  <Label htmlFor="sleep" className="text-sm font-normal cursor-pointer">Sleep</Label>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <input type="checkbox" id="temperature" name="temperature" className="w-4 h-4" aria-label="Temperature" />
+                  <Label htmlFor="temperature" className="text-sm font-normal cursor-pointer">Temperature</Label>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <input type="checkbox" id="weight" name="weight" className="w-4 h-4" aria-label="Weight" />
+                  <Label htmlFor="weight" className="text-sm font-normal cursor-pointer">Weight</Label>
+                </div>
+              </div>
             </div>
             <div className="flex justify-end gap-2">
               <Button type="button" variant="outline" onClick={() => setShowAddDevice(false)}>

@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { Card } from '../ui/card';
 import { Button } from '../ui/button';
 import { Badge } from '../ui/badge';
@@ -12,8 +13,19 @@ import {
   WifiOff,
   AlertCircle,
   Power,
-  Settings
+  Settings,
+  Trash2
 } from 'lucide-react';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '../ui/alert-dialog';
 import { Device } from '../../utils/mockData';
 import { toast } from 'sonner';
 
@@ -23,6 +35,8 @@ interface DeviceCardProps {
 }
 
 export function DeviceCard({ device, onUpdate }: DeviceCardProps) {
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+
   const getDeviceIcon = () => {
     switch (device.type) {
       case 'smartwatch': return Watch;
@@ -128,7 +142,89 @@ export function DeviceCard({ device, onUpdate }: DeviceCardProps) {
   const syncDevice = async () => {
     const syncTime = new Date().toISOString();
     
-    // Update database
+    // Generate new biomarker readings based on device's supported biomarkers
+    if (device.supportedBiomarkers && device.supportedBiomarkers.length > 0) {
+      try {
+        const { generateBiomarkerData } = await import('../../utils/mockData');
+        const { supabase } = await import('../../utils/supabase');
+        
+        // Get current user
+        const storedUsers = JSON.parse(localStorage.getItem('healthApp_users') || '[]');
+        const currentUser = storedUsers.find((u: any) => u.id === device.userId);
+        
+        if (currentUser) {
+          // Map frontend type to database enum
+          const typeMapping: Record<string, string> = {
+            'heartRate': 'HEART_RATE',
+            'bloodPressure': 'BLOOD_PRESSURE',
+            'glucose': 'BLOOD_GLUCOSE',
+            'oxygen': 'SPO2',
+            'steps': 'STEPS',
+            'sleep': 'SLEEP',
+            'temperature': 'RESPIRATORY_RATE',
+            'weight': 'WEIGHT'
+          };
+
+          // Generate readings for each supported biomarker
+          for (const biomarkerType of device.supportedBiomarkers) {
+            const newReading = generateBiomarkerData(currentUser.id, device.id, biomarkerType, new Date());
+            
+            // First, create data_point
+            const { data: dataPoint, error: dataPointError } = await supabase
+              .from('data_points')
+              .insert({
+                user_id: currentUser.user_id || currentUser.id,
+                source_id: device.id,
+                timestamp: newReading.timestamp,
+                data_type: 'BIOMARKER'
+              })
+              .select()
+              .single();
+
+            if (dataPointError) {
+              console.error('Error inserting data point:', dataPointError);
+              continue;
+            }
+
+            if (dataPoint) {
+              // Then, create biomarker_data
+              const { error: biomarkerError } = await supabase
+                .from('biomarker_data')
+                .insert({
+                  data_point_id: dataPoint.data_point_id,
+                  type: typeMapping[biomarkerType] || 'HEART_RATE',
+                  value: newReading.value,
+                  secondary_value: newReading.diastolic,
+                  unit: newReading.type === 'bloodPressure' ? 'mmHg' : 
+                        newReading.type === 'heartRate' ? 'bpm' :
+                        newReading.type === 'oxygen' ? '%' :
+                        newReading.type === 'glucose' ? 'mg/dL' :
+                        newReading.type === 'steps' ? 'steps' :
+                        newReading.type === 'sleep' ? 'hours' :
+                        newReading.type === 'temperature' ? '°F' :
+                        newReading.type === 'weight' ? 'lbs' : 'unit'
+                });
+
+              if (biomarkerError) {
+                console.error('Error inserting biomarker data:', biomarkerError);
+              }
+            }
+            
+            // Also save to localStorage
+            const allBiomarkers = JSON.parse(localStorage.getItem('healthApp_biomarkers') || '[]');
+            allBiomarkers.push(newReading);
+            localStorage.setItem('healthApp_biomarkers', JSON.stringify(allBiomarkers));
+          }
+          
+          toast.success(`Synced ${device.supportedBiomarkers.length} biomarker reading(s)`);
+        }
+      } catch (error) {
+        console.error('Error generating biomarker data:', error);
+        toast.error('Failed to sync device data');
+      }
+    }
+    
+    // Update device sync time in database
     try {
       const { supabase } = await import('../../utils/supabase');
       
@@ -154,7 +250,6 @@ export function DeviceCard({ device, onUpdate }: DeviceCardProps) {
     );
     localStorage.setItem('healthApp_devices', JSON.stringify(updated));
     onUpdate();
-    toast.success('Device synced successfully');
   };
 
   const simulateFault = async () => {
@@ -198,6 +293,33 @@ export function DeviceCard({ device, onUpdate }: DeviceCardProps) {
     localStorage.setItem('healthApp_devices', JSON.stringify(updated));
     onUpdate();
     toast.error('Device fault detected!');
+  };
+
+  const deleteDevice = async () => {
+    // Delete from database
+    try {
+      const { supabase } = await import('../../utils/supabase');
+      
+      const { error } = await supabase
+        .from('data_sources')
+        .delete()
+        .eq('source_id', device.id);
+
+      if (error) {
+        console.error('Error deleting device from database:', error);
+      }
+    } catch (error) {
+      console.error('Database error:', error);
+    }
+
+    // Delete from localStorage
+    const devices = JSON.parse(localStorage.getItem('healthApp_devices') || '[]');
+    const updated = devices.filter((d: Device) => d.id !== device.id);
+    localStorage.setItem('healthApp_devices', JSON.stringify(updated));
+    
+    setShowDeleteDialog(false);
+    onUpdate();
+    toast.success(`${device.name} removed successfully`);
   };
 
   const getBatteryColor = () => {
@@ -246,6 +368,26 @@ export function DeviceCard({ device, onUpdate }: DeviceCardProps) {
         <div className="p-3 bg-red-50 dark:bg-red-950 border border-red-200 rounded-lg flex items-center gap-2">
           <AlertCircle className="w-4 h-4 text-red-600" />
           <p className="text-sm text-red-700">Device malfunction detected. Please check device.</p>
+        </div>
+      )}
+
+      {device.supportedBiomarkers && device.supportedBiomarkers.length > 0 && (
+        <div className="space-y-2">
+          <p className="text-sm text-gray-600">Supported Biomarkers</p>
+          <div className="flex flex-wrap gap-2">
+            {device.supportedBiomarkers.map((biomarker) => (
+              <Badge key={biomarker} variant="outline" className="text-xs">
+                {biomarker === 'heartRate' && '❤️ Heart Rate'}
+                {biomarker === 'bloodPressure' && '🩺 Blood Pressure'}
+                {biomarker === 'glucose' && '🩸 Glucose'}
+                {biomarker === 'oxygen' && '💨 Oxygen'}
+                {biomarker === 'steps' && '👣 Steps'}
+                {biomarker === 'sleep' && '😴 Sleep'}
+                {biomarker === 'temperature' && '🌡️ Temperature'}
+                {biomarker === 'weight' && '⚖️ Weight'}
+              </Badge>
+            ))}
+          </div>
         </div>
       )}
 
@@ -305,6 +447,33 @@ export function DeviceCard({ device, onUpdate }: DeviceCardProps) {
           Simulate Fault
         </Button>
       )}
+
+      <Button 
+        size="sm" 
+        variant="outline" 
+        className="w-full text-red-600 hover:text-red-700 hover:bg-red-50"
+        onClick={() => setShowDeleteDialog(true)}
+      >
+        <Trash2 className="w-4 h-4 mr-2" />
+        Delete Device
+      </Button>
+
+      <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Device</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete {device.name}? This action cannot be undone and will remove all associated data.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={deleteDevice} className="bg-red-600 hover:bg-red-700">
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </Card>
   );
 }

@@ -39,6 +39,7 @@ export interface Device {
   batteryLevel: number;
   lastSync: string;
   autoMode: boolean;
+  supportedBiomarkers?: Biomarker['type'][];
 }
 
 export interface Alert {
@@ -81,6 +82,21 @@ export function generateBiomarkerData(
 
   let value = Math.random() * (baseValues[type].max - baseValues[type].min) + baseValues[type].min;
   let isFaulty = false;
+  let notes: string | undefined;
+
+  // Special handling for sleep to differentiate naps from nighttime sleep
+  if (type === 'sleep') {
+    const hour = date.getHours();
+    // If it's during the day (8 AM - 6 PM), make it a nap (1-2 hours)
+    if (hour >= 8 && hour <= 18) {
+      value = Math.random() * 1.5 + 0.5; // 0.5 - 2 hours
+      notes = 'Nap';
+    } else {
+      // Nighttime sleep (5-9 hours)
+      value = Math.random() * 4 + 5; // 5-9 hours
+      notes = 'Nighttime Sleep';
+    }
+  }
 
   // Simulate fault (5% chance or forced)
   if (includeFault || Math.random() < 0.05) {
@@ -101,6 +117,7 @@ export function generateBiomarkerData(
     timestamp: date.toISOString(),
     deviceId,
     isFaulty,
+    notes,
   };
 
   // Add blood pressure specific fields
@@ -214,6 +231,7 @@ export const mockDevices: Device[] = [
     batteryLevel: 85,
     lastSync: new Date().toISOString(),
     autoMode: true,
+    supportedBiomarkers: ['heartRate', 'oxygen', 'steps', 'sleep'],
   },
   {
     id: 'device-2',
@@ -224,6 +242,7 @@ export const mockDevices: Device[] = [
     batteryLevel: 92,
     lastSync: new Date(Date.now() - 3600000).toISOString(),
     autoMode: true,
+    supportedBiomarkers: ['glucose'],
   },
   {
     id: 'device-3',
@@ -234,6 +253,7 @@ export const mockDevices: Device[] = [
     batteryLevel: 67,
     lastSync: new Date(Date.now() - 7200000).toISOString(),
     autoMode: false,
+    supportedBiomarkers: ['bloodPressure', 'heartRate'],
   },
 ];
 
