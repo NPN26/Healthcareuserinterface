@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Card } from './ui/card';
-import { Activity, Flame, Droplet, Settings, Smartphone, Bell, User, Heart, Wind, Footprints, Moon } from 'lucide-react';
+import { Activity, Flame, Droplet, Settings, Smartphone, Bell, User, Heart, Wind, Footprints, Moon, Plus } from 'lucide-react';
 import { 
   BiomarkerChart, 
   DeviceCard, 
@@ -39,6 +39,11 @@ import {
   SidebarMenuItem,
   SidebarMenuButton,
 } from './ui/sidebar';
+import { Button } from './ui/button';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from './ui/dialog';
+import { Input } from './ui/input';
+import { Label } from './ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 
 interface UserDashboardProps {
   user: any;
@@ -54,6 +59,7 @@ export function UserDashboard({ user, onLogout }: UserDashboardProps) {
   const [showGoals, setShowGoals] = useState(false);
   const [showManualEntry, setShowManualEntry] = useState(false);
   const [showProfile, setShowProfile] = useState(false);
+  const [showAddDevice, setShowAddDevice] = useState(false);
   const [selectedPeriod, setSelectedPeriod] = useState<'today' | 'week' | 'month'>('today');
   const [activeView, setActiveView] = useState<'overview' | 'trends' | 'devices' | 'heartRate' | 'bloodPressure' | 'activities' | 'calories' | 'settings'>('overview');
   const [isDarkMode, setIsDarkMode] = useState(false);
@@ -165,6 +171,27 @@ export function UserDashboard({ user, onLogout }: UserDashboardProps) {
     setCurrentUser(updatedUser);
   };
 
+  const handleAddDevice = (deviceData: { name: string; type: Device['type'] }) => {
+    const newDevice: Device = {
+      id: `device-${Date.now()}`,
+      userId: user.id,
+      name: deviceData.name,
+      type: deviceData.type,
+      status: 'active',
+      batteryLevel: 100,
+      lastSync: new Date().toISOString(),
+      autoMode: true
+    };
+
+    const allDevices = JSON.parse(localStorage.getItem('healthApp_devices') || '[]');
+    const updatedDevices = [...allDevices, newDevice];
+    localStorage.setItem('healthApp_devices', JSON.stringify(updatedDevices));
+    
+    loadData();
+    setShowAddDevice(false);
+    toast.success(`${deviceData.name} added successfully!`);
+  };
+
   const handleCardClick = (type: Biomarker['type']) => {
     if (type === 'heartRate') setActiveView('heartRate');
     if (type === 'bloodPressure') setActiveView('bloodPressure');
@@ -219,14 +246,23 @@ export function UserDashboard({ user, onLogout }: UserDashboardProps) {
       
       case 'devices':
         return (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {devices.map(device => (
-              <DeviceCard 
-                key={device.id} 
-                device={device}
-                onUpdate={loadData}
-              />
-            ))}
+          <div className="space-y-4">
+            <div className="flex justify-between items-center">
+              <h2 className="text-2xl font-bold text-foreground">My Devices</h2>
+              <Button onClick={() => setShowAddDevice(true)}>
+                <Plus className="w-4 h-4 mr-2" />
+                Add Device
+              </Button>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {devices.map(device => (
+                <DeviceCard 
+                  key={device.id} 
+                  device={device}
+                  onUpdate={loadData}
+                />
+              ))}
+            </div>
           </div>
         );
       
@@ -497,6 +533,55 @@ export function UserDashboard({ user, onLogout }: UserDashboardProps) {
         deviceId={devices.find(d => d.status === 'active')?.id || devices[0]?.id || 'manual-entry'}
         onDataAdded={loadData}
       />
+
+      {/* Add Device Dialog */}
+      <Dialog open={showAddDevice} onOpenChange={setShowAddDevice}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Add New Device</DialogTitle>
+          </DialogHeader>
+          <form onSubmit={(e) => {
+            e.preventDefault();
+            const formData = new FormData(e.currentTarget);
+            handleAddDevice({
+              name: formData.get('name') as string,
+              type: formData.get('type') as Device['type']
+            });
+          }} className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="name">Device Name</Label>
+              <Input 
+                id="name" 
+                name="name" 
+                placeholder="Enter device name" 
+                required 
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="type">Device Type</Label>
+              <Select name="type" required>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select device type" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="smartwatch">Smart Watch</SelectItem>
+                  <SelectItem value="glucometer">Glucometer</SelectItem>
+                  <SelectItem value="bloodPressureMonitor">Blood Pressure Monitor</SelectItem>
+                  <SelectItem value="scale">Scale</SelectItem>
+                  <SelectItem value="thermometer">Thermometer</SelectItem>
+                  <SelectItem value="sleepTracker">Sleep Tracker</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="flex justify-end gap-2">
+              <Button type="button" variant="outline" onClick={() => setShowAddDevice(false)}>
+                Cancel
+              </Button>
+              <Button type="submit">Add Device</Button>
+            </div>
+          </form>
+        </DialogContent>
+      </Dialog>
     </SidebarProvider>
   );
 }

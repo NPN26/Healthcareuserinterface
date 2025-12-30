@@ -4,9 +4,10 @@ import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Label } from './ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
-import { Activity, Eye, EyeOff } from 'lucide-react';
+import { Activity, Eye, EyeOff, FlaskConical } from 'lucide-react';
 import { toast } from 'sonner@2.0.3';
 import { User } from '../utils/mockData';
+import { signIn, signUp, getMockAccounts } from '../utils/auth';
 
 interface AuthScreenProps {
   onLogin: (user: User) => void;
@@ -14,7 +15,7 @@ interface AuthScreenProps {
   setUsers: (users: User[]) => void;
 }
 
-export function AuthScreen({ onLogin, users, setUsers }: AuthScreenProps) {
+export function AuthScreen({ onLogin }: AuthScreenProps) {
   const [loginEmail, setLoginEmail] = useState('');
   const [loginPassword, setLoginPassword] = useState('');
   const [signupName, setSignupName] = useState('');
@@ -24,29 +25,50 @@ export function AuthScreen({ onLogin, users, setUsers }: AuthScreenProps) {
   const [showLoginPassword, setShowLoginPassword] = useState(false);
   const [showSignupPassword, setShowSignupPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
 
-  const handleLogin = () => {
+  const handleLogin = async () => {
     if (!loginEmail || !loginPassword) {
       toast.error('Please enter both email and password');
       return;
     }
 
-    const user = users.find(u => u.email === loginEmail);
-    if (!user) {
-      toast.error('User not found');
-      return;
-    }
+    setIsLoading(true);
+    try {
+      const { user, error } = await signIn(loginEmail, loginPassword);
 
-    if (user.password !== loginPassword) {
-      toast.error('Incorrect password');
-      return;
-    }
+      if (error) {
+        toast.error(error);
+        return;
+      }
 
-    onLogin(user);
-    toast.success(`Welcome back, ${user.name}!`);
+      if (!user) {
+        toast.error('Failed to sign in');
+        return;
+      }
+
+      // Convert to User format expected by app
+      const appUser: User = {
+        id: user.user_id,
+        name: user.name,
+        email: user.email,
+        password: '',
+        role: user.role,
+        age: user.age,
+        gender: user.gender,
+      };
+
+      onLogin(appUser);
+      toast.success(`Welcome back, ${user.name}!`);
+    } catch (error: any) {
+      console.error('Login error:', error);
+      toast.error(error.message || 'Failed to sign in');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
-  const handleSignup = () => {
+  const handleSignup = async () => {
     if (!signupName || !signupEmail || !signupPassword || !confirmPassword) {
       toast.error('Please fill in all fields');
       return;
@@ -62,33 +84,74 @@ export function AuthScreen({ onLogin, users, setUsers }: AuthScreenProps) {
       return;
     }
 
-    const existingUser = users.find(u => u.email === signupEmail);
-    if (existingUser) {
-      toast.error('An account with this email already exists');
-      return;
+    setIsLoading(true);
+    try {
+      const { user, error } = await signUp(signupEmail, signupPassword, signupName);
+
+      if (error) {
+        toast.error(error);
+        return;
+      }
+
+      if (!user) {
+        toast.error('Failed to create account');
+        return;
+      }
+
+      // Convert to User format
+      const appUser: User = {
+        id: user.user_id,
+        name: user.name,
+        email: user.email,
+        password: '',
+        role: user.role,
+      };
+
+      onLogin(appUser);
+      toast.success('Account created successfully!');
+    } catch (error: any) {
+      console.error('Signup error:', error);
+      toast.error(error.message || 'Failed to create account');
+    } finally {
+      setIsLoading(false);
     }
-
-    const newUser: User = {
-      id: `user-${Date.now()}`,
-      name: signupName,
-      email: signupEmail,
-      password: signupPassword,
-      role: 'user',
-    };
-
-    const updatedUsers = [...users, newUser];
-    setUsers(updatedUsers);
-    localStorage.setItem('healthApp_users', JSON.stringify(updatedUsers));
-
-    onLogin(newUser);
-    toast.success('Account created successfully!');
   };
 
-  const quickLogin = (userEmail: string) => {
-    const user = users.find(u => u.email === userEmail);
-    if (user) {
-      onLogin(user);
+  const quickLogin = async (userEmail: string, password: string = 'password123') => {
+    setLoginEmail(userEmail);
+    setLoginPassword(password);
+    
+    setIsLoading(true);
+    try {
+      const { user, error } = await signIn(userEmail, password);
+
+      if (error) {
+        toast.error(error);
+        return;
+      }
+
+      if (!user) {
+        toast.error('Failed to sign in');
+        return;
+      }
+
+      const appUser: User = {
+        id: user.user_id,
+        name: user.name,
+        email: user.email,
+        password: '',
+        role: user.role,
+        age: user.age,
+        gender: user.gender,
+      };
+
+      onLogin(appUser);
       toast.success(`Welcome back, ${user.name}!`);
+    } catch (error: any) {
+      console.error('Quick login error:', error);
+      toast.error('Quick login failed. Please sign in manually or create an account.');
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -147,8 +210,8 @@ export function AuthScreen({ onLogin, users, setUsers }: AuthScreenProps) {
                 </div>
               </div>
 
-              <Button className="w-full" onClick={handleLogin}>
-                Sign In
+              <Button className="w-full" onClick={handleLogin} disabled={isLoading}>
+                {isLoading ? 'Signing in...' : 'Sign In'}
               </Button>
 
               <div className="pt-4 border-t">
@@ -158,6 +221,7 @@ export function AuthScreen({ onLogin, users, setUsers }: AuthScreenProps) {
                     variant="outline" 
                     className="w-full justify-start"
                     onClick={() => quickLogin('john@example.com')}
+                    disabled={isLoading}
                   >
                     <div className="flex items-center gap-3">
                       <div className="w-8 h-8 rounded-full bg-blue-100 dark:bg-blue-900 flex items-center justify-center">
@@ -174,6 +238,7 @@ export function AuthScreen({ onLogin, users, setUsers }: AuthScreenProps) {
                     variant="outline" 
                     className="w-full justify-start"
                     onClick={() => quickLogin('emily@healthcare.com')}
+                    disabled={isLoading}
                   >
                     <div className="flex items-center gap-3">
                       <div className="w-8 h-8 rounded-full bg-green-100 dark:bg-green-900 flex items-center justify-center">
@@ -190,6 +255,7 @@ export function AuthScreen({ onLogin, users, setUsers }: AuthScreenProps) {
                     variant="outline" 
                     className="w-full justify-start"
                     onClick={() => quickLogin('admin@system.com')}
+                    disabled={isLoading}
                   >
                     <div className="flex items-center gap-3">
                       <div className="w-8 h-8 rounded-full bg-purple-100 dark:bg-purple-900 flex items-center justify-center">
@@ -202,6 +268,11 @@ export function AuthScreen({ onLogin, users, setUsers }: AuthScreenProps) {
                     </div>
                   </Button>
                 </div>
+
+                <p className="text-xs text-blue-600 dark:text-blue-400 mt-3 flex items-center gap-1">
+                  <FlaskConical className="w-3 h-3" />
+                  Test accounts use mock auth - no Supabase required
+                </p>
               </div>
             </div>
           </TabsContent>
@@ -273,8 +344,8 @@ export function AuthScreen({ onLogin, users, setUsers }: AuthScreenProps) {
                 </div>
               </div>
 
-              <Button className="w-full" onClick={handleSignup}>
-                Create Account
+              <Button className="w-full" onClick={handleSignup} disabled={isLoading}>
+                {isLoading ? 'Creating account...' : 'Create Account'}
               </Button>
 
               <p className="text-xs text-muted-foreground text-center">

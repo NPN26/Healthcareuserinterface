@@ -54,7 +54,7 @@ export function AdminDashboard({ user, onLogout }: AdminDashboardProps) {
 
     setSystemStatus(prev => ({
       ...prev,
-      activeUsers: storedUsers.filter((u: User) => u.role === 'user').length,
+      activeUsers: storedUsers.filter((u: User) => u.role === 'END_USER').length,
       totalDevices: storedDevices.length,
       dataPoints: storedBiomarkers.length,
     }));
@@ -85,7 +85,7 @@ export function AdminDashboard({ user, onLogout }: AdminDashboardProps) {
     const newBiomarkers: Biomarker[] = [];
     const types: Biomarker['type'][] = ['heartRate', 'glucose', 'oxygen'];
     
-    users.filter(u => u.role === 'user').forEach(user => {
+    users.filter(u => u.role === 'END_USER').forEach(user => {
       const userDevices = devices.filter(d => d.userId === user.id);
       if (userDevices.length > 0) {
         types.forEach(type => {
@@ -139,7 +139,7 @@ export function AdminDashboard({ user, onLogout }: AdminDashboardProps) {
   const toggleUserRole = (userId: string) => {
     const updatedUsers = users.map(u => {
       if (u.id === userId) {
-        const newRole: 'user' | 'provider' = u.role === 'provider' ? 'user' : 'provider';
+        const newRole: 'END_USER' | 'PROVIDER' = u.role === 'PROVIDER' ? 'END_USER' : 'PROVIDER';
         return { ...u, role: newRole };
       }
       return u;

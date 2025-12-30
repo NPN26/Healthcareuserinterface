@@ -28,7 +28,7 @@ export function ProviderDashboard({ user, onLogout }: ProviderDashboardProps) {
 
   const loadData = () => {
     const allUsers = JSON.parse(localStorage.getItem('healthApp_users') || '[]');
-    const patientUsers = allUsers.filter((u: User) => u.role === 'user');
+    const patientUsers = allUsers.filter((u: User) => u.role === 'END_USER');
     setPatients(patientUsers);
 
     const allBiomarkers = JSON.parse(localStorage.getItem('healthApp_biomarkers') || '[]');

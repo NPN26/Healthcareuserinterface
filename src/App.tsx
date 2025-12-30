@@ -3,12 +3,14 @@ import { UserDashboard } from './components/UserDashboard';
 import { ProviderDashboard } from './components/ProviderDashboard';
 import { AdminDashboard } from './components/AdminDashboard';
 import { AuthScreen } from './components/AuthScreen';
+import { DatabaseTest } from './components/DatabaseTest';
 import { initializeMockData, User } from './utils/mockData';
 import { Toaster } from './components/ui/sonner';
 
 export default function App() {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [users, setUsers] = useState<User[]>([]);
+  const [showDatabaseTest, setShowDatabaseTest] = useState(false);
 
   useEffect(() => {
     // Initialize mock data
@@ -23,6 +25,12 @@ export default function App() {
     if (storedCurrentUser) {
       setCurrentUser(JSON.parse(storedCurrentUser));
     }
+
+    // Check URL for database test mode
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('test') === 'db') {
+      setShowDatabaseTest(true);
+    }
   }, []);
 
   const handleLogin = (user: User) => {
@@ -34,6 +42,16 @@ export default function App() {
     setCurrentUser(null);
     localStorage.removeItem('healthApp_currentUser');
   };
+
+  // Show database test if in test mode
+  if (showDatabaseTest) {
+    return (
+      <>
+        <DatabaseTest />
+        <Toaster />
+      </>
+    );
+  }
 
   // Render authentication screen if not logged in
   if (!currentUser) {
@@ -48,9 +66,9 @@ export default function App() {
   // Render appropriate dashboard based on user role
   return (
     <div className="min-h-screen">
-      {currentUser.role === 'user' && <UserDashboard user={currentUser} onLogout={handleLogout} />}
-      {currentUser.role === 'provider' && <ProviderDashboard user={currentUser} onLogout={handleLogout} />}
-      {currentUser.role === 'admin' && <AdminDashboard user={currentUser} onLogout={handleLogout} />}
+      {currentUser.role === 'END_USER' && <UserDashboard user={currentUser} onLogout={handleLogout} />}
+      {currentUser.role === 'PROVIDER' && <ProviderDashboard user={currentUser} onLogout={handleLogout} />}
+      {currentUser.role === 'ADMIN' && <AdminDashboard user={currentUser} onLogout={handleLogout} />}
       <Toaster />
     </div>
   );

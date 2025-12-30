@@ -15,6 +15,28 @@ export function BiomarkerChart({ biomarkers, type, showDetails }: BiomarkerChart
     .sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime())
     .slice(-20); // Last 20 readings
 
+  // Check if there's no data
+  if (sortedData.length === 0) {
+    return (
+      <Card className="p-6">
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <h3 className="text-foreground">{getBiomarkerLabel(type)}</h3>
+              <p className="text-sm text-muted-foreground">No data available</p>
+            </div>
+          </div>
+          <div className="h-64 flex items-center justify-center">
+            <div className="text-center text-muted-foreground">
+              <p className="text-lg mb-2">No data recorded yet</p>
+              <p className="text-sm">Start tracking to see your {getBiomarkerLabel(type).toLowerCase()} data here</p>
+            </div>
+          </div>
+        </div>
+      </Card>
+    );
+  }
+
   const chartData = sortedData.map(b => ({
     time: new Date(b.timestamp).toLocaleString('en-US', { 
       month: 'short', 
