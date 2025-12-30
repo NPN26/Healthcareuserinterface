@@ -36,11 +36,44 @@ export function DeviceCard({ device, onUpdate }: DeviceCardProps) {
 
   const Icon = getDeviceIcon();
 
-  const toggleDeviceStatus = () => {
+  const toggleDeviceStatus = async () => {
+    const newStatus = device.status === 'active' ? 'inactive' : 'active';
+    
+    // Update database
+    try {
+      const { supabase } = await import('../../utils/supabase');
+      
+      // Get current metadata
+      const { data: currentData } = await supabase
+        .from('data_sources')
+        .select('metadata')
+        .eq('source_id', device.id)
+        .single();
+
+      const currentMetadata = currentData?.metadata || {};
+      
+      const { error } = await supabase
+        .from('data_sources')
+        .update({
+          status: newStatus === 'active' ? 'CONNECTED' : 'DISCONNECTED',
+          metadata: {
+            ...currentMetadata,
+            status: newStatus
+          }
+        })
+        .eq('source_id', device.id);
+
+      if (error) {
+        console.error('Error updating device status:', error);
+      }
+    } catch (error) {
+      console.error('Database error:', error);
+    }
+
     const devices = JSON.parse(localStorage.getItem('healthApp_devices') || '[]');
     const updated = devices.map((d: Device) => 
       d.id === device.id 
-        ? { ...d, status: d.status === 'active' ? 'inactive' : 'active' }
+        ? { ...d, status: newStatus }
         : d
     );
     localStorage.setItem('healthApp_devices', JSON.stringify(updated));
@@ -48,23 +81,75 @@ export function DeviceCard({ device, onUpdate }: DeviceCardProps) {
     toast.success(`${device.name} ${device.status === 'active' ? 'deactivated' : 'activated'}`);
   };
 
-  const toggleAutoMode = () => {
+  const toggleAutoMode = async () => {
+    const newAutoMode = !device.autoMode;
+    
+    // Update database metadata
+    try {
+      const { supabase } = await import('../../utils/supabase');
+      
+      // Get current metadata
+      const { data: currentData } = await supabase
+        .from('data_sources')
+        .select('metadata')
+        .eq('source_id', device.id)
+        .single();
+
+      const currentMetadata = currentData?.metadata || {};
+      
+      const { error } = await supabase
+        .from('data_sources')
+        .update({
+          metadata: {
+            ...currentMetadata,
+            auto_mode: newAutoMode
+          }
+        })
+        .eq('source_id', device.id);
+
+      if (error) {
+        console.error('Error updating auto mode:', error);
+      }
+    } catch (error) {
+      console.error('Database error:', error);
+    }
+    
     const devices = JSON.parse(localStorage.getItem('healthApp_devices') || '[]');
     const updated = devices.map((d: Device) => 
       d.id === device.id 
-        ? { ...d, autoMode: !d.autoMode }
+        ? { ...d, autoMode: newAutoMode }
         : d
     );
     localStorage.setItem('healthApp_devices', JSON.stringify(updated));
     onUpdate();
-    toast.success(`Auto mode ${!device.autoMode ? 'enabled' : 'disabled'}`);
+    toast.success(`Auto mode ${newAutoMode ? 'enabled' : 'disabled'}`);
   };
 
-  const syncDevice = () => {
+  const syncDevice = async () => {
+    const syncTime = new Date().toISOString();
+    
+    // Update database
+    try {
+      const { supabase } = await import('../../utils/supabase');
+      
+      const { error } = await supabase
+        .from('data_sources')
+        .update({
+          last_sync: syncTime
+        })
+        .eq('source_id', device.id);
+
+      if (error) {
+        console.error('Error syncing device:', error);
+      }
+    } catch (error) {
+      console.error('Database error:', error);
+    }
+
     const devices = JSON.parse(localStorage.getItem('healthApp_devices') || '[]');
     const updated = devices.map((d: Device) => 
       d.id === device.id 
-        ? { ...d, lastSync: new Date().toISOString() }
+        ? { ...d, lastSync: syncTime }
         : d
     );
     localStorage.setItem('healthApp_devices', JSON.stringify(updated));
@@ -72,7 +157,38 @@ export function DeviceCard({ device, onUpdate }: DeviceCardProps) {
     toast.success('Device synced successfully');
   };
 
-  const simulateFault = () => {
+  const simulateFault = async () => {
+    // Update database
+    try {
+      const { supabase } = await import('../../utils/supabase');
+      
+      // Get current metadata
+      const { data: currentData } = await supabase
+        .from('data_sources')
+        .select('metadata')
+        .eq('source_id', device.id)
+        .single();
+
+      const currentMetadata = currentData?.metadata || {};
+      
+      const { error } = await supabase
+        .from('data_sources')
+        .update({
+          status: 'ERROR',
+          metadata: {
+            ...currentMetadata,
+            status: 'faulty'
+          }
+        })
+        .eq('source_id', device.id);
+
+      if (error) {
+        console.error('Error simulating fault:', error);
+      }
+    } catch (error) {
+      console.error('Database error:', error);
+    }
+
     const devices = JSON.parse(localStorage.getItem('healthApp_devices') || '[]');
     const updated = devices.map((d: Device) => 
       d.id === device.id 

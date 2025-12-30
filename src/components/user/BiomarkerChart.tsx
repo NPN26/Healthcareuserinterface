@@ -42,6 +42,8 @@ export function BiomarkerChart({ biomarkers, type, showDetails }: BiomarkerChart
       month: 'short', 
       day: 'numeric',
       hour: b.type === 'steps' || b.type === 'sleep' ? undefined : '2-digit',
+      minute: b.type === 'steps' || b.type === 'sleep' ? undefined : '2-digit',
+      second: b.type === 'steps' || b.type === 'sleep' ? undefined : '2-digit',
     }),
     value: b.type === 'steps' ? Math.round(b.value) : b.value,
     systolic: b.systolic,

@@ -67,15 +67,75 @@ export function AdminDashboard({ user, onLogout }: AdminDashboardProps) {
     document.documentElement.classList.toggle('dark', newMode);
   };
 
-  const simulateFaultForAllDevices = () => {
+  const simulateFaultForAllDevices = async () => {
     const updated = devices.map(d => ({ ...d, status: 'faulty' as const }));
+    
+    // Update all devices in database
+    try {
+      const { supabase } = await import('../utils/supabase');
+      
+      for (const device of devices) {
+        // Get current metadata
+        const { data: currentData } = await supabase
+          .from('data_sources')
+          .select('metadata')
+          .eq('source_id', device.id)
+          .single();
+
+        const currentMetadata = currentData?.metadata || {};
+        
+        await supabase
+          .from('data_sources')
+          .update({
+            status: 'ERROR',
+            metadata: {
+              ...currentMetadata,
+              status: 'faulty'
+            }
+          })
+          .eq('source_id', device.id);
+      }
+    } catch (error) {
+      console.error('Database error:', error);
+    }
+    
     localStorage.setItem('healthApp_devices', JSON.stringify(updated));
     setDevices(updated);
     toast.success('Fault simulation activated for all devices');
   };
 
-  const resetAllDevices = () => {
+  const resetAllDevices = async () => {
     const updated = devices.map(d => ({ ...d, status: 'active' as const }));
+    
+    // Update all devices in database
+    try {
+      const { supabase } = await import('../utils/supabase');
+      
+      for (const device of devices) {
+        // Get current metadata
+        const { data: currentData } = await supabase
+          .from('data_sources')
+          .select('metadata')
+          .eq('source_id', device.id)
+          .single();
+
+        const currentMetadata = currentData?.metadata || {};
+        
+        await supabase
+          .from('data_sources')
+          .update({
+            status: 'CONNECTED',
+            metadata: {
+              ...currentMetadata,
+              status: 'active'
+            }
+          })
+          .eq('source_id', device.id);
+      }
+    } catch (error) {
+      console.error('Database error:', error);
+    }
+    
     localStorage.setItem('healthApp_devices', JSON.stringify(updated));
     setDevices(updated);
     toast.success('All devices reset to active status');
@@ -294,7 +354,7 @@ export function AdminDashboard({ user, onLogout }: AdminDashboardProps) {
                         </TableCell>
                         <TableCell>{device.batteryLevel}%</TableCell>
                         <TableCell>
-                          {new Date(device.lastSync).toLocaleString()}
+                          {new Date(device.lastSync).toLocaleString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
                         </TableCell>
                         <TableCell>
                           <Badge variant={device.autoMode ? 'default' : 'outline'}>

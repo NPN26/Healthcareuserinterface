@@ -99,7 +99,7 @@ export function UserDashboard({ user, onLogout }: UserDashboardProps) {
     setAlerts(storedAlerts.filter((a: Alert) => a.userId === user.id && !a.read));
   };
 
-  const simulateNewReading = () => {
+  const simulateNewReading = async () => {
     if (devices.length === 0) return;
 
     const activeDevices = devices.filter(d => d.status === 'active');
@@ -110,6 +110,57 @@ export function UserDashboard({ user, onLogout }: UserDashboardProps) {
     const type = types[Math.floor(Math.random() * types.length)];
 
     const newReading = generateBiomarkerData(user.id, device.id, type, new Date());
+
+    // Save to database
+    try {
+      const { supabase } = await import('../utils/supabase');
+      
+      // Map frontend type to database enum
+      const typeMapping: Record<string, string> = {
+        'heartRate': 'HEART_RATE',
+        'bloodPressure': 'BLOOD_PRESSURE',
+        'glucose': 'BLOOD_GLUCOSE',
+        'oxygen': 'SPO2',
+        'steps': 'STEPS',
+        'sleep': 'SLEEP',
+        'temperature': 'RESPIRATORY_RATE',
+        'weight': 'WEIGHT'
+      };
+
+      // First, create data_point
+      const { data: dataPoint, error: dataPointError } = await supabase
+        .from('data_points')
+        .insert({
+          user_id: user.user_id || user.id,
+          source_id: device.id,
+          timestamp: newReading.timestamp,
+          data_type: 'BIOMARKER'
+        })
+        .select()
+        .single();
+
+      if (dataPointError) {
+        console.error('Error inserting data point:', dataPointError);
+      } else if (dataPoint) {
+        // Then, create biomarker_data
+        const { error: biomarkerError } = await supabase
+          .from('biomarker_data')
+          .insert({
+            data_point_id: dataPoint.data_point_id,
+            type: typeMapping[type] || 'HEART_RATE',
+            value: newReading.value,
+            secondary_value: newReading.diastolic || null,
+            unit: getBiomarkerUnit(type)
+          });
+
+        if (biomarkerError) {
+          console.error('Error inserting biomarker:', biomarkerError);
+        }
+      }
+    } catch (error) {
+      console.error('Database error:', error);
+      // Continue with localStorage as fallback
+    }
 
     // Check for abnormal reading
     if (isAbnormalReading(type, newReading.value) || newReading.isFaulty) {
@@ -171,7 +222,7 @@ export function UserDashboard({ user, onLogout }: UserDashboardProps) {
     setCurrentUser(updatedUser);
   };
 
-  const handleAddDevice = (deviceData: { name: string; type: Device['type'] }) => {
+  const handleAddDevice = async (deviceData: { name: string; type: Device['type'] }) => {
     const newDevice: Device = {
       id: `device-${Date.now()}`,
       userId: user.id,
@@ -182,6 +233,36 @@ export function UserDashboard({ user, onLogout }: UserDashboardProps) {
       lastSync: new Date().toISOString(),
       autoMode: true
     };
+
+    // Save to database
+    try {
+      const { supabase } = await import('../utils/supabase');
+      
+      const { data, error } = await supabase
+        .from('data_sources')
+        .insert({
+          source_id: newDevice.id,
+          user_id: user.user_id || user.id,
+          name: newDevice.name,
+          status: 'CONNECTED',
+          last_sync: newDevice.lastSync,
+          priority: 1,
+          metadata: {
+            device_type: newDevice.type,
+            battery_level: newDevice.batteryLevel,
+            auto_mode: newDevice.autoMode,
+            status: newDevice.status
+          }
+        })
+        .select()
+        .single();
+
+      if (error) {
+        console.error('Error adding device to database:', error);
+      }
+    } catch (error) {
+      console.error('Database error:', error);
+    }
 
     const allDevices = JSON.parse(localStorage.getItem('healthApp_devices') || '[]');
     const updatedDevices = [...allDevices, newDevice];

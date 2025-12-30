@@ -106,7 +106,7 @@ export function AlertsPanel({ alerts, onUpdate }: AlertsPanelProps) {
                         {alert.message}
                       </p>
                       <p className="text-xs text-gray-500 mt-1">
-                        {new Date(alert.timestamp).toLocaleString()}
+                        {new Date(alert.timestamp).toLocaleString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
                       </p>
                     </div>
                     <Button

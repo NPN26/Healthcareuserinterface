@@ -221,7 +221,7 @@ export function SecurityMonitor({ users, alerts }: SecurityMonitorProps) {
                 </TableCell>
                 <TableCell>{event.user}</TableCell>
                 <TableCell>
-                  {new Date(event.timestamp).toLocaleString()}
+                  {new Date(event.timestamp).toLocaleString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
                 </TableCell>
                 <TableCell>
                   <code className="text-xs bg-gray-100 dark:bg-gray-800 px-2 py-1 rounded">{event.ip}</code>

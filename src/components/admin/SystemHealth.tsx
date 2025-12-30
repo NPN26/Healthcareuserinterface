@@ -32,7 +32,7 @@ export function SystemHealth({ biomarkers, devices, users }: SystemHealthProps) 
       }).length;
       
       data.push({
-        time: hour.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        time: hour.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
         readings: count,
       });
     }

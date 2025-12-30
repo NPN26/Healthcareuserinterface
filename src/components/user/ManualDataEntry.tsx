@@ -33,7 +33,7 @@ export function ManualDataEntry({ isOpen, onClose, userId, deviceId, onDataAdded
     { value: 'sleep', label: 'Sleep', icon: Moon, unit: 'hours', placeholder: '7.5' },
   ];
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     if (dataType === 'bloodPressure') {
       if (!systolic || !diastolic) {
         toast.error('Please enter both systolic and diastolic values');
@@ -51,13 +51,94 @@ export function ManualDataEntry({ isOpen, onClose, userId, deviceId, onDataAdded
       userId,
       deviceId,
       type: dataType,
-      value: dataType === 'bloodPressure' ? 0 : parseFloat(value),
+      value: dataType === 'bloodPressure' ? parseInt(systolic) : parseFloat(value),
       systolic: dataType === 'bloodPressure' ? parseInt(systolic) : undefined,
       diastolic: dataType === 'bloodPressure' ? parseInt(diastolic) : undefined,
       timestamp: new Date(timestamp).toISOString(),
       isFaulty: false,
       notes: notes || undefined,
     };
+
+    // Save to database
+    try {
+      const { supabase } = await import('../../utils/supabase');
+      
+      // Map frontend type to database enum
+      const typeMapping: Record<string, string> = {
+        'heartRate': 'HEART_RATE',
+        'bloodPressure': 'BLOOD_PRESSURE',
+        'glucose': 'BLOOD_GLUCOSE',
+        'oxygen': 'SPO2',
+        'steps': 'STEPS',
+        'sleep': 'SLEEP',
+        'temperature': 'RESPIRATORY_RATE',
+        'weight': 'WEIGHT'
+      };
+
+      const unitMapping: Record<string, string> = {
+        'heartRate': 'bpm',
+        'bloodPressure': 'mmHg',
+        'glucose': 'mg/dL',
+        'oxygen': '%',
+        'steps': 'steps',
+        'sleep': 'hours',
+        'temperature': '°F',
+        'weight': 'lbs'
+      };
+
+      // First, create data_point
+      const { data: dataPoint, error: dataPointError } = await supabase
+        .from('data_points')
+        .insert({
+          user_id: userId,
+          source_id: deviceId,
+          timestamp: newReading.timestamp,
+          data_type: 'MANUAL'
+        })
+        .select()
+        .single();
+
+      if (dataPointError) {
+        console.error('Error inserting data point:', dataPointError);
+      } else if (dataPoint) {
+        // Create both biomarker_data and manual_entries records
+        const { error: biomarkerError } = await supabase
+          .from('biomarker_data')
+          .insert({
+            data_point_id: dataPoint.data_point_id,
+            type: typeMapping[dataType] || 'HEART_RATE',
+            value: newReading.value,
+            secondary_value: newReading.diastolic || null,
+            unit: unitMapping[dataType] || 'unit'
+          });
+
+        if (biomarkerError) {
+          console.error('Error inserting biomarker:', biomarkerError);
+        }
+
+        // Also insert into manual_entries
+        const { error: manualError } = await supabase
+          .from('manual_entries')
+          .insert({
+            data_point_id: dataPoint.data_point_id,
+            entry_type: 'MEASUREMENT',
+            content: {
+              type: dataType,
+              value: newReading.value,
+              systolic: newReading.systolic,
+              diastolic: newReading.diastolic,
+              notes: notes
+            }
+          });
+
+        if (manualError) {
+          console.error('Error inserting manual entry:', manualError);
+        }
+      }
+    } catch (error) {
+      console.error('Database error:', error);
+      // Continue with localStorage as fallback
+    }
 
     const allBiomarkers = JSON.parse(localStorage.getItem('healthApp_biomarkers') || '[]');
     const updatedBiomarkers = [...allBiomarkers, newReading];
