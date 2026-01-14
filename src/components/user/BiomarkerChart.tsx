@@ -1,19 +1,29 @@
 import { Card } from '../ui/card';
 import { Badge } from '../ui/badge';
 import { LineChart, Line, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
-import { Biomarker, getBiomarkerLabel, getBiomarkerUnit, getBiomarkerColor } from '../../utils/mockData';
+import { Biomarker, Device, getBiomarkerLabel, getBiomarkerUnit, getBiomarkerColor } from '../../utils/mockData';
 import { TrendingUp, TrendingDown, AlertTriangle } from 'lucide-react';
 
 interface BiomarkerChartProps {
   biomarkers: Biomarker[];
   type: Biomarker['type'];
   showDetails?: boolean;
+  devices?: Device[];
 }
 
-export function BiomarkerChart({ biomarkers, type, showDetails }: BiomarkerChartProps) {
+export function BiomarkerChart({ biomarkers, type, showDetails, devices = [] }: BiomarkerChartProps) {
   const sortedData = [...biomarkers]
     .sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime())
     .slice(-20); // Last 20 readings
+
+  // Helper function to get device name by ID
+  const getDeviceName = (deviceId: string) => {
+    if (deviceId === 'deleted-device' || !deviceId) {
+      return 'Deleted Device';
+    }
+    const device = devices.find(d => d.id === deviceId);
+    return device ? device.name : 'Unknown Device';
+  };
 
   // Check if there's no data
   if (sortedData.length === 0) {
@@ -49,6 +59,8 @@ export function BiomarkerChart({ biomarkers, type, showDetails }: BiomarkerChart
     systolic: b.systolic,
     diastolic: b.diastolic,
     isFaulty: b.isFaulty,
+    deviceName: getDeviceName(b.deviceId),
+    notes: b.notes,
   }));
 
   const average = sortedData.reduce((sum, b) => sum + b.value, 0) / sortedData.length;
@@ -128,6 +140,24 @@ export function BiomarkerChart({ biomarkers, type, showDetails }: BiomarkerChart
                     border: '1px solid #e5e7eb',
                     borderRadius: '8px'
                   }}
+                  content={(props) => {
+                    if (!props.active || !props.payload || props.payload.length === 0) return null;
+                    const data = props.payload[0].payload;
+                    return (
+                      <div className="bg-white p-3 border border-gray-200 rounded-lg shadow-lg">
+                        <p className="text-sm font-medium text-gray-900 mb-2">{data.time}</p>
+                        <p className="text-sm text-purple-600">
+                          Systolic: <span className="font-semibold">{data.systolic} {getBiomarkerUnit(type)}</span>
+                        </p>
+                        <p className="text-sm text-purple-400">
+                          Diastolic: <span className="font-semibold">{data.diastolic} {getBiomarkerUnit(type)}</span>
+                        </p>
+                        <p className="text-xs text-gray-500 mt-2 pt-2 border-t border-gray-200">
+                          📱 {data.deviceName}
+                        </p>
+                      </div>
+                    );
+                  }}
                 />
                 <Line 
                   type="monotone" 
@@ -170,9 +200,31 @@ export function BiomarkerChart({ biomarkers, type, showDetails }: BiomarkerChart
                     border: '1px solid #e5e7eb',
                     borderRadius: '8px'
                   }}
-                  formatter={(value: any, name: any, props: any) => {
-                    const displayValue = type === 'steps' ? Math.round(value) : value.toFixed(1);
-                    return [`${displayValue} ${getBiomarkerUnit(type)}`, getBiomarkerLabel(type)];
+                  content={(props) => {
+                    if (!props.active || !props.payload || props.payload.length === 0) return null;
+                    const data = props.payload[0].payload;
+                    const displayValue = type === 'steps' ? Math.round(data.value) : data.value.toFixed(1);
+                    return (
+                      <div className="bg-white p-3 border border-gray-200 rounded-lg shadow-lg">
+                        <p className="text-sm font-medium text-gray-900 mb-2">{data.time}</p>
+                        <p className="text-sm font-semibold">
+                          {getBiomarkerLabel(type)}: {displayValue} {getBiomarkerUnit(type)}
+                        </p>
+                        {data.notes && (
+                          <p className="text-xs text-gray-600 mt-1">
+                            💤 {data.notes}
+                          </p>
+                        )}
+                        <p className="text-xs text-gray-500 mt-2 pt-2 border-t border-gray-200">
+                          📱 {data.deviceName}
+                        </p>
+                        {data.isFaulty && (
+                          <p className="text-xs text-red-600 font-medium mt-1">
+                            ⚠️ Faulty Reading
+                          </p>
+                        )}
+                      </div>
+                    );
                   }}
                 />
                 <Area

@@ -16,14 +16,16 @@ Run `npm run dev` to start the development server.
   - Update the icon's color to ensure visibility and consistency with the dark theme.
 - [ ] Increase visibility(anyone)
   - Enhance the visibility of key UI elements for better user experience and accessibility.
+- [ ] mobile view(anyone)
+  - Optimize the application's layout and functionality for mobile devices.
 
 ### Sprint 1: Development Environment Setup
 
 - [x] Development Environment Setup
-- [ ] Database Initial Setup
+- [x] Database Initial Setup
 - - [x] Create initial database schema
-- - [ ] Seed initial data
-- - [ ] Write database setup documentation
+- - [x] Seed initial data
+- - [x] Write database setup documentation
 - [ ] Update UI Mock-ups
 
 ### Sprint 2: User & Provider Management Services

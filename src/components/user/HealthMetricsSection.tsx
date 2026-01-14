@@ -1,10 +1,10 @@
-import { Heart, Activity, Footprints, Flame } from 'lucide-react';
+import { Heart, Activity, Footprints, Flame, Scale } from 'lucide-react';
 import { SidebarGroup, SidebarGroupLabel, SidebarGroupContent, SidebarMenu, SidebarMenuItem, SidebarMenuButton } from '../ui/sidebar';
 import { Biomarker } from '../../utils/mockData';
 
 interface HealthMetricsSectionProps {
   activeView: string;
-  onViewChange: (view: 'heartRate' | 'bloodPressure' | 'activities' | 'calories') => void;
+  onViewChange: (view: 'heartRate' | 'bloodPressure' | 'activities' | 'calories' | 'weight') => void;
   getLatestBiomarker: (type: Biomarker['type']) => Biomarker | undefined;
 }
 
@@ -13,7 +13,8 @@ export function HealthMetricsSection({ activeView, onViewChange, getLatestBiomar
     { id: 'heartRate' as const, label: 'Heart Rate', icon: Heart, color: 'text-red-500', unit: 'bpm' },
     { id: 'bloodPressure' as const, label: 'Blood Pressure', icon: Activity, color: 'text-purple-500', unit: 'mmHg' },
     { id: 'activities' as const, label: 'Activity', icon: Footprints, color: 'text-green-500', unit: 'steps' },
-    { id: 'calories' as const, label: 'Calories', icon: Flame, color: 'text-orange-500', unit: 'kcal' },
+    { id: 'weight' as const, label: 'Weight', icon: Scale, color: 'text-orange-500', unit: 'kg' },
+    { id: 'calories' as const, label: 'Calories', icon: Flame, color: 'text-amber-500', unit: 'kcal' },
   ];
 
   return (
@@ -28,6 +29,8 @@ export function HealthMetricsSection({ activeView, onViewChange, getLatestBiomar
               ? getLatestBiomarker('bloodPressure')
               : item.id === 'activities'
               ? getLatestBiomarker('steps')
+              : item.id === 'weight'
+              ? getLatestBiomarker('weight')
               : null;
 
             return (
@@ -44,6 +47,8 @@ export function HealthMetricsSection({ activeView, onViewChange, getLatestBiomar
                         ? `${latest.systolic}/${latest.diastolic}`
                         : item.id === 'calories'
                         ? '2.3k'
+                        : item.id === 'weight'
+                        ? latest.value?.toFixed(1)
                         : latest.value?.toFixed(0)}
                     </span>
                   )}

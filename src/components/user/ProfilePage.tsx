@@ -12,11 +12,12 @@ import {
   Calendar,
   Shield,
   Bell,
-  Target,
+  Trophy,
   Save,
   UserCircle2,
   Stethoscope,
 } from 'lucide-react';
+import { AchievementsPage } from './AchievementsPage';
 import {
   Select,
   SelectContent,
@@ -33,7 +34,7 @@ interface ProfilePageProps {
 }
 
 export function ProfilePage({ user, onBack, onUpdate }: ProfilePageProps) {
-  const [activeTab, setActiveTab] = useState<'personal' | 'goals' | 'security' | 'notifications'>('personal');
+  const [activeTab, setActiveTab] = useState<'personal' | 'achievements' | 'security' | 'notifications'>('personal');
   const [formData, setFormData] = useState({
     name: user.name || '',
     email: user.email || '',
@@ -117,7 +118,7 @@ export function ProfilePage({ user, onBack, onUpdate }: ProfilePageProps) {
 
   const tabs = [
     { id: 'personal' as const, label: 'Personal Info', icon: UserIcon },
-    { id: 'goals' as const, label: 'Health Goals', icon: Target },
+    { id: 'achievements' as const, label: 'Achievements', icon: Trophy },
     { id: 'security' as const, label: 'Security', icon: Shield },
     { id: 'notifications' as const, label: 'Notifications', icon: Bell },
   ];
@@ -289,28 +290,9 @@ export function ProfilePage({ user, onBack, onUpdate }: ProfilePageProps) {
           </div>
         )}
 
-        {/* Health Goals Tab */}
-        {activeTab === 'goals' && (
-          <Card className="p-6">
-            <div className="flex items-center gap-3 mb-6">
-              <div className="w-12 h-12 rounded-lg bg-gradient-to-br from-green-500 to-emerald-600 flex items-center justify-center">
-                <Target className="w-6 h-6 text-white" />
-              </div>
-              <div>
-                <h3 className="font-semibold">Health Goals</h3>
-                <p className="text-sm text-muted-foreground">Set and track your health objectives</p>
-              </div>
-            </div>
-
-            <div className="space-y-4">
-              <p className="text-muted-foreground">
-                Your health goals help you stay on track. You can manage these from the dashboard goals manager.
-              </p>
-              <Button variant="outline" onClick={onBack}>
-                Go to Goals Manager
-              </Button>
-            </div>
-          </Card>
+        {/* Achievements Tab */}
+        {activeTab === 'achievements' && (
+          <AchievementsPage userId={user.id || user.user_id} />
         )}
 
         {/* Security Tab */}

@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Card } from './ui/card';
-import { Activity, Flame, Droplet, Settings, Smartphone, Bell, User, Heart, Wind, Footprints, Moon, Plus } from 'lucide-react';
+import { Activity, Flame, Droplet, Settings, Smartphone, Bell, User, Heart, Wind, Footprints, Moon, Plus, Scale, Zap, Target, Trophy, Star, Crown, Sparkles, Award } from 'lucide-react';
 import { 
   BiomarkerChart, 
   DeviceCard, 
@@ -15,7 +15,11 @@ import {
   QuickActionsGrid,
   QuickStatsGrid,
   DashboardHeader,
-  SidebarFooterAlerts
+  SidebarFooterAlerts,
+  NotificationsPage,
+  AchievementUnlockAnimation,
+  type Notification,
+  type Achievement
 } from './user';
 import { 
   Biomarker, 
@@ -60,10 +64,14 @@ export function UserDashboard({ user, onLogout }: UserDashboardProps) {
   const [showManualEntry, setShowManualEntry] = useState(false);
   const [showProfile, setShowProfile] = useState(false);
   const [showAddDevice, setShowAddDevice] = useState(false);
+  const [showNotifications, setShowNotifications] = useState(false);
   const [selectedPeriod, setSelectedPeriod] = useState<'today' | 'week' | 'month'>('today');
-  const [activeView, setActiveView] = useState<'overview' | 'trends' | 'devices' | 'heartRate' | 'bloodPressure' | 'activities' | 'calories' | 'settings'>('overview');
+  const [activeView, setActiveView] = useState<'overview' | 'trends' | 'devices' | 'heartRate' | 'bloodPressure' | 'activities' | 'weight' | 'calories' | 'settings'>('overview');
   const [isDarkMode, setIsDarkMode] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [unreadNotificationsCount, setUnreadNotificationsCount] = useState(0);
+  const [achievementToShow, setAchievementToShow] = useState<Achievement | null>(null);
   
   // Track last generation time for each biomarker type
   const [lastGeneratedTime, setLastGeneratedTime] = useState<Record<string, number>>({});
@@ -102,37 +110,103 @@ export function UserDashboard({ user, onLogout }: UserDashboardProps) {
   };
 
   const loadData = async () => {
+    let supabaseBiomarkers: Biomarker[] = [];
+    let supabaseDevices: Device[] = [];
+    let supabaseAlerts: Alert[] = [];
+    let supabaseNotifications: Notification[] = [];
+    let dbLoadSuccess = false;
+
     try {
-      // Try to load from Supabase first
-      const { fetchBiomarkers, fetchDevices, fetchAlerts } = await import('../utils/supabase');
+      // Always try to load from Supabase first
+      console.log('Loading data from Supabase database');
+      const { fetchBiomarkers, fetchDevices, fetchAlerts, fetchNotifications } = await import('../utils/supabase');
       
-      const [supabaseBiomarkers, supabaseDevices, supabaseAlerts] = await Promise.all([
+      [supabaseBiomarkers, supabaseDevices, supabaseAlerts, supabaseNotifications] = await Promise.all([
         fetchBiomarkers(user.user_id || user.id),
         fetchDevices(user.user_id || user.id),
-        fetchAlerts(user.user_id || user.id)
+        fetchAlerts(user.user_id || user.id),
+        fetchNotifications(user.user_id || user.id)
       ]);
 
-      // If we get data from Supabase, use it
-      if (supabaseBiomarkers.length > 0 || supabaseDevices.length > 0) {
-        console.log('Loading data from Supabase');
-        setBiomarkers(supabaseBiomarkers);
-        setDevices(supabaseDevices);
-        setAlerts(supabaseAlerts);
-        return;
-      }
+      console.log(`Loaded from DB: ${supabaseBiomarkers.length} biomarkers, ${supabaseDevices.length} devices, ${supabaseNotifications.length} notifications`);
+      dbLoadSuccess = true;
     } catch (error) {
-      console.error('Error loading from Supabase, falling back to localStorage:', error);
+      console.error('Error loading from Supabase, will try localStorage:', error);
     }
 
-    // Fallback to localStorage if Supabase fails or has no data
-    console.log('Loading data from localStorage');
-    const storedBiomarkers = JSON.parse(localStorage.getItem('healthApp_biomarkers') || '[]');
-    const storedDevices = JSON.parse(localStorage.getItem('healthApp_devices') || '[]');
-    const storedAlerts = JSON.parse(localStorage.getItem('healthApp_alerts') || '[]');
+    // If database load was successful, use that data
+    if (dbLoadSuccess) {
+      setBiomarkers(supabaseBiomarkers);
+      setDevices(supabaseDevices);
+      setAlerts(supabaseAlerts);
+      setNotifications(supabaseNotifications);
+      setUnreadNotificationsCount(supabaseNotifications.filter(n => !n.is_read).length);
+    } else {
+      // Fallback to localStorage only if database fails completely
+      console.log('Loading data from localStorage as fallback');
+      const storedBiomarkers = JSON.parse(localStorage.getItem('healthApp_biomarkers') || '[]');
+      const storedDevices = JSON.parse(localStorage.getItem('healthApp_devices') || '[]');
+      const storedAlerts = JSON.parse(localStorage.getItem('healthApp_alerts') || '[]');
 
-    setBiomarkers(storedBiomarkers.filter((b: Biomarker) => b.userId === user.id));
-    setDevices(storedDevices.filter((d: Device) => d.userId === user.id));
-    setAlerts(storedAlerts.filter((a: Alert) => a.userId === user.id && !a.read));
+      setBiomarkers(storedBiomarkers.filter((b: Biomarker) => b.userId === user.id));
+      setDevices(storedDevices.filter((d: Device) => d.userId === user.id));
+      setAlerts(storedAlerts.filter((a: Alert) => a.userId === user.id && !a.read));
+      setNotifications([]);
+      setUnreadNotificationsCount(0);
+    }
+  };
+
+  // Helper function to check and unlock achievements
+  const checkAchievements = (biomarkerCount: number, stepCount?: number) => {
+    const userId = user.id || user.user_id;
+    const stored = localStorage.getItem(`achievements_${userId}`);
+    let achievements = stored ? JSON.parse(stored) : [];
+
+    // Initialize achievements if empty
+    if (achievements.length === 0) {
+      achievements = [
+        { id: 'first-reading', title: 'First Step', description: 'Record your first health reading', icon: 'Heart', category: 'health', rarity: 'common', unlocked: false, requirement: 1, progress: 0 },
+        { id: 'step-master', title: 'Step Master', description: 'Reach 10,000 steps in a single day', icon: 'Zap', category: 'activity', rarity: 'common', unlocked: false, requirement: 10000, progress: 0 },
+        { id: 'week-streak', title: 'Week Warrior', description: 'Log readings for 7 consecutive days', icon: 'Target', category: 'consistency', rarity: 'common', unlocked: false, requirement: 7, progress: 0 },
+      ];
+    }
+
+    // Check for first reading achievement
+    const firstReading = achievements.find((a: any) => a.id === 'first-reading');
+    if (firstReading && !firstReading.unlocked && biomarkerCount >= 1) {
+      firstReading.unlocked = true;
+      firstReading.unlockedAt = new Date().toISOString();
+      firstReading.progress = biomarkerCount;
+      
+      // Show animation
+      setAchievementToShow({
+        ...firstReading,
+        icon: Heart,
+        unlockedAt: new Date(firstReading.unlockedAt)
+      });
+      
+      toast.success('🏆 Achievement Unlocked: First Step!');
+      localStorage.setItem(`achievements_${userId}`, JSON.stringify(achievements));
+    }
+
+    // Check for step master achievement
+    if (stepCount && stepCount >= 10000) {
+      const stepMaster = achievements.find((a: any) => a.id === 'step-master');
+      if (stepMaster && !stepMaster.unlocked) {
+        stepMaster.unlocked = true;
+        stepMaster.unlockedAt = new Date().toISOString();
+        stepMaster.progress = stepCount;
+        
+        setAchievementToShow({
+          ...stepMaster,
+          icon: Zap,
+          unlockedAt: new Date(stepMaster.unlockedAt)
+        });
+        
+        toast.success('🏆 Achievement Unlocked: Step Master!');
+        localStorage.setItem(`achievements_${userId}`, JSON.stringify(achievements));
+      }
+    }
   };
 
   const simulateNewReading = async () => {
@@ -151,9 +225,12 @@ export function UserDashboard({ user, onLogout }: UserDashboardProps) {
       return;
     }
 
-    const device = activeDevices[0];
+    // Pick a random active device (gives all devices a chance)
+    const device = activeDevices[Math.floor(Math.random() * activeDevices.length)];
     // Use device's supported biomarkers or fallback to default types
     const types: Biomarker['type'][] = device.supportedBiomarkers || ['heartRate', 'oxygen'];
+    
+    console.log(`Device "${device.name}" supported biomarkers:`, types);
     
     // Filter types based on frequency rules
     const now = Date.now();
@@ -175,6 +252,8 @@ export function UserDashboard({ user, onLogout }: UserDashboardProps) {
       return true;
     });
     
+    console.log('Available types after frequency filter:', availableTypes);
+    
     if (availableTypes.length === 0) {
       console.log('No biomarkers ready for generation based on frequency rules');
       return;
@@ -186,7 +265,11 @@ export function UserDashboard({ user, onLogout }: UserDashboardProps) {
     
     // Update last generated time for this type
     setLastGeneratedTime(prev => ({ ...prev, [type]: now }));
-    console.log('Generated new reading:', type, newReading.value, 'for device:', device.id);
+    console.log(`Generated new reading: ${type} for device "${device.name}":`, 
+      type === 'bloodPressure' 
+        ? `${newReading.systolic}/${newReading.diastolic} mmHg` 
+        : `${newReading.value} ${getBiomarkerUnit(type)}`
+    );
 
     // Dual-write: Save to Supabase database
     try {
@@ -221,13 +304,14 @@ export function UserDashboard({ user, onLogout }: UserDashboardProps) {
       } else if (dataPoint) {
         console.log('Data point created:', dataPoint.data_point_id);
         // Then, create biomarker_data
+        // For blood pressure, use systolic as primary value and diastolic as secondary
         const { error: biomarkerError } = await supabase
           .from('biomarker_data')
           .insert({
             data_point_id: dataPoint.data_point_id,
             type: typeMapping[type] || 'HEART_RATE',
-            value: newReading.value,
-            secondary_value: newReading.diastolic || null,
+            value: type === 'bloodPressure' ? newReading.systolic : newReading.value,
+            secondary_value: type === 'bloodPressure' ? newReading.diastolic : null,
             unit: getBiomarkerUnit(type)
           });
 
@@ -292,6 +376,10 @@ export function UserDashboard({ user, onLogout }: UserDashboardProps) {
 
     const allBiomarkers = JSON.parse(localStorage.getItem('healthApp_biomarkers') || '[]');
     localStorage.setItem('healthApp_biomarkers', JSON.stringify([...allBiomarkers, newReading]));
+
+    // Check for achievements
+    const userBiomarkers = updatedBiomarkers.filter(b => b.userId === user.id);
+    checkAchievements(userBiomarkers.length, newReading.type === 'steps' ? newReading.value : undefined);
   };
 
   const getLatestBiomarker = (type: Biomarker['type']) => {
@@ -322,6 +410,96 @@ export function UserDashboard({ user, onLogout }: UserDashboardProps) {
 
   const handleUpdateUser = (updatedUser: any) => {
     setCurrentUser(updatedUser);
+  };
+
+  // Notification handlers
+  const handleMarkNotificationAsRead = async (notificationId: string) => {
+    try {
+      const { markNotificationAsRead } = await import('../utils/supabase');
+      const success = await markNotificationAsRead(notificationId);
+      
+      if (success) {
+        setNotifications(prev => 
+          prev.map(n => 
+            n.notification_id === notificationId 
+              ? { ...n, is_read: true, read_at: new Date().toISOString() }
+              : n
+          )
+        );
+        setUnreadNotificationsCount(prev => Math.max(0, prev - 1));
+        toast.success('Notification marked as read');
+      }
+    } catch (error) {
+      console.error('Error marking notification as read:', error);
+      toast.error('Failed to mark notification as read');
+    }
+  };
+
+  const handleMarkAllNotificationsAsRead = async () => {
+    try {
+      const { markAllNotificationsAsRead } = await import('../utils/supabase');
+      const success = await markAllNotificationsAsRead(user.user_id || user.id);
+      
+      if (success) {
+        const now = new Date().toISOString();
+        setNotifications(prev => 
+          prev.map(n => ({ ...n, is_read: true, read_at: now }))
+        );
+        setUnreadNotificationsCount(0);
+        toast.success('All notifications marked as read');
+      }
+    } catch (error) {
+      console.error('Error marking all notifications as read:', error);
+      toast.error('Failed to mark all notifications as read');
+    }
+  };
+
+  const handleDeleteNotification = async (notificationId: string) => {
+    try {
+      const { deleteNotification } = await import('../utils/supabase');
+      const success = await deleteNotification(notificationId);
+      
+      if (success) {
+        const deletedNotification = notifications.find(n => n.notification_id === notificationId);
+        setNotifications(prev => prev.filter(n => n.notification_id !== notificationId));
+        if (deletedNotification && !deletedNotification.is_read) {
+          setUnreadNotificationsCount(prev => Math.max(0, prev - 1));
+        }
+        toast.success('Notification deleted');
+      }
+    } catch (error) {
+      console.error('Error deleting notification:', error);
+      toast.error('Failed to delete notification');
+    }
+  };
+
+  const handleDeleteAllNotifications = async () => {
+    try {
+      const { deleteAllNotifications } = await import('../utils/supabase');
+      const success = await deleteAllNotifications(user.user_id || user.id);
+      
+      if (success) {
+        setNotifications([]);
+        setUnreadNotificationsCount(0);
+        toast.success('All notifications deleted');
+      }
+    } catch (error) {
+      console.error('Error deleting all notifications:', error);
+      toast.error('Failed to delete all notifications');
+    }
+  };
+
+  const handleRefreshNotifications = async () => {
+    try {
+      const { fetchNotifications } = await import('../utils/supabase');
+      const freshNotifications = await fetchNotifications(user.user_id || user.id);
+      setNotifications(freshNotifications);
+      setUnreadNotificationsCount(freshNotifications.filter(n => !n.is_read).length);
+      toast.success('Notifications refreshed');
+    } catch (error) {
+      console.error('Error refreshing notifications:', error);
+      toast.error('Failed to refresh notifications');
+    }
   };
 
   const handleAddDevice = async (deviceData: { name: string; type: Device['type']; supportedBiomarkers: Biomarker['type'][] }) => {
@@ -385,6 +563,7 @@ export function UserDashboard({ user, onLogout }: UserDashboardProps) {
     if (type === 'heartRate') setActiveView('heartRate');
     if (type === 'bloodPressure') setActiveView('bloodPressure');
     if (type === 'steps') setActiveView('activities');
+    if (type === 'weight') setActiveView('weight');
   };
 
   const biomarkerCards = [
@@ -394,6 +573,7 @@ export function UserDashboard({ user, onLogout }: UserDashboardProps) {
     { type: 'oxygen' as const, icon: Wind, color: 'text-cyan-500' },
     { type: 'steps' as const, icon: Footprints, color: 'text-green-500' },
     { type: 'sleep' as const, icon: Moon, color: 'text-indigo-500' },
+    { type: 'weight' as const, icon: Scale, color: 'text-orange-500' },
   ];
 
   const renderContent = () => {
@@ -413,6 +593,7 @@ export function UserDashboard({ user, onLogout }: UserDashboardProps) {
                   key={type}
                   biomarkers={biomarkers.filter(b => b.type === type)}
                   type={type}
+                  devices={devices}
                 />
               ))}
             </div>
@@ -428,6 +609,7 @@ export function UserDashboard({ user, onLogout }: UserDashboardProps) {
                 biomarkers={biomarkers.filter(b => b.type === type)}
                 type={type}
                 showDetails
+                devices={devices}
               />
             ))}
           </div>
@@ -464,6 +646,7 @@ export function UserDashboard({ user, onLogout }: UserDashboardProps) {
                 biomarkers={biomarkers.filter(b => b.type === 'heartRate')}
                 type="heartRate"
                 showDetails
+                devices={devices}
               />
             </Card>
           </div>
@@ -478,6 +661,7 @@ export function UserDashboard({ user, onLogout }: UserDashboardProps) {
                 biomarkers={biomarkers.filter(b => b.type === 'bloodPressure')}
                 type="bloodPressure"
                 showDetails
+                devices={devices}
               />
             </Card>
           </div>
@@ -493,13 +677,30 @@ export function UserDashboard({ user, onLogout }: UserDashboardProps) {
                   biomarkers={biomarkers.filter(b => b.type === 'steps')}
                   type="steps"
                   showDetails
+                  devices={devices}
                 />
                 <BiomarkerChart 
                   biomarkers={biomarkers.filter(b => b.type === 'sleep')}
                   type="sleep"
                   showDetails
+                  devices={devices}
                 />
               </div>
+            </Card>
+          </div>
+        );
+      
+      case 'weight':
+        return (
+          <div className="space-y-6">
+            <Card className="p-6">
+              <h3 className="text-foreground mb-4">Weight Tracking</h3>
+              <BiomarkerChart 
+                biomarkers={biomarkers.filter(b => b.type === 'weight')}
+                type="weight"
+                showDetails
+                devices={devices}
+              />
             </Card>
           </div>
         );
@@ -667,6 +868,12 @@ export function UserDashboard({ user, onLogout }: UserDashboardProps) {
               onProfileClick={() => setShowProfile(true)}
               onSettingsClick={() => setActiveView('settings')}
               onLogout={handleLogout}
+              notifications={notifications}
+              unreadCount={unreadNotificationsCount}
+              onMarkNotificationAsRead={handleMarkNotificationAsRead}
+              onMarkAllNotificationsAsRead={handleMarkAllNotificationsAsRead}
+              onDeleteNotification={handleDeleteNotification}
+              onViewAllNotifications={() => setShowNotifications(true)}
             />
 
             <div className="p-4 md:p-8">
@@ -722,6 +929,22 @@ export function UserDashboard({ user, onLogout }: UserDashboardProps) {
         deviceId={devices.find(d => d.status === 'active')?.id || devices[0]?.id || 'manual-entry'}
         onDataAdded={loadData}
       />
+
+      {/* Notifications Page */}
+      {showNotifications && (
+        <div className="fixed inset-0 z-50 bg-background">
+          <NotificationsPage
+            userId={user.user_id || user.id}
+            notifications={notifications}
+            onBack={() => setShowNotifications(false)}
+            onMarkAsRead={handleMarkNotificationAsRead}
+            onMarkAllAsRead={handleMarkAllNotificationsAsRead}
+            onDelete={handleDeleteNotification}
+            onDeleteAll={handleDeleteAllNotifications}
+            onRefresh={handleRefreshNotifications}
+          />
+        </div>
+      )}
 
       {/* Add Device Dialog */}
       <Dialog open={showAddDevice} onOpenChange={setShowAddDevice}>
@@ -825,6 +1048,14 @@ export function UserDashboard({ user, onLogout }: UserDashboardProps) {
           </form>
         </DialogContent>
       </Dialog>
+
+      {/* Achievement Unlock Animation */}
+      {achievementToShow && (
+        <AchievementUnlockAnimation
+          achievement={achievementToShow}
+          onClose={() => setAchievementToShow(null)}
+        />
+      )}
     </SidebarProvider>
   );
 }

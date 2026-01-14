@@ -4,7 +4,7 @@ import { Button } from '../ui/button';
 import { Input } from '../ui/input';
 import { Label } from '../ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
-import { Plus, Heart, Activity, Droplet, Wind, Footprints, Moon } from 'lucide-react';
+import { Plus, Heart, Activity, Droplet, Wind, Footprints, Moon, Scale } from 'lucide-react';
 import { toast } from 'sonner';
 import { Biomarker } from '../../utils/mockData';
 
@@ -31,6 +31,7 @@ export function ManualDataEntry({ isOpen, onClose, userId, deviceId, onDataAdded
     { value: 'oxygen', label: 'Blood Oxygen', icon: Wind, unit: '%', placeholder: '98' },
     { value: 'steps', label: 'Steps', icon: Footprints, unit: 'steps', placeholder: '8000' },
     { value: 'sleep', label: 'Sleep', icon: Moon, unit: 'hours', placeholder: '7.5' },
+    { value: 'weight', label: 'Weight', icon: Scale, unit: 'kg', placeholder: '70' },
   ];
 
   const handleSubmit = async () => {
@@ -83,7 +84,7 @@ export function ManualDataEntry({ isOpen, onClose, userId, deviceId, onDataAdded
         'steps': 'steps',
         'sleep': 'hours',
         'temperature': '°F',
-        'weight': 'lbs'
+        'weight': 'kg'
       };
 
       // First, create data_point

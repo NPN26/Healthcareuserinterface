@@ -74,7 +74,7 @@ export function generateBiomarkerData(
     bloodPressure: { min: 110, max: 130 },
     glucose: { min: 70, max: 120 },
     oxygen: { min: 95, max: 100 },
-    steps: { min: 3000, max: 12000 },
+    steps: { min: 10, max: 100 },
     sleep: { min: 5, max: 9 },
     temperature: { min: 36.1, max: 37.2 },
     weight: { min: 65, max: 85 },
@@ -101,7 +101,7 @@ export function generateBiomarkerData(
   // Simulate fault (5% chance or forced)
   if (includeFault || Math.random() < 0.05) {
     if (type === 'steps') {
-      value = 1000000; // Impossible step count
+      value = 50000; // Unrealistically high step increment
       isFaulty = true;
     } else if (type === 'heartRate') {
       value = 250; // Impossibly high

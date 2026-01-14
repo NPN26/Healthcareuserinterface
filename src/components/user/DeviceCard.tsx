@@ -296,10 +296,13 @@ export function DeviceCard({ device, onUpdate }: DeviceCardProps) {
   };
 
   const deleteDevice = async () => {
-    // Delete from database
+    // Delete device from database (biomarker data will be preserved)
     try {
       const { supabase } = await import('../../utils/supabase');
       
+      // Simply delete the device - the database foreign key constraint
+      // will automatically set source_id to NULL for all related data_points
+      // This preserves the historical biomarker data
       const { error } = await supabase
         .from('data_sources')
         .delete()
@@ -307,9 +310,15 @@ export function DeviceCard({ device, onUpdate }: DeviceCardProps) {
 
       if (error) {
         console.error('Error deleting device from database:', error);
+        toast.error('Failed to delete device from database');
+        return;
       }
+      
+      console.log('Device deleted from database. Historical data preserved.');
     } catch (error) {
       console.error('Database error:', error);
+      toast.error('Database error while deleting device');
+      return;
     }
 
     // Delete from localStorage
@@ -319,7 +328,7 @@ export function DeviceCard({ device, onUpdate }: DeviceCardProps) {
     
     setShowDeleteDialog(false);
     onUpdate();
-    toast.success(`${device.name} removed successfully`);
+    toast.success(`${device.name} removed. Historical data preserved.`);
   };
 
   const getBatteryColor = () => {

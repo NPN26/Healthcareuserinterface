@@ -11,6 +11,7 @@ import {
   DropdownMenuTrigger,
 } from '../ui/dropdown-menu';
 import { Avatar, AvatarFallback } from '../ui/avatar';
+import { NotificationsPopover, type Notification } from './NotificationsPopover';
 
 interface DashboardHeaderProps {
   user: any;
@@ -22,6 +23,13 @@ interface DashboardHeaderProps {
   onProfileClick: () => void;
   onSettingsClick: () => void;
   onLogout: () => void;
+  // Notification props
+  notifications: Notification[];
+  unreadCount: number;
+  onMarkNotificationAsRead: (notificationId: string) => Promise<void>;
+  onMarkAllNotificationsAsRead: () => Promise<void>;
+  onDeleteNotification: (notificationId: string) => Promise<void>;
+  onViewAllNotifications: () => void;
 }
 
 export function DashboardHeader({
@@ -34,6 +42,12 @@ export function DashboardHeader({
   onProfileClick,
   onSettingsClick,
   onLogout,
+  notifications,
+  unreadCount,
+  onMarkNotificationAsRead,
+  onMarkAllNotificationsAsRead,
+  onDeleteNotification,
+  onViewAllNotifications,
 }: DashboardHeaderProps) {
   return (
     <header className="sticky top-0 z-10 flex h-16 shrink-0 items-center gap-4 border-b bg-white/80 dark:bg-gray-900/80 backdrop-blur-xl px-4">
@@ -64,16 +78,15 @@ export function DashboardHeader({
           {isDarkMode ? <Sun className="w-4 h-4" /> : <MoonIcon className="w-4 h-4" />}
         </Button>
 
-        <Button
-          variant="ghost"
-          size="icon"
-          className="h-9 w-9 relative"
-        >
-          <Bell className="w-4 h-4" />
-          {alertCount > 0 && (
-            <span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full"></span>
-          )}
-        </Button>
+        <NotificationsPopover
+          userId={user.user_id}
+          notifications={notifications}
+          unreadCount={unreadCount}
+          onMarkAsRead={onMarkNotificationAsRead}
+          onMarkAllAsRead={onMarkAllNotificationsAsRead}
+          onDelete={onDeleteNotification}
+          onViewAll={onViewAllNotifications}
+        />
 
         {/* Profile Dropdown */}
         <DropdownMenu>

@@ -10,18 +10,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { Target, Plus, Edit2, Trash2, CheckCircle2, TrendingUp } from 'lucide-react';
 import { toast } from 'sonner';
 import { Biomarker } from '../../utils/mockData';
+import { HealthGoal, fetchGoals, createGoal, updateGoal, deleteGoal } from '../../utils/supabase';
 
-export interface HealthGoal {
-  id: string;
-  userId: string;
-  type: 'steps' | 'heartRate' | 'bloodPressure' | 'glucose' | 'sleep' | 'weight';
-  target: number;
-  targetSystolic?: number;
-  targetDiastolic?: number;
-  period: 'daily' | 'weekly' | 'monthly';
-  createdAt: string;
-  deadline?: string;
-}
+// Re-export HealthGoal for backward compatibility
+export type { HealthGoal } from '../../utils/supabase';
 
 interface GoalsManagerProps {
   isOpen: boolean;
@@ -34,6 +26,7 @@ export function GoalsManager({ isOpen, onClose, userId, biomarkers }: GoalsManag
   const [goals, setGoals] = useState<HealthGoal[]>([]);
   const [showAddGoal, setShowAddGoal] = useState(false);
   const [editingGoal, setEditingGoal] = useState<HealthGoal | null>(null);
+  const [loading, setLoading] = useState(false);
   const [newGoal, setNewGoal] = useState({
     type: 'steps' as HealthGoal['type'],
     target: 10000,
@@ -44,65 +37,105 @@ export function GoalsManager({ isOpen, onClose, userId, biomarkers }: GoalsManag
   });
 
   useEffect(() => {
-    loadGoals();
-  }, [userId]);
+    if (isOpen) {
+      loadGoals();
+    }
+  }, [userId, isOpen]);
 
-  const loadGoals = () => {
-    const storedGoals = JSON.parse(localStorage.getItem('healthApp_goals') || '[]');
-    setGoals(storedGoals.filter((g: HealthGoal) => g.userId === userId));
+  const loadGoals = async () => {
+    setLoading(true);
+    try {
+      const fetchedGoals = await fetchGoals(userId);
+      setGoals(fetchedGoals);
+    } catch (error) {
+      console.error('Error loading goals:', error);
+      toast.error('Failed to load goals');
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const handleAddGoal = () => {
-    const goal: HealthGoal = {
-      id: `goal-${Date.now()}`,
-      userId,
-      type: newGoal.type,
-      target: newGoal.type === 'bloodPressure' ? 0 : newGoal.target,
-      targetSystolic: newGoal.type === 'bloodPressure' ? newGoal.targetSystolic : undefined,
-      targetDiastolic: newGoal.type === 'bloodPressure' ? newGoal.targetDiastolic : undefined,
-      period: newGoal.period,
-      createdAt: new Date().toISOString(),
-      deadline: newGoal.deadline || undefined,
-    };
+  const handleAddGoal = async () => {
+    setLoading(true);
+    try {
+      const goal: Omit<HealthGoal, 'id' | 'createdAt'> = {
+        userId,
+        type: newGoal.type,
+        target: newGoal.type === 'bloodPressure' ? 0 : newGoal.target,
+        targetSystolic: newGoal.type === 'bloodPressure' ? newGoal.targetSystolic : undefined,
+        targetDiastolic: newGoal.type === 'bloodPressure' ? newGoal.targetDiastolic : undefined,
+        period: newGoal.period,
+        deadline: newGoal.deadline || undefined,
+      };
 
-    const allGoals = JSON.parse(localStorage.getItem('healthApp_goals') || '[]');
-    const updatedGoals = [...allGoals, goal];
-    localStorage.setItem('healthApp_goals', JSON.stringify(updatedGoals));
-    
-    setGoals([...goals, goal]);
-    setShowAddGoal(false);
-    setNewGoal({
-      type: 'steps',
-      target: 10000,
-      targetSystolic: 120,
-      targetDiastolic: 80,
-      period: 'daily',
-      deadline: '',
-    });
-    toast.success('Goal created successfully!');
+      const createdGoal = await createGoal(goal);
+      
+      if (createdGoal) {
+        setGoals([createdGoal, ...goals]);
+        setShowAddGoal(false);
+        setNewGoal({
+          type: 'steps',
+          target: 10000,
+          targetSystolic: 120,
+          targetDiastolic: 80,
+          period: 'daily',
+          deadline: '',
+        });
+        toast.success('Goal created successfully!');
+      } else {
+        toast.error('Failed to create goal. Only steps, sleep, and weight goals are currently supported.');
+      }
+    } catch (error) {
+      console.error('Error creating goal:', error);
+      toast.error('Failed to create goal');
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const handleUpdateGoal = () => {
+  const handleUpdateGoal = async () => {
     if (!editingGoal) return;
 
-    const allGoals = JSON.parse(localStorage.getItem('healthApp_goals') || '[]');
-    const updatedGoals = allGoals.map((g: HealthGoal) => 
-      g.id === editingGoal.id ? editingGoal : g
-    );
-    localStorage.setItem('healthApp_goals', JSON.stringify(updatedGoals));
-    
-    loadGoals();
-    setEditingGoal(null);
-    toast.success('Goal updated successfully!');
+    setLoading(true);
+    try {
+      const success = await updateGoal(editingGoal.id, {
+        target: editingGoal.target,
+        period: editingGoal.period,
+        deadline: editingGoal.deadline
+      });
+
+      if (success) {
+        await loadGoals();
+        setEditingGoal(null);
+        toast.success('Goal updated successfully!');
+      } else {
+        toast.error('Failed to update goal');
+      }
+    } catch (error) {
+      console.error('Error updating goal:', error);
+      toast.error('Failed to update goal');
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const handleDeleteGoal = (goalId: string) => {
-    const allGoals = JSON.parse(localStorage.getItem('healthApp_goals') || '[]');
-    const updatedGoals = allGoals.filter((g: HealthGoal) => g.id !== goalId);
-    localStorage.setItem('healthApp_goals', JSON.stringify(updatedGoals));
-    
-    loadGoals();
-    toast.success('Goal deleted successfully!');
+  const handleDeleteGoal = async (goalId: string) => {
+    setLoading(true);
+    try {
+      const success = await deleteGoal(goalId);
+      
+      if (success) {
+        setGoals(goals.filter(g => g.id !== goalId));
+        toast.success('Goal deleted successfully!');
+      } else {
+        toast.error('Failed to delete goal');
+      }
+    } catch (error) {
+      console.error('Error deleting goal:', error);
+      toast.error('Failed to delete goal');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const getGoalProgress = (goal: HealthGoal) => {
@@ -130,9 +163,20 @@ export function GoalsManager({ isOpen, onClose, userId, biomarkers }: GoalsManag
       return Math.round((systolicProgress + diastolicProgress) / 2);
     }
 
+    // For steps, sum all values in the period
+    // For weight and other metrics, use average
     const current = goal.type === 'steps' 
       ? relevantData.reduce((sum, b) => sum + b.value, 0)
       : relevantData.reduce((sum, b) => sum + b.value, 0) / relevantData.length;
+
+    // For weight goals, calculate progress based on proximity to target
+    if (goal.type === 'weight') {
+      // If current is close to or at target, show higher progress
+      const difference = Math.abs(current - goal.target);
+      const maxDifference = 20; // Maximum reasonable difference in kg
+      const progress = Math.max(0, 100 - (difference / maxDifference) * 100);
+      return Math.min(Math.round(progress), 100);
+    }
 
     return Math.min(Math.round((current / goal.target) * 100), 100);
   };
@@ -175,12 +219,17 @@ export function GoalsManager({ isOpen, onClose, userId, biomarkers }: GoalsManag
         </DialogHeader>
 
         <div className="flex-1 overflow-auto pr-2">
-          {goals.length === 0 && !showAddGoal ? (
+          {loading && goals.length === 0 ? (
+            <div className="text-center py-12">
+              <Target className="w-16 h-16 text-muted-foreground mx-auto mb-4 animate-pulse" />
+              <p className="text-muted-foreground">Loading goals...</p>
+            </div>
+          ) : goals.length === 0 && !showAddGoal ? (
             <div className="text-center py-12">
               <Target className="w-16 h-16 text-muted-foreground mx-auto mb-4" />
               <h3 className="mb-2">No Goals Yet</h3>
               <p className="text-muted-foreground mb-6">Set your first health goal to get started</p>
-              <Button onClick={() => setShowAddGoal(true)}>
+              <Button onClick={() => setShowAddGoal(true)} disabled={loading}>
                 <Plus className="w-4 h-4 mr-2" />
                 Create Goal
               </Button>
@@ -188,7 +237,7 @@ export function GoalsManager({ isOpen, onClose, userId, biomarkers }: GoalsManag
           ) : (
             <div className="space-y-4">
               {!showAddGoal && !editingGoal && (
-                <Button onClick={() => setShowAddGoal(true)} className="w-full">
+                <Button onClick={() => setShowAddGoal(true)} className="w-full" disabled={loading}>
                   <Plus className="w-4 h-4 mr-2" />
                   Add New Goal
                 </Button>
@@ -270,13 +319,15 @@ export function GoalsManager({ isOpen, onClose, userId, biomarkers }: GoalsManag
                         type="date"
                         value={newGoal.deadline}
                         onChange={(e) => setNewGoal({ ...newGoal, deadline: e.target.value })}
-                        className="mt-1"
+                        className="mt-1 dark:text-gray-700"
                       />
                     </div>
 
                     <div className="flex gap-2">
-                      <Button onClick={handleAddGoal} className="flex-1">Create Goal</Button>
-                      <Button variant="outline" onClick={() => setShowAddGoal(false)}>Cancel</Button>
+                      <Button onClick={handleAddGoal} className="flex-1" disabled={loading}>
+                        {loading ? 'Creating...' : 'Create Goal'}
+                      </Button>
+                      <Button variant="outline" onClick={() => setShowAddGoal(false)} disabled={loading}>Cancel</Button>
                     </div>
                   </div>
                 </Card>
@@ -316,8 +367,10 @@ export function GoalsManager({ isOpen, onClose, userId, biomarkers }: GoalsManag
                           </div>
                         </div>
                         <div className="flex gap-2">
-                          <Button onClick={handleUpdateGoal} className="flex-1">Save Changes</Button>
-                          <Button variant="outline" onClick={() => setEditingGoal(null)}>Cancel</Button>
+                          <Button onClick={handleUpdateGoal} className="flex-1" disabled={loading}>
+                            {loading ? 'Saving...' : 'Save Changes'}
+                          </Button>
+                          <Button variant="outline" onClick={() => setEditingGoal(null)} disabled={loading}>Cancel</Button>
                         </div>
                       </div>
                     ) : (
@@ -330,10 +383,10 @@ export function GoalsManager({ isOpen, onClose, userId, biomarkers }: GoalsManag
                             </p>
                           </div>
                           <div className="flex items-center gap-2">
-                            <Button variant="ghost" size="icon" onClick={() => setEditingGoal(goal)}>
+                            <Button variant="ghost" size="icon" onClick={() => setEditingGoal(goal)} disabled={loading}>
                               <Edit2 className="w-4 h-4" />
                             </Button>
-                            <Button variant="ghost" size="icon" onClick={() => handleDeleteGoal(goal.id)}>
+                            <Button variant="ghost" size="icon" onClick={() => handleDeleteGoal(goal.id)} disabled={loading}>
                               <Trash2 className="w-4 h-4" />
                             </Button>
                           </div>

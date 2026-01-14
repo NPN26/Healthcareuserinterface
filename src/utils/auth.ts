@@ -21,7 +21,7 @@ export interface User {
 // Mock accounts that bypass authentication
 const MOCK_ACCOUNTS = {
   'john@example.com': {
-    user_id: 'mock-user-1',
+    user_id: '550e8400-e29b-41d4-a716-446655440001',
     email: 'john@example.com',
     name: 'John Doe',
     role: 'END_USER' as const,
@@ -30,7 +30,7 @@ const MOCK_ACCOUNTS = {
     password: 'password123'
   },
   'sarah@example.com': {
-    user_id: 'mock-user-2',
+    user_id: '550e8400-e29b-41d4-a716-446655440002',
     email: 'sarah@example.com',
     name: 'Sarah Smith',
     role: 'END_USER' as const,
@@ -39,7 +39,7 @@ const MOCK_ACCOUNTS = {
     password: 'password123'
   },
   'emily@healthcare.com': {
-    user_id: 'mock-provider-1',
+    user_id: '550e8400-e29b-41d4-a716-446655440003',
     email: 'emily@healthcare.com',
     name: 'Dr. Emily Brown',
     role: 'PROVIDER' as const,
@@ -48,7 +48,7 @@ const MOCK_ACCOUNTS = {
     password: 'password123'
   },
   'admin@system.com': {
-    user_id: 'mock-admin-1',
+    user_id: '550e8400-e29b-41d4-a716-446655440004',
     email: 'admin@system.com',
     name: 'Admin User',
     role: 'ADMIN' as const,
