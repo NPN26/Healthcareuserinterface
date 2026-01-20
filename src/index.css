@@ -2372,6 +2372,10 @@
     color: var(--primary-foreground);
   }
 
+  .text-purple-400 {
+    color: var(--color-purple-400);
+  }
+
   .text-purple-500 {
     color: var(--color-purple-500);
   }
@@ -4073,6 +4077,14 @@
     color: var(--color-blue-400);
   }
 
+  .dark\:text-gray-600:is(.dark *) {
+    color: var(--color-gray-600);
+  }
+
+  .dark\:text-gray-500:is(.dark *) {
+    color: var(--color-gray-500);
+  }
+
   .dark\:text-gray-300:is(.dark *) {
     color: var(--color-gray-300);
   }
@@ -4085,6 +4097,10 @@
     color: var(--color-green-700);
   }
 
+  .dark\:text-purple-600:is(.dark *) {
+    color: var(--color-purple-600);
+  }
+
   .dark\:text-muted-foreground:is(.dark *) {
     color: var(--muted-foreground);
   }
@@ -4093,8 +4109,12 @@
     color: var(--color-orange-400);
   }
 
-  .dark\:text-purple-400:is(.dark *) {
-    color: var(--color-purple-400);
+  .dark\:text-purple-800:is(.dark *) {
+    color: var(--color-purple-800);
+  }
+
+  .dark\:text-purple-600:is(.dark *) {
+    color: var(--color-purple-600);
   }
 
   .dark\:text-red-400:is(.dark *) {

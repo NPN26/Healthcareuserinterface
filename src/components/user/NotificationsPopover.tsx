@@ -107,7 +107,7 @@ export function NotificationsPopover({
           size="icon"
           className="h-9 w-9 relative"
         >
-          <Bell className="w-4 h-4" />
+          {unreadCount === 0 && <Bell className="w-4 h-4" />}
           {unreadCount > 0 && (
             <>
               <span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full animate-pulse"></span>
@@ -115,7 +115,7 @@ export function NotificationsPopover({
                 variant="destructive"
                 className="absolute -top-1 -right-1 h-5 w-5 flex items-center justify-center p-0 text-xs"
               >
-                {unreadCount > 9 ? '9+' : unreadCount}
+              {unreadCount > 9 ? '9+' : unreadCount}
               </Badge>
             </>
           )}

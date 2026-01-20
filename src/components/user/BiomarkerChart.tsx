@@ -12,10 +12,6 @@ interface BiomarkerChartProps {
 }
 
 export function BiomarkerChart({ biomarkers, type, showDetails, devices = [] }: BiomarkerChartProps) {
-  const sortedData = [...biomarkers]
-    .sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime())
-    .slice(-20); // Last 20 readings
-
   // Helper function to get device name by ID
   const getDeviceName = (deviceId: string) => {
     if (deviceId === 'deleted-device' || !deviceId) {
@@ -24,6 +20,51 @@ export function BiomarkerChart({ biomarkers, type, showDetails, devices = [] }: 
     const device = devices.find(d => d.id === deviceId);
     return device ? device.name : 'Unknown Device';
   };
+
+  // Aggregate data by day for steps and sleep
+  const aggregateDataByDay = (data: Biomarker[]) => {
+    const dailyMap = new Map<string, Biomarker[]>();
+    
+    data.forEach(biomarker => {
+      const date = new Date(biomarker.timestamp);
+      const dateKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+      
+      if (!dailyMap.has(dateKey)) {
+        dailyMap.set(dateKey, []);
+      }
+      dailyMap.get(dateKey)!.push(biomarker);
+    });
+
+    // Convert map to array and aggregate values
+    const aggregatedData: Biomarker[] = Array.from(dailyMap.entries()).map(([dateKey, dayData]) => {
+      const totalValue = dayData.reduce((sum, b) => sum + b.value, 0);
+      const avgValue = totalValue / dayData.length;
+      
+      // For steps, sum all values; for sleep, average the values
+      const aggregatedValue = type === 'steps' ? totalValue : avgValue;
+      
+      // Use the first reading of the day as the base, but update value and timestamp
+      const firstReading = dayData[0];
+      return {
+        ...firstReading,
+        value: aggregatedValue,
+        timestamp: dateKey + 'T00:00:00Z', // Set to start of day
+        notes: type === 'sleep' && dayData.length > 1 ? `${dayData.length} readings` : firstReading.notes,
+      };
+    });
+
+    return aggregatedData;
+  };
+
+  let sortedData = [...biomarkers]
+    .sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+
+  // Aggregate by day for steps and sleep, otherwise show individual data points
+  if (type === 'steps' || type === 'sleep') {
+    sortedData = aggregateDataByDay(sortedData).slice(-20); // Last 20 days
+  } else {
+    sortedData = sortedData.slice(-20); // Last 20 readings
+  }
 
   // Check if there's no data
   if (sortedData.length === 0) {
@@ -53,7 +94,6 @@ export function BiomarkerChart({ biomarkers, type, showDetails, devices = [] }: 
       day: 'numeric',
       hour: b.type === 'steps' || b.type === 'sleep' ? undefined : '2-digit',
       minute: b.type === 'steps' || b.type === 'sleep' ? undefined : '2-digit',
-      second: b.type === 'steps' || b.type === 'sleep' ? undefined : '2-digit',
     }),
     value: b.type === 'steps' ? Math.round(b.value) : b.value,
     systolic: b.systolic,
@@ -145,11 +185,11 @@ export function BiomarkerChart({ biomarkers, type, showDetails, devices = [] }: 
                     const data = props.payload[0].payload;
                     return (
                       <div className="bg-white p-3 border border-gray-200 rounded-lg shadow-lg">
-                        <p className="text-sm font-medium text-gray-900 mb-2">{data.time}</p>
-                        <p className="text-sm text-purple-600">
+                        <p className="text-sm font-medium text-gray-900 dark:text-gray-600 mb-2">{data.time}</p>
+                        <p className="text-sm text-purple-600 dark:text-purple-800">
                           Systolic: <span className="font-semibold">{data.systolic} {getBiomarkerUnit(type)}</span>
                         </p>
-                        <p className="text-sm text-purple-400">
+                        <p className="text-sm text-purple-400 dark:text-purple-600">
                           Diastolic: <span className="font-semibold">{data.diastolic} {getBiomarkerUnit(type)}</span>
                         </p>
                         <p className="text-xs text-gray-500 mt-2 pt-2 border-t border-gray-200">
@@ -206,8 +246,8 @@ export function BiomarkerChart({ biomarkers, type, showDetails, devices = [] }: 
                     const displayValue = type === 'steps' ? Math.round(data.value) : data.value.toFixed(1);
                     return (
                       <div className="bg-white p-3 border border-gray-200 rounded-lg shadow-lg">
-                        <p className="text-sm font-medium text-gray-900 mb-2">{data.time}</p>
-                        <p className="text-sm font-semibold">
+                        <p className="text-sm font-medium text-gray-900 dark:text-gray-600 mb-2">{data.time}</p>
+                        <p className="text-sm font-semibold dark:text-gray-500">
                           {getBiomarkerLabel(type)}: {displayValue} {getBiomarkerUnit(type)}
                         </p>
                         {data.notes && (
