@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
 import { ProviderHeader, ProviderStatsCards, PatientListTable, CriticalAlertsPanel, PatientDetail, PatternAnalysis } from './provider';
 import { Biomarker, User, Alert } from '../utils/mockData';
+import { toast } from 'sonner';
 
 interface ProviderDashboardProps {
   user: any;
@@ -15,6 +16,7 @@ export function ProviderDashboard({ user, onLogout }: ProviderDashboardProps) {
   const [biomarkers, setBiomarkers] = useState<Biomarker[]>([]);
   const [alerts, setAlerts] = useState<Alert[]>([]);
   const [isDarkMode, setIsDarkMode] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
     loadData();
@@ -26,16 +28,49 @@ export function ProviderDashboard({ user, onLogout }: ProviderDashboardProps) {
     }
   }, []);
 
-  const loadData = () => {
-    const allUsers = JSON.parse(localStorage.getItem('healthApp_users') || '[]');
-    const patientUsers = allUsers.filter((u: User) => u.role === 'END_USER');
-    setPatients(patientUsers);
+  const loadData = async () => {
+    setIsLoading(true);
+    try {
+      // Load data from Supabase
+      console.log('Loading provider data from Supabase database');
+      const { fetchPatients, fetchAllPatientsBiomarkers, fetchAllPatientsAlerts } = await import('../utils/supabase');
+      
+      // Use the provider's user_id or id
+      const providerId = user.user_id || user.id;
+      
+      const [supabasePatients, supabaseBiomarkers, supabaseAlerts] = await Promise.all([
+        fetchPatients(providerId),
+        fetchAllPatientsBiomarkers(providerId),
+        fetchAllPatientsAlerts(providerId)
+      ]);
 
-    const allBiomarkers = JSON.parse(localStorage.getItem('healthApp_biomarkers') || '[]');
-    setBiomarkers(allBiomarkers);
+      console.log(`Loaded from DB: ${supabasePatients.length} patients, ${supabaseBiomarkers.length} biomarkers, ${supabaseAlerts.length} alerts`);
 
-    const allAlerts = JSON.parse(localStorage.getItem('healthApp_alerts') || '[]');
-    setAlerts(allAlerts);
+      // Map Patient type to User type
+      const mappedPatients: User[] = supabasePatients.map(patient => ({
+        id: patient.id,
+        email: patient.email,
+        name: patient.name,
+        role: patient.role as 'END_USER' | 'PROVIDER' | 'ADMIN'
+      }));
+
+      setPatients(mappedPatients);
+      setBiomarkers(supabaseBiomarkers);
+      setAlerts(supabaseAlerts);
+
+      if (supabasePatients.length === 0) {
+        toast.info('No patients have granted you access yet');
+      }
+    } catch (error) {
+      console.error('Error loading data from Supabase:', error);
+      toast.error('Failed to load data from database');
+      // Don't fall back to localStorage - show empty data for provider
+      setPatients([]);
+      setBiomarkers([]);
+      setAlerts([]);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const toggleDarkMode = () => {
@@ -74,6 +109,17 @@ export function ProviderDashboard({ user, onLogout }: ProviderDashboardProps) {
         alerts={alerts.filter(a => a.userId === selectedPatient.id)}
         onBack={() => setSelectedPatient(null)}
       />
+    );
+  }
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-green-50 via-white to-blue-50 dark:from-gray-950 dark:via-gray-900 dark:to-gray-950 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-green-600 dark:border-green-400 mx-auto mb-4"></div>
+          <p className="text-gray-600 dark:text-gray-400">Loading patient data...</p>
+        </div>
+      </div>
     );
   }
 

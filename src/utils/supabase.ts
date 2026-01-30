@@ -593,3 +593,236 @@ export async function deleteGoal(goalId: string): Promise<boolean> {
     return false
   }
 }
+
+// =========================================
+// PROVIDER FUNCTIONS
+// =========================================
+
+export interface Patient {
+  id: string;
+  email: string;
+  name: string;
+  role: string;
+  created_at: string;
+  last_login: string | null;
+}
+
+/**
+ * Fetch patients who have granted consent to the provider from Supabase
+ * For provider dashboard only - respects access_consents table
+ * @param providerId - The provider's user ID
+ */
+export async function fetchPatients(providerId: string): Promise<Patient[]> {
+  try {
+    // First, get the list of patient IDs who have granted active consent to this provider
+    const { data: consents, error: consentError } = await supabase
+      .from('access_consents')
+      .select('patient_id')
+      .eq('provider_id', providerId)
+      .eq('status', 'ACTIVE')
+      .is('revoked_at', null)
+
+    if (consentError) {
+      console.error('Error fetching consents:', consentError)
+      return []
+    }
+
+    if (!consents || consents.length === 0) {
+      console.log('No patients have granted consent to this provider')
+      return []
+    }
+
+    // Extract patient IDs
+    const patientIds = consents.map(c => c.patient_id)
+
+    // Fetch user details for consented patients
+    const { data, error } = await supabase
+      .from('users')
+      .select('*')
+      .eq('role', 'END_USER')
+      .in('user_id', patientIds)
+      .order('name', { ascending: true })
+
+    if (error) {
+      console.error('Error fetching patients:', error)
+      return []
+    }
+
+    if (!data) return []
+
+    // Map database format to frontend format
+    return data.map(user => ({
+      id: user.user_id,
+      email: user.email,
+      name: user.name,
+      role: user.role,
+      created_at: user.created_at,
+      last_login: user.last_login
+    }))
+  } catch (error) {
+    console.error('Error in fetchPatients:', error)
+    return []
+  }
+}
+
+/**
+ * Fetch biomarkers for patients who have granted consent to the provider
+ * For provider dashboard only - respects access_consents table
+ * @param providerId - The provider's user ID
+ */
+export async function fetchAllPatientsBiomarkers(providerId: string): Promise<Biomarker[]> {
+  try {
+    // First, get the list of patient IDs who have granted active consent to this provider
+    const { data: consents, error: consentError } = await supabase
+      .from('access_consents')
+      .select('patient_id')
+      .eq('provider_id', providerId)
+      .eq('status', 'ACTIVE')
+      .is('revoked_at', null)
+
+    if (consentError) {
+      console.error('Error fetching consents:', consentError)
+      return []
+    }
+
+    if (!consents || consents.length === 0) {
+      console.log('No patients have granted consent to this provider')
+      return []
+    }
+
+    // Extract patient IDs
+    const patientIds = consents.map(c => c.patient_id)
+
+    const { data, error } = await supabase
+      .from('data_points')
+      .select(`
+        data_point_id,
+        user_id,
+        timestamp,
+        source_id,
+        biomarker_data (
+          type,
+          value,
+          secondary_value,
+          unit
+        )
+      `)
+      .eq('data_type', 'BIOMARKER')
+      .in('user_id', patientIds)
+      .order('timestamp', { ascending: false })
+      .limit(5000) // Limit to recent data
+
+    if (error) {
+      console.error('Error fetching all patients biomarkers:', error)
+      return []
+    }
+
+    if (!data) return []
+
+    // Map database format to frontend format
+    const typeMapping: Record<string, Biomarker['type']> = {
+      'HEART_RATE': 'heartRate',
+      'BLOOD_PRESSURE': 'bloodPressure',
+      'BLOOD_GLUCOSE': 'glucose',
+      'SPO2': 'oxygen',
+      'STEPS': 'steps',
+      'SLEEP': 'sleep',
+      'RESPIRATORY_RATE': 'temperature',
+      'WEIGHT': 'weight'
+    }
+
+    return data
+      .filter(item => item.biomarker_data)
+      .map(item => {
+        const biomarkerData = Array.isArray(item.biomarker_data) 
+          ? item.biomarker_data[0] 
+          : item.biomarker_data
+        
+        const frontendType = typeMapping[biomarkerData.type] || 'heartRate';
+        
+        const biomarker: Biomarker = {
+          id: item.data_point_id,
+          userId: item.user_id,
+          deviceId: item.source_id || 'deleted-device',
+          type: frontendType,
+          value: biomarkerData.value,
+          timestamp: item.timestamp,
+          isFaulty: false
+        };
+        
+        // Add blood pressure specific fields
+        if (frontendType === 'bloodPressure') {
+          biomarker.systolic = biomarkerData.value;
+          biomarker.diastolic = biomarkerData.secondary_value;
+        } else if (biomarkerData.secondary_value) {
+          biomarker.diastolic = biomarkerData.secondary_value;
+        }
+        
+        return biomarker;
+      })
+  } catch (error) {
+    console.error('Error in fetchAllPatientsBiomarkers:', error)
+    return []
+  }
+}
+
+/**
+ * Fetch alerts for patients who have granted consent to the provider
+ * For provider dashboard only - respects access_consents table
+ * @param providerId - The provider's user ID
+ */
+export async function fetchAllPatientsAlerts(providerId: string): Promise<Alert[]> {
+  try {
+    // First, get the list of patient IDs who have granted active consent to this provider
+    const { data: consents, error: consentError } = await supabase
+      .from('access_consents')
+      .select('patient_id')
+      .eq('provider_id', providerId)
+      .eq('status', 'ACTIVE')
+      .is('revoked_at', null)
+
+    if (consentError) {
+      console.error('Error fetching consents:', consentError)
+      return []
+    }
+
+    if (!consents || consents.length === 0) {
+      console.log('No patients have granted consent to this provider')
+      return []
+    }
+
+    // Extract patient IDs
+    const patientIds = consents.map(c => c.patient_id)
+
+    const { data, error } = await supabase
+      .from('notifications')
+      .select('*')
+      .eq('type', 'ALERT')
+      .in('user_id', patientIds)
+      .order('timestamp', { ascending: false })
+      .limit(1000)
+
+    if (error) {
+      console.error('Error fetching all patients alerts:', error)
+      return []
+    }
+
+    if (!data) return []
+
+    // Map database format to frontend format
+    return data.map(notification => {
+      return {
+        id: notification.notification_id,
+        userId: notification.user_id,
+        type: notification.is_read ? 'info' : 'warning',
+        message: notification.content,
+        timestamp: notification.timestamp,
+        biomarkerType: undefined,
+        read: notification.is_read
+      } as Alert
+    })
+  } catch (error) {
+    console.error('Error in fetchAllPatientsAlerts:', error)
+    return []
+  }
+}
