@@ -79,7 +79,10 @@ export async function fetchBiomarkers(userId: string): Promise<Biomarker[]> {
           deviceId: item.source_id || 'deleted-device', // Handle null source_id for historical data
           type: frontendType,
           value: biomarkerData.value,
-          timestamp: item.timestamp,
+          // Ensure timestamp is in ISO format with timezone (add Z if missing)
+          timestamp: item.timestamp.includes('Z') || item.timestamp.includes('+') || item.timestamp.includes('-') 
+            ? item.timestamp 
+            : `${item.timestamp}Z`,
           isFaulty: false
         };
         
@@ -824,5 +827,292 @@ export async function fetchAllPatientsAlerts(providerId: string): Promise<Alert[
   } catch (error) {
     console.error('Error in fetchAllPatientsAlerts:', error)
     return []
+  }
+}
+
+// =========================================
+// ACCESS REQUEST FUNCTIONS
+// =========================================
+
+export interface AccessRequest {
+  consent_id: string;
+  patient_id: string;
+  provider_id: string;
+  patient_name?: string;
+  patient_email?: string;
+  provider_name?: string;
+  provider_email?: string;
+  status: 'PENDING' | 'ACTIVE' | 'DENIED' | 'REVOKED';
+  granted_at: string | null;
+  revoked_at: string | null;
+  requested_at: string;
+}
+
+/**
+ * Create an access request from provider to patient
+ * Provider enters patient's email, system creates a pending request
+ * @param providerId - The provider's user ID
+ * @param patientEmail - The patient's email address
+ */
+export async function createAccessRequest(providerId: string, patientEmail: string): Promise<{ success: boolean; message: string }> {
+  try {
+    // First, check if patient exists
+    const { data: patientData, error: patientError } = await supabase
+      .from('users')
+      .select('user_id, name, email')
+      .eq('email', patientEmail)
+      .eq('role', 'END_USER')
+      .single()
+
+    if (patientError || !patientData) {
+      return { success: false, message: 'Patient not found with this email address' }
+    }
+
+    // Check if there's already an active or pending consent
+    const { data: existingConsent, error: existingError } = await supabase
+      .from('access_consents')
+      .select('status')
+      .eq('provider_id', providerId)
+      .eq('patient_id', patientData.user_id)
+      .in('status', ['PENDING', 'ACTIVE'])
+      .maybeSingle()
+
+    if (existingConsent) {
+      if (existingConsent.status === 'ACTIVE') {
+        return { success: false, message: 'You already have active access to this patient' }
+      }
+      if (existingConsent.status === 'PENDING') {
+        return { success: false, message: 'An access request is already pending for this patient' }
+      }
+    }
+
+    // Get provider info for the notification
+    const { data: providerData } = await supabase
+      .from('users')
+      .select('name, email')
+      .eq('user_id', providerId)
+      .single()
+
+    // Create a pending access request
+    const { error: insertError } = await supabase
+      .from('access_consents')
+      .insert({
+        patient_id: patientData.user_id,
+        provider_id: providerId,
+        status: 'PENDING',
+        requested_at: new Date().toISOString()
+      })
+
+    if (insertError) {
+      console.error('Error creating access request:', insertError)
+      return { success: false, message: 'Failed to create access request' }
+    }
+
+    // Create notification for the patient
+    await supabase
+      .from('notifications')
+      .insert({
+        user_id: patientData.user_id,
+        type: 'ACCESS_REQUEST',
+        content: `Dr. ${providerData?.name || 'A healthcare provider'} has requested access to your health data. Please review in Sharing Settings.`,
+        is_read: false
+      })
+
+    return { success: true, message: `Access request sent to ${patientData.name}` }
+  } catch (error) {
+    console.error('Error in createAccessRequest:', error)
+    return { success: false, message: 'An error occurred while creating the access request' }
+  }
+}
+
+/**
+ * Fetch pending access requests for a patient
+ * @param patientId - The patient's user ID
+ */
+export async function fetchPendingAccessRequests(patientId: string): Promise<AccessRequest[]> {
+  try {
+    const { data, error } = await supabase
+      .from('access_consents')
+      .select(`
+        consent_id,
+        patient_id,
+        provider_id,
+        status,
+        granted_at,
+        revoked_at,
+        requested_at,
+        provider:users!access_consents_provider_id_fkey(name, email)
+      `)
+      .eq('patient_id', patientId)
+      .eq('status', 'PENDING')
+      .order('requested_at', { ascending: false })
+
+    if (error) {
+      console.error('Error fetching pending requests:', error)
+      return []
+    }
+
+    if (!data) return []
+
+    return data.map(item => ({
+      consent_id: item.consent_id,
+      patient_id: item.patient_id,
+      provider_id: item.provider_id,
+      provider_name: item.provider?.name,
+      provider_email: item.provider?.email,
+      status: item.status,
+      granted_at: item.granted_at,
+      revoked_at: item.revoked_at,
+      requested_at: item.requested_at
+    }))
+  } catch (error) {
+    console.error('Error in fetchPendingAccessRequests:', error)
+    return []
+  }
+}
+
+/**
+ * Fetch all access consents for a patient (active and historical)
+ * @param patientId - The patient's user ID
+ */
+export async function fetchAllAccessConsents(patientId: string): Promise<AccessRequest[]> {
+  try {
+    const { data, error } = await supabase
+      .from('access_consents')
+      .select(`
+        consent_id,
+        patient_id,
+        provider_id,
+        status,
+        granted_at,
+        revoked_at,
+        requested_at,
+        provider:users!access_consents_provider_id_fkey(name, email)
+      `)
+      .eq('patient_id', patientId)
+      .order('requested_at', { ascending: false })
+
+    if (error) {
+      console.error('Error fetching access consents:', error)
+      return []
+    }
+
+    if (!data) return []
+
+    return data.map(item => ({
+      consent_id: item.consent_id,
+      patient_id: item.patient_id,
+      provider_id: item.provider_id,
+      provider_name: item.provider?.name,
+      provider_email: item.provider?.email,
+      status: item.status,
+      granted_at: item.granted_at,
+      revoked_at: item.revoked_at,
+      requested_at: item.requested_at
+    }))
+  } catch (error) {
+    console.error('Error in fetchAllAccessConsents:', error)
+    return []
+  }
+}
+
+/**
+ * Approve an access request
+ * @param consentId - The consent ID to approve
+ * @param providerId - The provider ID (for notification)
+ */
+export async function approveAccessRequest(consentId: string, providerId: string): Promise<{ success: boolean; message: string }> {
+  try {
+    const { error } = await supabase
+      .from('access_consents')
+      .update({
+        status: 'ACTIVE',
+        granted_at: new Date().toISOString()
+      })
+      .eq('consent_id', consentId)
+      .eq('status', 'PENDING')
+
+    if (error) {
+      console.error('Error approving access request:', error)
+      return { success: false, message: 'Failed to approve access request' }
+    }
+
+    // Get patient info for notification
+    const { data: consentData } = await supabase
+      .from('access_consents')
+      .select(`
+        patient:users!access_consents_patient_id_fkey(name)
+      `)
+      .eq('consent_id', consentId)
+      .single()
+
+    // Create notification for the provider
+    await supabase
+      .from('notifications')
+      .insert({
+        user_id: providerId,
+        type: 'ACCESS_GRANTED',
+        content: `${consentData?.patient?.name || 'A patient'} has granted you access to their health data.`,
+        is_read: false
+      })
+
+    return { success: true, message: 'Access request approved' }
+  } catch (error) {
+    console.error('Error in approveAccessRequest:', error)
+    return { success: false, message: 'An error occurred while approving the request' }
+  }
+}
+
+/**
+ * Deny an access request
+ * @param consentId - The consent ID to deny
+ */
+export async function denyAccessRequest(consentId: string): Promise<{ success: boolean; message: string }> {
+  try {
+    const { error } = await supabase
+      .from('access_consents')
+      .update({
+        status: 'DENIED',
+        revoked_at: new Date().toISOString()
+      })
+      .eq('consent_id', consentId)
+      .eq('status', 'PENDING')
+
+    if (error) {
+      console.error('Error denying access request:', error)
+      return { success: false, message: 'Failed to deny access request' }
+    }
+
+    return { success: true, message: 'Access request denied' }
+  } catch (error) {
+    console.error('Error in denyAccessRequest:', error)
+    return { success: false, message: 'An error occurred while denying the request' }
+  }
+}
+
+/**
+ * Revoke an active access consent
+ * @param consentId - The consent ID to revoke
+ */
+export async function revokeAccessConsent(consentId: string): Promise<{ success: boolean; message: string }> {
+  try {
+    const { error } = await supabase
+      .from('access_consents')
+      .update({
+        status: 'REVOKED',
+        revoked_at: new Date().toISOString()
+      })
+      .eq('consent_id', consentId)
+      .eq('status', 'ACTIVE')
+
+    if (error) {
+      console.error('Error revoking access:', error)
+      return { success: false, message: 'Failed to revoke access' }
+    }
+
+    return { success: true, message: 'Access revoked successfully' }
+  } catch (error) {
+    console.error('Error in revokeAccessConsent:', error)
+    return { success: false, message: 'An error occurred while revoking access' }
   }
 }

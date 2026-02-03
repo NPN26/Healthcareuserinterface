@@ -1,14 +1,15 @@
 import { Button } from '../ui/button';
-import { LogOut, Sun, MoonIcon } from 'lucide-react';
+import { LogOut, Sun, MoonIcon, UserPlus } from 'lucide-react';
 
 interface ProviderHeaderProps {
   userName: string;
   isDarkMode: boolean;
   onToggleDarkMode: () => void;
   onLogout: () => void;
+  onRequestAccess: () => void;
 }
 
-export function ProviderHeader({ userName, isDarkMode, onToggleDarkMode, onLogout }: ProviderHeaderProps) {
+export function ProviderHeader({ userName, isDarkMode, onToggleDarkMode, onLogout, onRequestAccess }: ProviderHeaderProps) {
   return (
     <div className="flex items-center justify-between">
       <div>
@@ -16,6 +17,13 @@ export function ProviderHeader({ userName, isDarkMode, onToggleDarkMode, onLogou
         <p className="text-gray-600">Welcome, {userName}</p>
       </div>
       <div className="flex items-center gap-4">
+        <Button
+          onClick={onRequestAccess}
+          variant="outline"
+        >
+          <UserPlus className="w-4 h-4 mr-2" />
+          Request Patient Access
+        </Button>
         <Button
           variant="ghost"
           size="icon"

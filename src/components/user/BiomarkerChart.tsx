@@ -2,7 +2,8 @@ import { useState } from 'react';
 import { Card } from '../ui/card';
 import { Badge } from '../ui/badge';
 import { Button } from '../ui/button';
-import { LineChart, Line, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
+import ReactApexChart from 'react-apexcharts';
+import { ApexOptions } from 'apexcharts';
 import { Biomarker, Device, getBiomarkerLabel, getBiomarkerUnit, getBiomarkerColor } from '../../utils/mockData';
 import { TrendingUp, TrendingDown, AlertTriangle, ChevronLeft, ChevronRight } from 'lucide-react';
 
@@ -27,13 +28,88 @@ export function BiomarkerChart({ biomarkers, type, showDetails, devices = [] }: 
     return device ? device.name : 'Unknown Device';
   };
 
+  // Aggregate data by hour for daily view
+  // NOTE: Using UTC methods to extract date/time components to avoid timezone issues
+  // DB stores timestamps in UTC, so we group by UTC hour. Display will convert to local time.
+  const aggregateDataByHour = (data: Biomarker[]) => {
+    const hourlyMap = new Map<string, Biomarker[]>();
+    
+    data.forEach(biomarker => {
+      const date = new Date(biomarker.timestamp);
+      // Use UTC methods to extract date parts to avoid double timezone conversion
+      const hourKey = `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, '0')}-${String(date.getUTCDate()).padStart(2, '0')}-${String(date.getUTCHours()).padStart(2, '0')}`;
+      
+      if (!hourlyMap.has(hourKey)) {
+        hourlyMap.set(hourKey, []);
+      }
+      hourlyMap.get(hourKey)!.push(biomarker);
+    });
+
+    // Convert map to array and aggregate values
+    const aggregatedData: (Biomarker & { minValue?: number; maxValue?: number; minSystolic?: number; maxSystolic?: number; minDiastolic?: number; maxDiastolic?: number })[] = Array.from(hourlyMap.entries()).map(([hourKey, hourData]) => {
+      const values = hourData.map(b => b.value);
+      const totalValue = values.reduce((sum, v) => sum + v, 0);
+      const avgValue = totalValue / values.length;
+      const minValue = Math.min(...values);
+      const maxValue = Math.max(...values);
+      
+      // For blood pressure, also track systolic/diastolic ranges
+      let minSystolic, maxSystolic, minDiastolic, maxDiastolic;
+      if (type === 'bloodPressure') {
+        const systolicValues = hourData.map(b => b.systolic || 0).filter(v => v > 0);
+        const diastolicValues = hourData.map(b => b.diastolic || 0).filter(v => v > 0);
+        if (systolicValues.length > 0) {
+          minSystolic = Math.min(...systolicValues);
+          maxSystolic = Math.max(...systolicValues);
+        }
+        if (diastolicValues.length > 0) {
+          minDiastolic = Math.min(...diastolicValues);
+          maxDiastolic = Math.max(...diastolicValues);
+        }
+      }
+      
+      // For steps, sum all values; for others, average
+      const aggregatedValue = type === 'steps' ? totalValue : avgValue;
+      
+      // For blood pressure, calculate average systolic/diastolic
+      const avgSystolic = type === 'bloodPressure' && hourData[0].systolic
+        ? hourData.reduce((sum, b) => sum + (b.systolic || 0), 0) / hourData.length
+        : hourData[0].systolic;
+      const avgDiastolic = type === 'bloodPressure' && hourData[0].diastolic
+        ? hourData.reduce((sum, b) => sum + (b.diastolic || 0), 0) / hourData.length
+        : hourData[0].diastolic;
+      
+      // Use the first reading of the hour as the base
+      const firstReading = hourData[0];
+      const [year, month, day, hour] = hourKey.split('-');
+      return {
+        ...firstReading,
+        value: aggregatedValue,
+        minValue,
+        maxValue,
+        systolic: avgSystolic,
+        diastolic: avgDiastolic,
+        minSystolic,
+        maxSystolic,
+        minDiastolic,
+        maxDiastolic,
+        timestamp: `${year}-${month}-${day}T${hour}:00:00Z`,
+        notes: hourData.length > 1 ? `${hourData.length} readings` : firstReading.notes,
+      };
+    });
+
+    return aggregatedData;
+  };
+
   // Aggregate data by day for steps and sleep
+  // NOTE: Using UTC methods to extract date/time components to avoid timezone issues
   const aggregateDataByDay = (data: Biomarker[]) => {
     const dailyMap = new Map<string, Biomarker[]>();
     
     data.forEach(biomarker => {
       const date = new Date(biomarker.timestamp);
-      const dateKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+      // Use UTC methods to extract date parts to avoid double timezone conversion
+      const dateKey = `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, '0')}-${String(date.getUTCDate()).padStart(2, '0')}`;
       
       if (!dailyMap.has(dateKey)) {
         dailyMap.set(dateKey, []);
@@ -42,18 +118,52 @@ export function BiomarkerChart({ biomarkers, type, showDetails, devices = [] }: 
     });
 
     // Convert map to array and aggregate values
-    const aggregatedData: Biomarker[] = Array.from(dailyMap.entries()).map(([dateKey, dayData]) => {
-      const totalValue = dayData.reduce((sum, b) => sum + b.value, 0);
-      const avgValue = totalValue / dayData.length;
+    const aggregatedData: (Biomarker & { minValue?: number; maxValue?: number; minSystolic?: number; maxSystolic?: number; minDiastolic?: number; maxDiastolic?: number })[] = Array.from(dailyMap.entries()).map(([dateKey, dayData]) => {
+      const values = dayData.map(b => b.value);
+      const totalValue = values.reduce((sum, v) => sum + v, 0);
+      const avgValue = totalValue / values.length;
+      const minValue = Math.min(...values);
+      const maxValue = Math.max(...values);
       
-      // For steps, sum all values; for sleep, average the values
+      // For blood pressure, also track systolic/diastolic ranges
+      let minSystolic, maxSystolic, minDiastolic, maxDiastolic;
+      if (type === 'bloodPressure') {
+        const systolicValues = dayData.map(b => b.systolic || 0).filter(v => v > 0);
+        const diastolicValues = dayData.map(b => b.diastolic || 0).filter(v => v > 0);
+        if (systolicValues.length > 0) {
+          minSystolic = Math.min(...systolicValues);
+          maxSystolic = Math.max(...systolicValues);
+        }
+        if (diastolicValues.length > 0) {
+          minDiastolic = Math.min(...diastolicValues);
+          maxDiastolic = Math.max(...diastolicValues);
+        }
+      }
+      
+      // For steps, sum all values; for others, average
       const aggregatedValue = type === 'steps' ? totalValue : avgValue;
       
-      // Use the first reading of the day as the base, but update value and timestamp
+      // For blood pressure, calculate average systolic/diastolic
+      const avgSystolic = type === 'bloodPressure' && dayData[0].systolic
+        ? dayData.reduce((sum, b) => sum + (b.systolic || 0), 0) / dayData.length
+        : dayData[0].systolic;
+      const avgDiastolic = type === 'bloodPressure' && dayData[0].diastolic
+        ? dayData.reduce((sum, b) => sum + (b.diastolic || 0), 0) / dayData.length
+        : dayData[0].diastolic;
+      
+      // Use the first reading of the day as the base
       const firstReading = dayData[0];
       return {
         ...firstReading,
         value: aggregatedValue,
+        minValue,
+        maxValue,
+        systolic: avgSystolic,
+        diastolic: avgDiastolic,
+        minSystolic,
+        maxSystolic,
+        minDiastolic,
+        maxDiastolic,
         timestamp: dateKey + 'T00:00:00Z', // Set to start of day
         notes: type === 'sleep' && dayData.length > 1 ? `${dayData.length} readings` : firstReading.notes,
       };
@@ -72,10 +182,13 @@ export function BiomarkerChart({ biomarkers, type, showDetails, devices = [] }: 
     
     dailyData.forEach(biomarker => {
       const date = new Date(biomarker.timestamp);
-      // Get the Monday of the week
+      // Get the Monday of the week (working in UTC to avoid timezone issues)
       const monday = new Date(date);
-      monday.setDate(date.getDate() - date.getDay() + (date.getDay() === 0 ? -6 : 1));
-      const weekKey = `${monday.getFullYear()}-${String(monday.getMonth() + 1).padStart(2, '0')}-${String(monday.getDate()).padStart(2, '0')}`;
+      const day = date.getUTCDay();
+      const diff = date.getUTCDate() - day + (day === 0 ? -6 : 1);
+      monday.setUTCDate(diff);
+      // Use UTC methods to extract date parts to avoid double timezone conversion
+      const weekKey = `${monday.getUTCFullYear()}-${String(monday.getUTCMonth() + 1).padStart(2, '0')}-${String(monday.getUTCDate()).padStart(2, '0')}`;
       
       if (!weeklyMap.has(weekKey)) {
         weeklyMap.set(weekKey, []);
@@ -163,11 +276,8 @@ export function BiomarkerChart({ biomarkers, type, showDetails, devices = [] }: 
   } else if (timeRange === 'monthly') {
     sortedData = aggregateDataByMonth(sortedData);
   } else if (timeRange === 'daily') {
-    // For daily view, show individual readings within the day
-    // No aggregation needed unless it's steps/sleep
-    if (type === 'steps' || type === 'sleep') {
-      sortedData = aggregateDataByDay(sortedData);
-    }
+    // For daily view, aggregate by hour
+    sortedData = aggregateDataByHour(sortedData);
   }
 
   const chartData = sortedData.map(b => {
@@ -175,24 +285,29 @@ export function BiomarkerChart({ biomarkers, type, showDetails, devices = [] }: 
     let timeLabel = '';
     
     // Format time label based on time range
+    // toLocaleString/toLocaleTimeString automatically converts UTC timestamps to user's local timezone
     if (timeRange === 'monthly') {
-      timeLabel = date.toLocaleString('en-US', { month: 'short', day: 'numeric' });
+      timeLabel = date.toLocaleString(undefined, { month: 'short', day: 'numeric' });
     } else if (timeRange === 'weekly') {
-      timeLabel = date.toLocaleString('en-US', { month: 'short', day: 'numeric' });
+      timeLabel = date.toLocaleString(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
     } else if (timeRange === 'daily') {
-      // For daily, show time if we have multiple readings, otherwise just show the time
-      if (type === 'steps' || type === 'sleep') {
-        timeLabel = date.toLocaleString('en-US', { month: 'short', day: 'numeric' });
-      } else {
-        timeLabel = date.toLocaleString('en-US', { hour: '2-digit', minute: '2-digit' });
-      }
+      // For daily, show hour in local time (automatically converted from UTC)
+      timeLabel = date.toLocaleTimeString(undefined, { hour: 'numeric', hour12: true }).replace(' ', '');
     }
+    
+    const bWithRange = b as Biomarker & { minValue?: number; maxValue?: number; minSystolic?: number; maxSystolic?: number; minDiastolic?: number; maxDiastolic?: number };
     
     return {
       time: timeLabel,
       value: b.type === 'steps' ? Math.round(b.value) : b.value,
+      minValue: bWithRange.minValue,
+      maxValue: bWithRange.maxValue,
       systolic: b.systolic,
       diastolic: b.diastolic,
+      minSystolic: bWithRange.minSystolic,
+      maxSystolic: bWithRange.maxSystolic,
+      minDiastolic: bWithRange.minDiastolic,
+      maxDiastolic: bWithRange.maxDiastolic,
       isFaulty: b.isFaulty,
       deviceName: getDeviceName(b.deviceId),
       notes: b.notes,
@@ -213,7 +328,7 @@ export function BiomarkerChart({ biomarkers, type, showDetails, devices = [] }: 
   // Get display label for time range
   const getTimeRangeLabel = () => {
     const { startDate, endDate } = getDateRange();
-    const formatDate = (date: Date) => date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+    const formatDate = (date: Date) => date.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
     
     switch (timeRange) {
       case 'daily':
@@ -229,7 +344,7 @@ export function BiomarkerChart({ biomarkers, type, showDetails, devices = [] }: 
         }
         return `${formatDate(startDate)} - ${formatDate(endDate)}`;
       case 'monthly':
-        return startDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+        return startDate.toLocaleDateString(undefined, { month: 'long', year: 'numeric' });
     }
   };
 
@@ -353,123 +468,221 @@ export function BiomarkerChart({ biomarkers, type, showDetails, devices = [] }: 
             )}
 
             <div className="h-64">
-              <ResponsiveContainer width="100%" height="100%">
-                {type === 'bloodPressure' ? (
-                  <LineChart data={chartData}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-                    <XAxis 
-                      dataKey="time" 
-                      tick={{ fontSize: 12 }}
-                      stroke="#9ca3af"
-                    />
-                    <YAxis 
-                      tick={{ fontSize: 12 }}
-                      stroke="#9ca3af"
-                    />
-                    <Tooltip 
-                      contentStyle={{ 
-                        backgroundColor: 'white', 
-                        border: '1px solid #e5e7eb',
-                        borderRadius: '8px'
-                      }}
-                      content={(props) => {
-                        if (!props.active || !props.payload || props.payload.length === 0) return null;
-                        const data = props.payload[0].payload;
-                        return (
-                          <div className="bg-white p-3 border border-gray-200 rounded-lg shadow-lg">
-                            <p className="text-sm font-medium text-gray-900 dark:text-gray-600 mb-2">{data.time}</p>
-                            <p className="text-sm text-purple-600 dark:text-purple-800">
-                              Systolic: <span className="font-semibold">{data.systolic} {getBiomarkerUnit(type)}</span>
+              {type === 'bloodPressure' ? (
+                <ReactApexChart
+                  options={{
+                    chart: {
+                      type: 'bar',
+                      animations: {
+                        enabled: true,
+                        easing: 'easeinout',
+                        speed: 800,
+                        animateGradually: {
+                          enabled: true,
+                          delay: 150
+                        },
+                        dynamicAnimation: {
+                          enabled: true,
+                          speed: 350
+                        }
+                      },
+                      toolbar: {
+                        show: false
+                      },
+                      zoom: {
+                        enabled: false
+                      }
+                    },
+                    plotOptions: {
+                      bar: {
+                        horizontal: false,
+                        columnWidth: '60%',
+                        borderRadius: 4
+                      }
+                    },
+                    dataLabels: {
+                      enabled: false
+                    },
+                    colors: ['#8b5cf6', '#c084fc'],
+                    xaxis: {
+                      categories: chartData.map(d => d.time),
+                      labels: {
+                        style: {
+                          colors: '#9ca3af',
+                          fontSize: '12px'
+                        }
+                      }
+                    },
+                    yaxis: {
+                      labels: {
+                        style: {
+                          colors: '#9ca3af',
+                          fontSize: '12px'
+                        },
+                        formatter: (value: number) => {
+                          return Math.round(value).toString();
+                        }
+                      }
+                    },
+                    grid: {
+                      borderColor: '#e5e7eb',
+                      strokeDashArray: 3
+                    },
+                    tooltip: {
+                      custom: ({ series, seriesIndex, dataPointIndex, w }) => {
+                        const data = chartData[dataPointIndex];
+                        const showRange = data.notes && data.notes.includes('readings');
+                        const systolicRange = data.minSystolic !== undefined && data.maxSystolic !== undefined && data.minSystolic !== data.maxSystolic
+                          ? `Range: ${Math.round(data.minSystolic)} - ${Math.round(data.maxSystolic)} ${getBiomarkerUnit(type)}`
+                          : '';
+                        const diastolicRange = data.minDiastolic !== undefined && data.maxDiastolic !== undefined && data.minDiastolic !== data.maxDiastolic
+                          ? `Range: ${Math.round(data.minDiastolic)} - ${Math.round(data.maxDiastolic)} ${getBiomarkerUnit(type)}`
+                          : '';
+                        return `
+                          <div class="bg-white p-3 rounded-lg">
+                            <p class="text-sm font-medium text-gray-900 dark:text-gray-600  mb-2">${data.time}</p>
+                            <p class="text-sm text-purple-600">
+                              Systolic: <span class="font-semibold">${Math.round(data.systolic || 0)} ${getBiomarkerUnit(type)}</span>
                             </p>
-                            <p className="text-sm text-purple-400 dark:text-purple-600">
-                              Diastolic: <span className="font-semibold">{data.diastolic} {getBiomarkerUnit(type)}</span>
+                            ${systolicRange ? `<p class="text-xs text-gray-600 mt-0.5">${systolicRange}</p>` : ''}
+                            <p class="text-sm text-purple-400 mt-1">
+                              Diastolic: <span class="font-semibold">${Math.round(data.diastolic || 0)} ${getBiomarkerUnit(type)}</span>
                             </p>
-                            <p className="text-xs text-gray-500 mt-2 pt-2 border-t border-gray-200">
-                              📱 {data.deviceName}
+                            ${diastolicRange ? `<p class="text-xs text-gray-600 mt-0.5">${diastolicRange}</p>` : ''}
+                            ${showRange && data.notes ? `<p class="text-xs text-gray-500 mt-1">${data.notes}</p>` : ''}
+                            <p class="text-xs text-gray-500 mt-2 pt-2 border-t border-gray-200">
+                              📱 ${data.deviceName}
                             </p>
                           </div>
-                        );
-                      }}
-                    />
-                    <Line 
-                      type="monotone" 
-                      dataKey="systolic" 
-                      stroke="#8b5cf6" 
-                      strokeWidth={2}
-                      dot={{ fill: '#8b5cf6', r: 4 }}
-                      name="Systolic"
-                    />
-                    <Line 
-                      type="monotone" 
-                      dataKey="diastolic" 
-                      stroke="#c084fc" 
-                      strokeWidth={2}
-                      dot={{ fill: '#c084fc', r: 4 }}
-                      name="Diastolic"
-                    />
-                  </LineChart>
-                ) : (
-                  <AreaChart data={chartData}>
-                    <defs>
-                      <linearGradient id={`gradient-${type}`} x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor={getBiomarkerColor(type)} stopOpacity={0.3}/>
-                        <stop offset="95%" stopColor={getBiomarkerColor(type)} stopOpacity={0}/>
-                      </linearGradient>
-                    </defs>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-                    <XAxis 
-                      dataKey="time" 
-                      tick={{ fontSize: 12 }}
-                      stroke="#9ca3af"
-                    />
-                    <YAxis 
-                      tick={{ fontSize: 12 }}
-                      stroke="#9ca3af"
-                    />
-                    <Tooltip 
-                      contentStyle={{ 
-                        backgroundColor: 'white', 
-                        border: '1px solid #e5e7eb',
-                        borderRadius: '8px'
-                      }}
-                      content={(props) => {
-                        if (!props.active || !props.payload || props.payload.length === 0) return null;
-                        const data = props.payload[0].payload;
+                        `;
+                      }
+                    },
+                    legend: {
+                      show: true,
+                      position: 'top',
+                      horizontalAlign: 'right'
+                    }
+                  } as ApexOptions}
+                  series={[
+                    {
+                      name: 'Blood Pressure',
+                      data: chartData.map(d => ({
+                        x: d.time,
+                        y: [d.diastolic || 0, d.systolic || 0]
+                      }))
+                    }
+                  ]}
+                  type="rangeBar"
+                  height="100%"
+                />
+              ) : (
+                <ReactApexChart
+                  options={{
+                    chart: {
+                      type: type === 'steps' ? 'bar' : 'rangeBar',
+                      animations: {
+                        enabled: true,
+                        easing: 'easeinout',
+                        speed: 800,
+                        animateGradually: {
+                          enabled: true,
+                          delay: 150
+                        },
+                        dynamicAnimation: {
+                          enabled: true,
+                          speed: 350
+                        }
+                      },
+                      toolbar: {
+                        show: false
+                      },
+                      zoom: {
+                        enabled: false
+                      }
+                    },
+                    plotOptions: {
+                      bar: {
+                        horizontal: false,
+                        columnWidth: '60%',
+                        borderRadius: 4
+                      }
+                    },
+                    dataLabels: {
+                      enabled: false
+                    },
+                    colors: [getBiomarkerColor(type)],
+                    xaxis: {
+                      categories: chartData.map(d => d.time),
+                      labels: {
+                        style: {
+                          colors: '#9ca3af',
+                          fontSize: '12px'
+                        }
+                      }
+                    },
+                    yaxis: {
+                      labels: {
+                        style: {
+                          colors: '#9ca3af',
+                          fontSize: '12px'
+                        },
+                        formatter: (value: number) => {
+                          return type === 'steps' ? Math.round(value).toString() : value.toFixed(1);
+                        }
+                      }
+                    },
+                    grid: {
+                      borderColor: '#e5e7eb',
+                      strokeDashArray: 3
+                    },
+                    tooltip: {
+                      custom: ({ series, seriesIndex, dataPointIndex, w }) => {
+                        const data = chartData[dataPointIndex];
                         const displayValue = type === 'steps' ? Math.round(data.value) : data.value.toFixed(1);
-                        return (
-                          <div className="bg-white p-3 border border-gray-200 rounded-lg shadow-lg">
-                            <p className="text-sm font-medium text-gray-900 dark:text-gray-600 mb-2">{data.time}</p>
-                            <p className="text-sm font-semibold dark:text-gray-500">
-                              {getBiomarkerLabel(type)}: {displayValue} {getBiomarkerUnit(type)}
+                        const hasRange = data.minValue !== undefined && data.maxValue !== undefined && data.minValue !== data.maxValue;
+                        const rangeText = hasRange 
+                          ? `Range: ${type === 'steps' ? Math.round(data.minValue!) : data.minValue!.toFixed(1)} - ${type === 'steps' ? Math.round(data.maxValue!) : data.maxValue!.toFixed(1)} ${getBiomarkerUnit(type)}`
+                          : '';
+                        return `
+                          <div class="bg-white p-3 rounded-lg">
+                            <p class="text-sm font-medium text-gray-900 dark:text-gray-600 mb-2">${data.time}</p>
+                            <p class="text-sm font-semibold text-gray-500">
+                              ${getBiomarkerLabel(type)}: ${displayValue} ${getBiomarkerUnit(type)}
                             </p>
-                            {data.notes && (
-                              <p className="text-xs text-gray-600 mt-1">
-                                💤 {data.notes}
-                              </p>
-                            )}
-                            <p className="text-xs text-gray-500 mt-2 pt-2 border-t border-gray-200">
-                              📱 {data.deviceName}
+                            ${hasRange ? `<p class="text-xs text-gray-600 mt-1">${rangeText}</p>` : ''}
+                            ${data.notes ? `<p class="text-xs text-gray-600 mt-1"> ${data.notes}</p>` : ''}
+                            <p class="text-xs text-gray-500 mt-2 pt-2 border-t border-gray-200">
+                              📱 ${data.deviceName}
                             </p>
-                            {data.isFaulty && (
-                              <p className="text-xs text-red-600 font-medium mt-1">
-                                ⚠️ Faulty Reading
-                              </p>
-                            )}
+                            ${data.isFaulty ? '<p class="text-xs text-red-600 font-medium mt-1">⚠️ Faulty Reading</p>' : ''}
                           </div>
-                        );
-                      }}
-                    />
-                    <Area
-                      type="monotone"
-                      dataKey="value"
-                      stroke={getBiomarkerColor(type)}
-                      strokeWidth={2}
-                      fill={`url(#gradient-${type})`}
-                      dot={{ fill: getBiomarkerColor(type), r: 4 }}
-                    />
-                  </AreaChart>
-                )}
-              </ResponsiveContainer>
+                        `;
+                      }
+                    },
+                    legend: {
+                      show: false
+                    }
+                  } as ApexOptions}
+                  series={[
+                    {
+                      name: getBiomarkerLabel(type),
+                      data: type === 'steps'
+                        ? chartData.map(d => ({
+                            x: d.time,
+                            y: d.value
+                          }))
+                        : chartData.map(d => ({
+                            x: d.time,
+                            y: d.minValue !== undefined && d.maxValue !== undefined && d.minValue !== d.maxValue
+                              ? [d.minValue, d.maxValue]
+                              : [d.value, d.value]
+                          }))
+                    }
+                  ]}
+                  type={type === 'steps' ? 'bar' : 'rangeBar'}
+                  height="100%"
+                />
+              )}
             </div>
           </>
         )}

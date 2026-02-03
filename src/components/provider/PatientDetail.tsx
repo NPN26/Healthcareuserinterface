@@ -134,7 +134,7 @@ export function PatientDetail({ patient, biomarkers, alerts, onBack }: PatientDe
               </p>
               <p className="text-xs text-gray-500 mt-1">
                 {biomarkers.length > 0 
-                  ? new Date(biomarkers[biomarkers.length - 1].timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })
+                  ? new Date(biomarkers[biomarkers.length - 1].timestamp).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', second: '2-digit' })
                   : ''
                 }
               </p>

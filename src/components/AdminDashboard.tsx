@@ -354,7 +354,7 @@ export function AdminDashboard({ user, onLogout }: AdminDashboardProps) {
                         </TableCell>
                         <TableCell>{device.batteryLevel}%</TableCell>
                         <TableCell>
-                          {new Date(device.lastSync).toLocaleString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+                          {new Date(device.lastSync).toLocaleString(undefined, { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
                         </TableCell>
                         <TableCell>
                           <Badge variant={device.autoMode ? 'default' : 'outline'}>

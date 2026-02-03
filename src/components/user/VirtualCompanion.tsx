@@ -235,7 +235,7 @@ export function VirtualCompanion({ isOpen, onClose, biomarkers, devices, user }:
                     <p className={`text-xs mt-1 ${
                       message.sender === 'user' ? 'text-blue-100' : 'text-gray-500'
                     }`}>
-                      {message.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+                      {message.timestamp.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
                     </p>
                   </div>
                 </div>

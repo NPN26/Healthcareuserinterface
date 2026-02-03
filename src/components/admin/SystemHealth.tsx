@@ -1,7 +1,8 @@
 import { Card } from '../ui/card';
 import { Progress } from '../ui/progress';
 import { Badge } from '../ui/badge';
-import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
+import ReactApexChart from 'react-apexcharts';
+import { ApexOptions } from 'apexcharts';
 import { Server, HardDrive, Cpu, Activity, TrendingUp, CheckCircle } from 'lucide-react';
 import { Biomarker, Device, User } from '../../utils/mockData';
 
@@ -32,7 +33,7 @@ export function SystemHealth({ biomarkers, devices, users }: SystemHealthProps) 
       }).length;
       
       data.push({
-        time: hour.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
+        time: hour.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
         readings: count,
       });
     }
@@ -121,34 +122,79 @@ export function SystemHealth({ biomarkers, devices, users }: SystemHealthProps) 
           </Badge>
         </div>
         <div className="h-64">
-          <ResponsiveContainer width="100%" height="100%">
-            <LineChart data={throughputData}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-              <XAxis 
-                dataKey="time" 
-                tick={{ fontSize: 12 }}
-                stroke="#9ca3af"
-                angle={-45}
-                textAnchor="end"
-                height={80}
-              />
-              <YAxis stroke="#9ca3af" />
-              <Tooltip 
-                contentStyle={{ 
-                  backgroundColor: 'white', 
-                  border: '1px solid #e5e7eb',
-                  borderRadius: '8px'
-                }}
-              />
-              <Line 
-                type="monotone" 
-                dataKey="readings" 
-                stroke="#3b82f6" 
-                strokeWidth={2}
-                dot={{ fill: '#3b82f6', r: 3 }}
-              />
-            </LineChart>
-          </ResponsiveContainer>
+          <ReactApexChart
+            options={{
+              chart: {
+                type: 'line',
+                animations: {
+                  enabled: true,
+                  easing: 'easeinout',
+                  speed: 800,
+                  animateGradually: {
+                    enabled: true,
+                    delay: 150
+                  },
+                  dynamicAnimation: {
+                    enabled: true,
+                    speed: 350
+                  }
+                },
+                toolbar: {
+                  show: false
+                },
+                zoom: {
+                  enabled: false
+                }
+              },
+              stroke: {
+                curve: 'smooth',
+                width: 2
+              },
+              colors: ['#3b82f6'],
+              xaxis: {
+                categories: throughputData.map(d => d.time),
+                labels: {
+                  rotate: -45,
+                  style: {
+                    colors: '#9ca3af',
+                    fontSize: '12px'
+                  }
+                }
+              },
+              yaxis: {
+                labels: {
+                  style: {
+                    colors: '#9ca3af'
+                  }
+                }
+              },
+              grid: {
+                borderColor: '#e5e7eb',
+                strokeDashArray: 3
+              },
+              markers: {
+                size: 3,
+                strokeWidth: 0,
+                hover: {
+                  size: 5
+                }
+              },
+              tooltip: {
+                theme: 'light'
+              },
+              legend: {
+                show: false
+              }
+            } as ApexOptions}
+            series={[
+              {
+                name: 'Readings',
+                data: throughputData.map(d => d.readings)
+              }
+            ]}
+            type="line"
+            height="100%"
+          />
         </div>
       </Card>
 
@@ -157,21 +203,69 @@ export function SystemHealth({ biomarkers, devices, users }: SystemHealthProps) 
         <Card className="p-6">
           <h3 className="text-foreground mb-4">Device Status Distribution</h3>
           <div className="h-64">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={deviceStats}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-                <XAxis dataKey="name" stroke="#9ca3af" />
-                <YAxis stroke="#9ca3af" />
-                <Tooltip 
-                  contentStyle={{ 
-                    backgroundColor: 'white', 
-                    border: '1px solid #e5e7eb',
-                    borderRadius: '8px'
-                  }}
-                />
-                <Bar dataKey="value" fill="#8b5cf6" radius={[8, 8, 0, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
+            <ReactApexChart
+              options={{
+                chart: {
+                  type: 'bar',
+                  animations: {
+                    enabled: true,
+                    easing: 'easeinout',
+                    speed: 800,
+                    animateGradually: {
+                      enabled: true,
+                      delay: 150
+                    }
+                  },
+                  toolbar: {
+                    show: false
+                  }
+                },
+                plotOptions: {
+                  bar: {
+                    borderRadius: 8,
+                    borderRadiusApplication: 'end',
+                    columnWidth: '60%'
+                  }
+                },
+                colors: ['#8b5cf6'],
+                xaxis: {
+                  categories: deviceStats.map(d => d.name),
+                  labels: {
+                    style: {
+                      colors: '#9ca3af'
+                    }
+                  }
+                },
+                yaxis: {
+                  labels: {
+                    style: {
+                      colors: '#9ca3af'
+                    }
+                  }
+                },
+                grid: {
+                  borderColor: '#e5e7eb',
+                  strokeDashArray: 3
+                },
+                tooltip: {
+                  theme: 'light'
+                },
+                dataLabels: {
+                  enabled: false
+                },
+                legend: {
+                  show: false
+                }
+              } as ApexOptions}
+              series={[
+                {
+                  name: 'Devices',
+                  data: deviceStats.map(d => d.value)
+                }
+              ]}
+              type="bar"
+              height="100%"
+            />
           </div>
         </Card>
 

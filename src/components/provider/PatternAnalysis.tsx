@@ -1,7 +1,8 @@
 import { Card } from '../ui/card';
 import { Badge } from '../ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
-import { ScatterChart, Scatter, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ZAxis, LineChart, Line } from 'recharts';
+import ReactApexChart from 'react-apexcharts';
+import { ApexOptions } from 'apexcharts';
 import { Biomarker, User, getBiomarkerLabel } from '../../utils/mockData';
 import { TrendingUp, TrendingDown, Activity, Users } from 'lucide-react';
 import { useState } from 'react';
@@ -186,53 +187,91 @@ export function PatternAnalysis({ patients, biomarkers }: PatternAnalysisProps) 
         </div>
 
         <div className="h-80">
-          <ResponsiveContainer width="100%" height="100%">
-            <LineChart data={trendData}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-              <XAxis 
-                dataKey="date" 
-                tick={{ fontSize: 12 }}
-                stroke="#9ca3af"
-                angle={-45}
-                textAnchor="end"
-                height={80}
-              />
-              <YAxis stroke="#9ca3af" />
-              <Tooltip 
-                contentStyle={{ 
-                  backgroundColor: 'white', 
-                  border: '1px solid #e5e7eb',
-                  borderRadius: '8px'
-                }}
-              />
-              <Line 
-                type="monotone" 
-                dataKey="average" 
-                stroke="#3b82f6" 
-                strokeWidth={2}
-                dot={{ fill: '#3b82f6', r: 4 }}
-                name="Average"
-              />
-              <Line 
-                type="monotone" 
-                dataKey="max" 
-                stroke="#ef4444" 
-                strokeWidth={1}
-                strokeDasharray="5 5"
-                dot={false}
-                name="Max"
-              />
-              <Line 
-                type="monotone" 
-                dataKey="min" 
-                stroke="#10b981" 
-                strokeWidth={1}
-                strokeDasharray="5 5"
-                dot={false}
-                name="Min"
-              />
-            </LineChart>
-          </ResponsiveContainer>
+          <ReactApexChart
+            options={{
+              chart: {
+                type: 'line',
+                animations: {
+                  enabled: true,
+                  easing: 'easeinout',
+                  speed: 800,
+                  animateGradually: {
+                    enabled: true,
+                    delay: 150
+                  },
+                  dynamicAnimation: {
+                    enabled: true,
+                    speed: 350
+                  }
+                },
+                toolbar: {
+                  show: false
+                },
+                zoom: {
+                  enabled: false
+                }
+              },
+              stroke: {
+                curve: 'smooth',
+                width: [2, 1, 1],
+                dashArray: [0, 5, 5]
+              },
+              colors: ['#3b82f6', '#ef4444', '#10b981'],
+              xaxis: {
+                categories: trendData.map(d => d.date),
+                labels: {
+                  rotate: -45,
+                  style: {
+                    colors: '#9ca3af',
+                    fontSize: '12px'
+                  }
+                }
+              },
+              yaxis: {
+                labels: {
+                  style: {
+                    colors: '#9ca3af'
+                  }
+                }
+              },
+              grid: {
+                borderColor: '#e5e7eb',
+                strokeDashArray: 3
+              },
+              markers: {
+                size: [4, 0, 0],
+                strokeWidth: 0,
+                hover: {
+                  size: 6
+                }
+              },
+              tooltip: {
+                shared: true,
+                intersect: false
+              },
+              legend: {
+                show: true,
+                position: 'top',
+                horizontalAlign: 'right'
+              }
+            } as ApexOptions}
+            series={[
+              {
+                name: 'Average',
+                data: trendData.map(d => d.average)
+              },
+              {
+                name: 'Max',
+                data: trendData.map(d => d.max)
+              },
+              {
+                name: 'Min',
+                data: trendData.map(d => d.min)
+              }
+            ]}
+            type="line"
+            height="100%"
+          />
         </div>
       </Card>
 
@@ -244,44 +283,98 @@ export function PatternAnalysis({ patients, biomarkers }: PatternAnalysisProps) 
         </div>
 
         <div className="h-80">
-          <ResponsiveContainer width="100%" height="100%">
-            <ScatterChart>
-              <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-              <XAxis 
-                type="number" 
-                dataKey="heartRate" 
-                name="Heart Rate" 
-                unit=" bpm"
-                stroke="#9ca3af"
-              />
-              <YAxis 
-                type="number" 
-                dataKey="glucose" 
-                name="Glucose" 
-                unit=" mg/dL"
-                stroke="#9ca3af"
-              />
-              <ZAxis type="number" dataKey="readings" range={[50, 400]} />
-              <Tooltip 
-                cursor={{ strokeDasharray: '3 3' }}
-                contentStyle={{ 
-                  backgroundColor: 'white', 
-                  border: '1px solid #e5e7eb',
-                  borderRadius: '8px'
-                }}
-                formatter={(value: any, name: string) => {
-                  if (name === 'heartRate') return [`${value.toFixed(1)} bpm`, 'Heart Rate'];
-                  if (name === 'glucose') return [`${value.toFixed(1)} mg/dL`, 'Glucose'];
-                  return value;
-                }}
-              />
-              <Scatter 
-                name="Patients" 
-                data={correlationData} 
-                fill="#8b5cf6"
-              />
-            </ScatterChart>
-          </ResponsiveContainer>
+          <ReactApexChart
+            options={{
+              chart: {
+                type: 'scatter',
+                animations: {
+                  enabled: true,
+                  easing: 'easeinout',
+                  speed: 800,
+                  animateGradually: {
+                    enabled: true,
+                    delay: 150
+                  }
+                },
+                toolbar: {
+                  show: false
+                },
+                zoom: {
+                  enabled: true,
+                  type: 'xy'
+                }
+              },
+              colors: ['#8b5cf6'],
+              xaxis: {
+                title: {
+                  text: 'Heart Rate (bpm)',
+                  style: {
+                    color: '#9ca3af'
+                  }
+                },
+                labels: {
+                  style: {
+                    colors: '#9ca3af'
+                  }
+                }
+              },
+              yaxis: {
+                title: {
+                  text: 'Glucose (mg/dL)',
+                  style: {
+                    color: '#9ca3af'
+                  }
+                },
+                labels: {
+                  style: {
+                    colors: '#9ca3af'
+                  }
+                }
+              },
+              grid: {
+                borderColor: '#e5e7eb',
+                strokeDashArray: 3
+              },
+              markers: {
+                size: (seriesIndex, dataPointIndex) => {
+                  const reading = correlationData[dataPointIndex]?.readings || 50;
+                  return Math.min(Math.max(reading / 10, 5), 20);
+                },
+                strokeWidth: 0,
+                hover: {
+                  size: undefined,
+                  sizeOffset: 3
+                }
+              },
+              tooltip: {
+                custom: ({ series, seriesIndex, dataPointIndex, w }) => {
+                  const data = correlationData[dataPointIndex];
+                  return `
+                    <div class="bg-white p-3 border border-gray-200 rounded-lg shadow-lg">
+                      <p class="text-sm font-medium text-gray-900 mb-2">${data.name}</p>
+                      <p class="text-sm">Heart Rate: <span class="font-semibold">${data.heartRate.toFixed(1)} bpm</span></p>
+                      <p class="text-sm">Glucose: <span class="font-semibold">${data.glucose.toFixed(1)} mg/dL</span></p>
+                      <p class="text-xs text-gray-500 mt-2">Readings: ${data.readings}</p>
+                    </div>
+                  `;
+                }
+              },
+              legend: {
+                show: false
+              }
+            } as ApexOptions}
+            series={[
+              {
+                name: 'Patients',
+                data: correlationData.map(d => ({
+                  x: d.heartRate,
+                  y: d.glucose
+                }))
+              }
+            ]}
+            type="scatter"
+            height="100%"
+          />
         </div>
 
         <div className="mt-4 p-4 bg-purple-50 dark:bg-purple-950 rounded-lg">

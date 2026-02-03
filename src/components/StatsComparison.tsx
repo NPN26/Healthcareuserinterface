@@ -2,7 +2,8 @@ import { useState } from 'react';
 import { Card } from './ui/card';
 import { Button } from './ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
+import ReactApexChart from 'react-apexcharts';
+import { ApexOptions } from 'apexcharts';
 import { Biomarker, getBiomarkerLabel, getBiomarkerUnit, getBiomarkerColor } from '../utils/mockData';
 import { TrendingUp, TrendingDown } from 'lucide-react';
 
@@ -164,29 +165,72 @@ export function StatsComparison({ biomarkers }: StatsComparisonProps) {
         </div>
 
         <div className="h-80">
-          <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={comparisonResult.data}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-              <XAxis dataKey="name" stroke="#9ca3af" />
-              <YAxis stroke="#9ca3af" />
-              <Tooltip 
-                contentStyle={{ 
-                  backgroundColor: 'white', 
-                  border: '1px solid #e5e7eb',
-                  borderRadius: '8px'
-                }}
-                formatter={(value: any) => [
-                  `${value.toFixed(1)} ${getBiomarkerUnit(selectedType)}`,
-                  getBiomarkerLabel(selectedType)
-                ]}
-              />
-              <Bar 
-                dataKey="value" 
-                fill={getBiomarkerColor(selectedType)}
-                radius={[8, 8, 0, 0]}
-              />
-            </BarChart>
-          </ResponsiveContainer>
+          <ReactApexChart
+            options={{
+              chart: {
+                type: 'bar',
+                animations: {
+                  enabled: true,
+                  easing: 'easeinout',
+                  speed: 800,
+                  animateGradually: {
+                    enabled: true,
+                    delay: 150
+                  }
+                },
+                toolbar: {
+                  show: false
+                }
+              },
+              plotOptions: {
+                bar: {
+                  borderRadius: 8,
+                  borderRadiusApplication: 'end',
+                  columnWidth: '50%'
+                }
+              },
+              colors: [getBiomarkerColor(selectedType)],
+              xaxis: {
+                categories: comparisonResult.data.map(d => d.name),
+                labels: {
+                  style: {
+                    colors: '#9ca3af'
+                  }
+                }
+              },
+              yaxis: {
+                labels: {
+                  style: {
+                    colors: '#9ca3af'
+                  },
+                  formatter: (value) => value.toFixed(1)
+                }
+              },
+              grid: {
+                borderColor: '#e5e7eb',
+                strokeDashArray: 3
+              },
+              tooltip: {
+                y: {
+                  formatter: (value) => `${value.toFixed(1)} ${getBiomarkerUnit(selectedType)}`
+                }
+              },
+              dataLabels: {
+                enabled: false
+              },
+              legend: {
+                show: false
+              }
+            } as ApexOptions}
+            series={[
+              {
+                name: getBiomarkerLabel(selectedType),
+                data: comparisonResult.data.map(d => d.value)
+              }
+            ]}
+            type="bar"
+            height="100%"
+          />
         </div>
 
         <div className="mt-6 p-4 bg-gray-50 dark:bg-gray-900 rounded-lg">

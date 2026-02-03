@@ -5,3 +5,4 @@ dist
 database
 .DS_Store
 .vscode
+build

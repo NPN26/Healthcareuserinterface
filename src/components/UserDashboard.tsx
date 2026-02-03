@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Card } from './ui/card';
-import { Activity, Flame, Droplet, Settings, Smartphone, Bell, User, Heart, Wind, Footprints, Moon, Plus, Scale, Zap, Target, Trophy, Star, Crown, Sparkles, Award } from 'lucide-react';
+import { Activity, Flame, Droplet, Settings, Smartphone, Bell, User, Heart, Wind, Footprints, Moon, Plus, Scale, Zap, Target, Trophy, Star, Crown, Sparkles, Award, Shield, RefreshCw } from 'lucide-react';
 import { 
   BiomarkerChart, 
   DeviceCard, 
@@ -18,6 +18,7 @@ import {
   SidebarFooterAlerts,
   NotificationsPage,
   AchievementUnlockAnimation,
+  SharingSettingsPage,
   type Notification,
   type Achievement
 } from './user';
@@ -65,6 +66,7 @@ export function UserDashboard({ user, onLogout }: UserDashboardProps) {
   const [showProfile, setShowProfile] = useState(false);
   const [showAddDevice, setShowAddDevice] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
+  const [showSharingSettings, setShowSharingSettings] = useState(false);
   const [selectedPeriod, setSelectedPeriod] = useState<'today' | 'week' | 'month'>('today');
   const [activeView, setActiveView] = useState<'overview' | 'trends' | 'devices' | 'heartRate' | 'bloodPressure' | 'activities' | 'weight' | 'calories' | 'settings'>('overview');
   const [isDarkMode, setIsDarkMode] = useState(false);
@@ -84,6 +86,31 @@ export function UserDashboard({ user, onLogout }: UserDashboardProps) {
     if (darkMode) {
       document.documentElement.classList.add('dark');
     }
+  }, []);
+
+  // Sync devices when page becomes visible (tab focus/refresh)
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        console.log('Page became visible, syncing devices...');
+        loadData();
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    
+    // Also sync on window focus
+    const handleFocus = () => {
+      console.log('Window focused, syncing devices...');
+      loadData();
+    };
+    
+    window.addEventListener('focus', handleFocus);
+
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('focus', handleFocus);
+    };
   }, []);
 
   // Separate effect for simulating readings - depends on devices
@@ -261,7 +288,7 @@ export function UserDashboard({ user, onLogout }: UserDashboardProps) {
     
     const type = availableTypes[Math.floor(Math.random() * availableTypes.length)];
 
-    const newReading = generateBiomarkerData(user.id, device.id, type, new Date());
+    const newReading = generateBiomarkerData(user.id, device.id, type);
     
     // Update last generated time for this type
     setLastGeneratedTime(prev => ({ ...prev, [type]: now }));
@@ -620,10 +647,19 @@ export function UserDashboard({ user, onLogout }: UserDashboardProps) {
           <div className="space-y-4">
             <div className="flex justify-between items-center">
               <h2 className="text-2xl font-bold text-foreground">My Devices</h2>
-              <Button onClick={() => setShowAddDevice(true)}>
-                <Plus className="w-4 h-4 mr-2" />
-                Add Device
-              </Button>
+              <div className="flex gap-2">
+                <Button variant="outline" onClick={() => {
+                  toast.info('Syncing devices...');
+                  loadData();
+                }}>
+                  <RefreshCw className="w-4 h-4 mr-2" />
+                  Sync Devices
+                </Button>
+                <Button onClick={() => setShowAddDevice(true)}>
+                  <Plus className="w-4 h-4 mr-2" />
+                  Add Device
+                </Button>
+              </div>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               {devices.map(device => (
@@ -761,6 +797,17 @@ export function UserDashboard({ user, onLogout }: UserDashboardProps) {
                     <div>
                       <h4>Profile Settings</h4>
                       <p className="text-sm text-muted-foreground">Manage your personal information</p>
+                    </div>
+                  </div>
+                </button>
+                <button onClick={() => setShowSharingSettings(true)} className="w-full p-4 border border-border rounded-lg hover:bg-accent transition-colors text-left">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-lg bg-indigo-500/10 flex items-center justify-center">
+                      <Shield className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
+                    </div>
+                    <div>
+                      <h4>Data Sharing Settings</h4>
+                      <p className="text-sm text-muted-foreground">Manage healthcare provider access</p>
                     </div>
                   </div>
                 </button>
@@ -942,6 +989,16 @@ export function UserDashboard({ user, onLogout }: UserDashboardProps) {
             onDelete={handleDeleteNotification}
             onDeleteAll={handleDeleteAllNotifications}
             onRefresh={handleRefreshNotifications}
+          />
+        </div>
+      )}
+
+      {/* Sharing Settings Page */}
+      {showSharingSettings && (
+        <div className="fixed inset-0 z-50 bg-background">
+          <SharingSettingsPage
+            userId={user.user_id || user.id}
+            onBack={() => setShowSharingSettings(false)}
           />
         </div>
       )}

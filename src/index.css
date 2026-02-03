@@ -1600,6 +1600,14 @@
     background-color: var(--color-green-500);
   }
 
+  .bg-green-600 {
+    background-color: var(--color-green-600);
+  }
+
+  .bg-green-700 {
+    background-color: var(--color-green-700);
+  }
+
   .bg-green-500\/10 {
     background-color: color-mix(in srgb, oklch(.723 .219 149.579) 10%, transparent);
   }
@@ -3849,6 +3857,10 @@
 
   .dark\:bg-red-950:is(.dark *) {
     background-color: var(--color-red-950);
+  }
+
+  .dark\:bg-green-500:is(.dark *) {
+    background-color: var(--color-green-500);
   }
 
   .dark\:bg-green-950:is(.dark *) {

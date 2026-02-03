@@ -17,5 +17,6 @@ export { NotificationsPopover } from './NotificationsPopover';
 export { NotificationsPage } from './NotificationsPage';
 export { AchievementsPage } from './AchievementsPage';
 export { AchievementUnlockAnimation } from './AchievementUnlockAnimation';
+export { SharingSettingsPage } from './SharingSettingsPage';
 export type { Notification } from './NotificationsPopover';
 export type { Achievement } from './AchievementsPage';

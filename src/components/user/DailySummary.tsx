@@ -58,7 +58,7 @@ export function DailySummary({ biomarkers }: DailySummaryProps) {
       <div className="space-y-6">
         <div>
           <h3 className="text-foreground mb-1">Daily Health Summary</h3>
-          <p className="text-sm text-gray-600">{new Date().toLocaleDateString('en-US', { 
+          <p className="text-sm text-gray-600">{new Date().toLocaleDateString(undefined, { 
             weekday: 'long', 
             year: 'numeric', 
             month: 'long', 

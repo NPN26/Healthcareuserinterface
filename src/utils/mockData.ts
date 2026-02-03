@@ -66,9 +66,13 @@ export function generateBiomarkerData(
   userId: string,
   deviceId: string,
   type: Biomarker['type'],
-  date: Date,
+  date?: Date,
   includeFault: boolean = false
 ): Biomarker {
+  // Use provided date or current time
+  const timestamp = date ? date.toISOString() : new Date().toISOString();
+  const dateObj = date || new Date();
+  
   const baseValues: Record<Biomarker['type'], { min: number; max: number }> = {
     heartRate: { min: 60, max: 100 },
     bloodPressure: { min: 110, max: 130 },
@@ -86,7 +90,7 @@ export function generateBiomarkerData(
 
   // Special handling for sleep to differentiate naps from nighttime sleep
   if (type === 'sleep') {
-    const hour = date.getHours();
+    const hour = dateObj.getHours();
     // If it's during the day (8 AM - 6 PM), make it a nap (1-2 hours)
     if (hour >= 8 && hour <= 18) {
       value = Math.random() * 1.5 + 0.5; // 0.5 - 2 hours
@@ -98,8 +102,8 @@ export function generateBiomarkerData(
     }
   }
 
-  // Simulate fault (5% chance or forced)
-  if (includeFault || Math.random() < 0.05) {
+  // Simulate fault (0.1% chance or forced)
+  if (includeFault || Math.random() < 0.001) {
     if (type === 'steps') {
       value = 50000; // Unrealistically high step increment
       isFaulty = true;
@@ -110,11 +114,11 @@ export function generateBiomarkerData(
   }
 
   const biomarker: Biomarker = {
-    id: `${type}-${date.getTime()}-${Math.random()}`,
+    id: `${type}-${Date.now()}-${Math.random()}`,
     userId,
     type,
     value: Math.round(value * 10) / 10,
-    timestamp: date.toISOString(),
+    timestamp: timestamp,
     deviceId,
     isFaulty,
     notes,

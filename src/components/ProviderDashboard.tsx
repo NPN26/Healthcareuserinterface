@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
-import { ProviderHeader, ProviderStatsCards, PatientListTable, CriticalAlertsPanel, PatientDetail, PatternAnalysis } from './provider';
+import { ProviderHeader, ProviderStatsCards, PatientListTable, CriticalAlertsPanel, PatientDetail, PatternAnalysis, AccessRequestDialog } from './provider';
 import { Biomarker, User, Alert } from '../utils/mockData';
 import { toast } from 'sonner';
 
@@ -17,6 +17,7 @@ export function ProviderDashboard({ user, onLogout }: ProviderDashboardProps) {
   const [alerts, setAlerts] = useState<Alert[]>([]);
   const [isDarkMode, setIsDarkMode] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+  const [showAccessRequest, setShowAccessRequest] = useState(false);
 
   useEffect(() => {
     loadData();
@@ -131,6 +132,7 @@ export function ProviderDashboard({ user, onLogout }: ProviderDashboardProps) {
           isDarkMode={isDarkMode}
           onToggleDarkMode={toggleDarkMode}
           onLogout={onLogout}
+          onRequestAccess={() => setShowAccessRequest(true)}
         />
 
         <ProviderStatsCards
@@ -171,6 +173,17 @@ export function ProviderDashboard({ user, onLogout }: ProviderDashboardProps) {
           </TabsContent>
         </Tabs>
       </div>
+
+      {/* Access Request Dialog */}
+      <AccessRequestDialog
+        isOpen={showAccessRequest}
+        onClose={() => {
+          setShowAccessRequest(false);
+          // Reload data after successful request to refresh patient list
+          loadData();
+        }}
+        providerId={user.user_id || user.id}
+      />
     </div>
   );
 }

@@ -392,7 +392,7 @@ export function AchievementsPage({ userId }: AchievementsPageProps) {
                     <Sparkles className="w-4 h-4" />
                     <span>
                       Unlocked{' '}
-                      {achievement.unlockedAt?.toLocaleDateString('en-US', {
+                      {achievement.unlockedAt?.toLocaleDateString(undefined, {
                         month: 'short',
                         day: 'numeric',
                         year: 'numeric',
