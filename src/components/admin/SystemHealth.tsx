@@ -1,28 +1,62 @@
+import { useState, useEffect } from 'react';
 import { Card } from '../ui/card';
 import { Progress } from '../ui/progress';
 import { Badge } from '../ui/badge';
 import ReactApexChart from 'react-apexcharts';
 import { ApexOptions } from 'apexcharts';
 import { Server, HardDrive, Cpu, Activity, TrendingUp, CheckCircle } from 'lucide-react';
-import { Biomarker, Device, User } from '../../utils/mockData';
+import { Biomarker, Device } from '../../utils/mockData';
+import { AdminUser, fetchSystemMetrics, fetchDataThroughput, SystemMetrics } from '../../utils/supabase';
 
 interface SystemHealthProps {
   biomarkers: Biomarker[];
   devices: Device[];
-  users: User[];
+  users: AdminUser[];
 }
 
 export function SystemHealth({ biomarkers, devices, users }: SystemHealthProps) {
-  // Calculate system metrics
-  const totalStorage = 1000; // GB
-  const usedStorage = Math.min((biomarkers.length * 0.001), totalStorage);
-  const storagePercent = (usedStorage / totalStorage) * 100;
+  const [systemMetrics, setSystemMetrics] = useState<SystemMetrics | null>(null);
+  const [throughputData, setThroughputData] = useState<{ hour: string; count: number }[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
 
-  const cpuUsage = 35 + Math.random() * 20; // Simulated
-  const memoryUsage = 45 + Math.random() * 15; // Simulated
+  useEffect(() => {
+    loadSystemData();
+  }, []);
 
-  // Data throughput over time
+  const loadSystemData = async () => {
+    setIsLoading(true);
+    try {
+      const [metrics, throughput] = await Promise.all([
+        fetchSystemMetrics(),
+        fetchDataThroughput()
+      ]);
+      setSystemMetrics(metrics);
+      setThroughputData(throughput);
+    } catch (error) {
+      console.error('Error loading system data:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Simulated resource metrics (these would come from a monitoring service in production)
+  const cpuUsage = 35 + Math.random() * 20;
+  const memoryUsage = 45 + Math.random() * 15;
+  
+  // Calculate storage from real data
+  const totalStorageGB = 1000; // Total allocated storage
+  const usedStorageGB = systemMetrics ? systemMetrics.storageUsedMB / 1024 : 0;
+  const storagePercent = (usedStorageGB / totalStorageGB) * 100;
+
+  // Data throughput over time - use real data from Supabase
   const getThroughputData = () => {
+    if (throughputData.length > 0) {
+      return throughputData.map(item => ({
+        time: item.hour,
+        readings: item.count
+      }));
+    }
+    // Fallback to biomarkers if throughput data not loaded
     const data = [];
     for (let i = 23; i >= 0; i--) {
       const hour = new Date();
@@ -33,7 +67,7 @@ export function SystemHealth({ biomarkers, devices, users }: SystemHealthProps) 
       }).length;
       
       data.push({
-        time: hour.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
+        time: hour.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' }),
         readings: count,
       });
     }
@@ -53,8 +87,17 @@ export function SystemHealth({ biomarkers, devices, users }: SystemHealthProps) 
   const faultyReadings = biomarkers.filter(b => b.isFaulty).length;
   const dataQuality = ((biomarkers.length - faultyReadings) / biomarkers.length) * 100;
 
-  const throughputData = getThroughputData();
+  const throughputChartData = getThroughputData();
   const deviceStats = getDeviceStats();
+
+  if (isLoading) {
+    return (
+      <div className="p-8 text-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-600 mx-auto mb-4"></div>
+        <p className="text-gray-600">Loading system metrics...</p>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -99,12 +142,12 @@ export function SystemHealth({ biomarkers, devices, users }: SystemHealthProps) 
             </div>
             <div className="flex-1">
               <p className="text-sm text-gray-600">Storage Used</p>
-              <p className="text-2xl text-gray-900">{usedStorage.toFixed(1)} GB</p>
+              <p className="text-2xl text-gray-900">{usedStorageGB.toFixed(1)} GB</p>
             </div>
           </div>
           <Progress value={storagePercent} className="h-2" />
           <p className="text-xs text-gray-500 mt-2">
-            {(totalStorage - usedStorage).toFixed(1)} GB available
+            {(totalStorageGB - usedStorageGB).toFixed(1)} GB available
           </p>
         </Card>
       </div>
@@ -152,7 +195,7 @@ export function SystemHealth({ biomarkers, devices, users }: SystemHealthProps) 
               },
               colors: ['#3b82f6'],
               xaxis: {
-                categories: throughputData.map(d => d.time),
+                categories: throughputChartData.map(d => d.time),
                 labels: {
                   rotate: -45,
                   style: {
@@ -189,7 +232,7 @@ export function SystemHealth({ biomarkers, devices, users }: SystemHealthProps) 
             series={[
               {
                 name: 'Readings',
-                data: throughputData.map(d => d.readings)
+                data: throughputChartData.map(d => d.readings)
               }
             ]}
             type="line"

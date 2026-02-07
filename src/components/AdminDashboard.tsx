@@ -8,9 +8,21 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '.
 import { Switch } from './ui/switch';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 import { UserPlus, Trash2 } from 'lucide-react';
-import { User, Device, Biomarker, Alert, generateBiomarkerData } from '../utils/mockData';
+import { Device, Biomarker, Alert } from '../utils/mockData';
 import { toast } from 'sonner';
 import { AdminHeader, AdminStatsCards, QuickActionsCard, SystemAlertsCard, SystemHealth, SecurityMonitor } from './admin';
+import { 
+  fetchAllUsers, 
+  fetchAllDevices, 
+  fetchAllBiomarkers, 
+  fetchAllAlerts,
+  updateUserRole as updateUserRoleInDB,
+  deleteUserAndData,
+  updateAllDevicesStatus,
+  clearAllAlertsForAllUsers,
+  logAuditEvent,
+  AdminUser
+} from '../utils/supabase';
 
 interface AdminDashboardProps {
   user: any;
@@ -18,11 +30,12 @@ interface AdminDashboardProps {
 }
 
 export function AdminDashboard({ user, onLogout }: AdminDashboardProps) {
-  const [users, setUsers] = useState<User[]>([]);
+  const [users, setUsers] = useState<AdminUser[]>([]);
   const [devices, setDevices] = useState<Device[]>([]);
   const [biomarkers, setBiomarkers] = useState<Biomarker[]>([]);
   const [alerts, setAlerts] = useState<Alert[]>([]);
   const [isDarkMode, setIsDarkMode] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
   const [systemStatus, setSystemStatus] = useState({
     uptime: '99.9%',
     activeUsers: 0,
@@ -41,23 +54,37 @@ export function AdminDashboard({ user, onLogout }: AdminDashboardProps) {
     }
   }, []);
 
-  const loadData = () => {
-    const storedUsers = JSON.parse(localStorage.getItem('healthApp_users') || '[]');
-    const storedDevices = JSON.parse(localStorage.getItem('healthApp_devices') || '[]');
-    const storedBiomarkers = JSON.parse(localStorage.getItem('healthApp_biomarkers') || '[]');
-    const storedAlerts = JSON.parse(localStorage.getItem('healthApp_alerts') || '[]');
+  const loadData = async () => {
+    setIsLoading(true);
+    try {
+      console.log('Loading admin data from Supabase database');
+      
+      const [supabaseUsers, supabaseDevices, supabaseBiomarkers, supabaseAlerts] = await Promise.all([
+        fetchAllUsers(),
+        fetchAllDevices(),
+        fetchAllBiomarkers(),
+        fetchAllAlerts()
+      ]);
 
-    setUsers(storedUsers);
-    setDevices(storedDevices);
-    setBiomarkers(storedBiomarkers);
-    setAlerts(storedAlerts);
+      console.log(`Loaded from DB: ${supabaseUsers.length} users, ${supabaseDevices.length} devices, ${supabaseBiomarkers.length} biomarkers, ${supabaseAlerts.length} alerts`);
 
-    setSystemStatus(prev => ({
-      ...prev,
-      activeUsers: storedUsers.filter((u: User) => u.role === 'END_USER').length,
-      totalDevices: storedDevices.length,
-      dataPoints: storedBiomarkers.length,
-    }));
+      setUsers(supabaseUsers);
+      setDevices(supabaseDevices);
+      setBiomarkers(supabaseBiomarkers);
+      setAlerts(supabaseAlerts);
+
+      setSystemStatus(prev => ({
+        ...prev,
+        activeUsers: supabaseUsers.filter(u => u.role === 'END_USER').length,
+        totalDevices: supabaseDevices.length,
+        dataPoints: supabaseBiomarkers.length,
+      }));
+    } catch (error) {
+      console.error('Error loading admin data from Supabase:', error);
+      toast.error('Failed to load data from database');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const toggleDarkMode = () => {
@@ -68,149 +95,158 @@ export function AdminDashboard({ user, onLogout }: AdminDashboardProps) {
   };
 
   const simulateFaultForAllDevices = async () => {
-    const updated = devices.map(d => ({ ...d, status: 'faulty' as const }));
-    
-    // Update all devices in database
     try {
-      const { supabase } = await import('../utils/supabase');
+      const result = await updateAllDevicesStatus('faulty');
       
-      for (const device of devices) {
-        // Get current metadata
-        const { data: currentData } = await supabase
-          .from('data_sources')
-          .select('metadata')
-          .eq('source_id', device.id)
-          .single();
-
-        const currentMetadata = currentData?.metadata || {};
+      if (result.success) {
+        // Log the audit event
+        await logAuditEvent(
+          user.user_id || user.id,
+          'SYSTEM_ACTION',
+          undefined,
+          'devices',
+          { action: 'simulate_fault', deviceCount: result.count, performedBy: user.name }
+        );
         
-        await supabase
-          .from('data_sources')
-          .update({
-            status: 'ERROR',
-            metadata: {
-              ...currentMetadata,
-              status: 'faulty'
-            }
-          })
-          .eq('source_id', device.id);
+        // Reload devices to reflect changes
+        const updatedDevices = await fetchAllDevices();
+        setDevices(updatedDevices);
+        toast.success(`Fault simulation activated for ${result.count} devices`);
+      } else {
+        toast.error(result.message);
       }
     } catch (error) {
-      console.error('Database error:', error);
+      console.error('Error simulating faults:', error);
+      toast.error('Failed to simulate device faults');
     }
-    
-    localStorage.setItem('healthApp_devices', JSON.stringify(updated));
-    setDevices(updated);
-    toast.success('Fault simulation activated for all devices');
   };
 
   const resetAllDevices = async () => {
-    const updated = devices.map(d => ({ ...d, status: 'active' as const }));
-    
-    // Update all devices in database
     try {
-      const { supabase } = await import('../utils/supabase');
+      const result = await updateAllDevicesStatus('active');
       
-      for (const device of devices) {
-        // Get current metadata
-        const { data: currentData } = await supabase
-          .from('data_sources')
-          .select('metadata')
-          .eq('source_id', device.id)
-          .single();
-
-        const currentMetadata = currentData?.metadata || {};
+      if (result.success) {
+        // Log the audit event
+        await logAuditEvent(
+          user.user_id || user.id,
+          'SYSTEM_ACTION',
+          undefined,
+          'devices',
+          { action: 'reset_devices', deviceCount: result.count, performedBy: user.name }
+        );
         
-        await supabase
-          .from('data_sources')
-          .update({
-            status: 'CONNECTED',
-            metadata: {
-              ...currentMetadata,
-              status: 'active'
-            }
-          })
-          .eq('source_id', device.id);
+        // Reload devices to reflect changes
+        const updatedDevices = await fetchAllDevices();
+        setDevices(updatedDevices);
+        toast.success(`All ${result.count} devices reset to active status`);
+      } else {
+        toast.error(result.message);
       }
     } catch (error) {
-      console.error('Database error:', error);
+      console.error('Error resetting devices:', error);
+      toast.error('Failed to reset devices');
     }
-    
-    localStorage.setItem('healthApp_devices', JSON.stringify(updated));
-    setDevices(updated);
-    toast.success('All devices reset to active status');
   };
 
   const generateBulkData = () => {
-    const newBiomarkers: Biomarker[] = [];
-    const types: Biomarker['type'][] = ['heartRate', 'glucose', 'oxygen'];
-    
-    users.filter(u => u.role === 'END_USER').forEach(user => {
-      const userDevices = devices.filter(d => d.userId === user.id);
-      if (userDevices.length > 0) {
-        types.forEach(type => {
-          for (let i = 0; i < 10; i++) {
-            const date = new Date();
-            date.setHours(date.getHours() - i);
-            newBiomarkers.push(
-              generateBiomarkerData(user.id, userDevices[0].id, type, date)
-            );
-          }
-        });
+    // TODO: Implement bulk data generation with Supabase
+    // This would require inserting into data_points and biomarker_data tables
+    toast.info('Bulk data generation not yet implemented with Supabase');
+  };
+
+  const clearAllAlerts = async () => {
+    try {
+      const result = await clearAllAlertsForAllUsers();
+      
+      if (result.success) {
+        // Reload alerts to reflect changes
+        const updatedAlerts = await fetchAllAlerts();
+        setAlerts(updatedAlerts);
+        toast.success('All alerts cleared');
+      } else {
+        toast.error(result.message);
       }
-    });
-
-    const allBiomarkers = [...biomarkers, ...newBiomarkers];
-    localStorage.setItem('healthApp_biomarkers', JSON.stringify(allBiomarkers));
-    setBiomarkers(allBiomarkers);
-    toast.success(`Generated ${newBiomarkers.length} new data points`);
+    } catch (error) {
+      console.error('Error clearing alerts:', error);
+      toast.error('Failed to clear alerts');
+    }
   };
 
-  const clearAllAlerts = () => {
-    localStorage.setItem('healthApp_alerts', JSON.stringify([]));
-    setAlerts([]);
-    toast.success('All alerts cleared');
-  };
-
-  const deleteUser = (userId: string) => {
-    if (users.find(u => u.id === userId)?.role === 'admin') {
+  const deleteUser = async (userId: string) => {
+    if (users.find(u => u.id === userId)?.role === 'ADMIN') {
       toast.error('Cannot delete admin user');
       return;
     }
 
-    const updatedUsers = users.filter(u => u.id !== userId);
-    const updatedDevices = devices.filter(d => d.userId !== userId);
-    const updatedBiomarkers = biomarkers.filter(b => b.userId !== userId);
-    const updatedAlerts = alerts.filter(a => a.userId !== userId);
-
-    localStorage.setItem('healthApp_users', JSON.stringify(updatedUsers));
-    localStorage.setItem('healthApp_devices', JSON.stringify(updatedDevices));
-    localStorage.setItem('healthApp_biomarkers', JSON.stringify(updatedBiomarkers));
-    localStorage.setItem('healthApp_alerts', JSON.stringify(updatedAlerts));
-
-    setUsers(updatedUsers);
-    setDevices(updatedDevices);
-    setBiomarkers(updatedBiomarkers);
-    setAlerts(updatedAlerts);
-
-    toast.success('User and associated data deleted');
+    try {
+      const result = await deleteUserAndData(userId);
+      
+      if (result.success) {
+        // Log the audit event
+        await logAuditEvent(
+          user.user_id || user.id,
+          'USER_DELETED',
+          userId,
+          'user',
+          { deletedBy: user.name }
+        );
+        
+        // Reload all data to reflect changes
+        await loadData();
+        toast.success('User and associated data deleted');
+      } else {
+        toast.error(result.message);
+      }
+    } catch (error) {
+      console.error('Error deleting user:', error);
+      toast.error('Failed to delete user');
+    }
   };
 
-  const toggleUserRole = (userId: string) => {
-    const updatedUsers = users.map(u => {
-      if (u.id === userId) {
-        const newRole: 'END_USER' | 'PROVIDER' = u.role === 'PROVIDER' ? 'END_USER' : 'PROVIDER';
-        return { ...u, role: newRole };
+  const toggleUserRole = async (userId: string) => {
+    const targetUser = users.find(u => u.id === userId);
+    if (!targetUser) return;
+    
+    const newRole: 'END_USER' | 'PROVIDER' = targetUser.role === 'PROVIDER' ? 'END_USER' : 'PROVIDER';
+    
+    try {
+      const result = await updateUserRoleInDB(userId, newRole);
+      
+      if (result.success) {
+        // Log the audit event
+        await logAuditEvent(
+          user.user_id || user.id,
+          'ROLE_CHANGED',
+          userId,
+          'user',
+          { oldRole: targetUser.role, newRole, changedBy: user.name }
+        );
+        
+        // Update local state
+        setUsers(users.map(u => u.id === userId ? { ...u, role: newRole } : u));
+        toast.success('User role updated');
+      } else {
+        toast.error(result.message);
       }
-      return u;
-    });
-    localStorage.setItem('healthApp_users', JSON.stringify(updatedUsers));
-    setUsers(updatedUsers);
-    toast.success('User role updated');
+    } catch (error) {
+      console.error('Error updating user role:', error);
+      toast.error('Failed to update user role');
+    }
   };
 
   const faultyDevices = devices.filter(d => d.status === 'faulty');
   const criticalAlerts = alerts.filter(a => a.type === 'critical' && !a.read);
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-purple-50 via-white to-blue-50 dark:from-gray-950 dark:via-gray-900 dark:to-gray-950 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-600 dark:border-purple-400 mx-auto mb-4"></div>
+          <p className="text-gray-600 dark:text-gray-400">Loading admin data...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-purple-50 via-white to-blue-50 dark:from-gray-950 dark:via-gray-900 dark:to-gray-950 p-4 md:p-8">
@@ -277,16 +313,16 @@ export function AdminDashboard({ user, onLogout }: AdminDashboardProps) {
                       <TableCell>{u.name}</TableCell>
                       <TableCell>{u.email}</TableCell>
                       <TableCell>
-                        <Badge variant={u.role === 'admin' ? 'destructive' : u.role === 'provider' ? 'default' : 'secondary'}>
+                        <Badge variant={u.role === 'ADMIN' ? 'destructive' : u.role === 'PROVIDER' ? 'default' : 'secondary'}>
                           {u.role}
                         </Badge>
                       </TableCell>
-                      <TableCell>{u.age}</TableCell>
+                      <TableCell>{u.age || 'N/A'}</TableCell>
                       <TableCell>{devices.filter(d => d.userId === u.id).length}</TableCell>
                       <TableCell>{biomarkers.filter(b => b.userId === u.id).length}</TableCell>
                       <TableCell>
                         <div className="flex gap-2">
-                          {u.role !== 'admin' && (
+                          {u.role !== 'ADMIN' && (
                             <>
                               <Button 
                                 size="sm" 

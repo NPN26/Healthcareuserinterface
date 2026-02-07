@@ -1,89 +1,69 @@
+import { useState, useEffect } from 'react';
 import { Card } from '../ui/card';
 import { Badge } from '../ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../ui/table';
-import { Shield, Lock, Eye, AlertTriangle, CheckCircle, Key } from 'lucide-react';
-import { User, Alert } from '../../utils/mockData';
+import { Shield, Lock, Eye, AlertTriangle, CheckCircle, Key, UserPlus, UserX, UserCog, FileText } from 'lucide-react';
+import { Alert } from '../../utils/mockData';
+import { AdminUser, fetchSecurityEvents, AuditLog } from '../../utils/supabase';
 
 interface SecurityMonitorProps {
-  users: User[];
+  users: AdminUser[];
   alerts: Alert[];
 }
 
 export function SecurityMonitor({ users, alerts }: SecurityMonitorProps) {
-  // Simulated security events
-  const securityEvents = [
-    {
-      id: '1',
-      type: 'login',
-      user: users[0]?.name || 'User',
-      timestamp: new Date(Date.now() - 1000 * 60 * 15).toISOString(),
-      status: 'success',
-      ip: '192.168.1.100',
-      location: 'New York, US',
-    },
-    {
-      id: '2',
-      type: 'data_access',
-      user: users[2]?.name || 'Provider',
-      timestamp: new Date(Date.now() - 1000 * 60 * 30).toISOString(),
-      status: 'success',
-      ip: '192.168.1.105',
-      location: 'Boston, US',
-    },
-    {
-      id: '3',
-      type: 'failed_login',
-      user: 'Unknown',
-      timestamp: new Date(Date.now() - 1000 * 60 * 120).toISOString(),
-      status: 'blocked',
-      ip: '45.123.45.67',
-      location: 'Unknown',
-    },
-    {
-      id: '4',
-      type: 'password_change',
-      user: users[0]?.name || 'User',
-      timestamp: new Date(Date.now() - 1000 * 60 * 60 * 24).toISOString(),
-      status: 'success',
-      ip: '192.168.1.100',
-      location: 'New York, US',
-    },
-    {
-      id: '5',
-      type: 'data_export',
-      user: users[2]?.name || 'Provider',
-      timestamp: new Date(Date.now() - 1000 * 60 * 60 * 48).toISOString(),
-      status: 'success',
-      ip: '192.168.1.105',
-      location: 'Boston, US',
-    },
-  ];
+  const [securityEvents, setSecurityEvents] = useState<AuditLog[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
 
-  // Security metrics
-  const totalLogins = securityEvents.filter(e => e.type === 'login' || e.type === 'failed_login').length;
-  const failedLogins = securityEvents.filter(e => e.type === 'failed_login').length;
-  const dataAccess = securityEvents.filter(e => e.type === 'data_access' || e.type === 'data_export').length;
+  useEffect(() => {
+    loadSecurityEvents();
+  }, []);
 
-  const getEventIcon = (type: string) => {
-    switch (type) {
-      case 'login': return <Eye className="w-4 h-4 text-blue-600" />;
-      case 'failed_login': return <AlertTriangle className="w-4 h-4 text-red-600" />;
-      case 'data_access': return <Shield className="w-4 h-4 text-green-600" />;
-      case 'data_export': return <Lock className="w-4 h-4 text-purple-600" />;
-      case 'password_change': return <Key className="w-4 h-4 text-amber-600" />;
+  const loadSecurityEvents = async () => {
+    setIsLoading(true);
+    try {
+      const events = await fetchSecurityEvents(50);
+      setSecurityEvents(events);
+    } catch (error) {
+      console.error('Error loading security events:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Security metrics from real audit logs
+  const loginEvents = securityEvents.filter(e => 
+    e.action === 'LOGIN' || e.action === 'FAILED_LOGIN'
+  );
+  const failedLogins = securityEvents.filter(e => e.action === 'FAILED_LOGIN');
+  const dataAccessEvents = securityEvents.filter(e => 
+    e.action === 'DATA_ACCESS' || e.action === 'DATA_EXPORT'
+  );
+
+  const getEventIcon = (action: string) => {
+    switch (action) {
+      case 'LOGIN': return <Eye className="w-4 h-4 text-blue-600" />;
+      case 'FAILED_LOGIN': return <AlertTriangle className="w-4 h-4 text-red-600" />;
+      case 'DATA_ACCESS': return <Shield className="w-4 h-4 text-green-600" />;
+      case 'DATA_EXPORT': return <FileText className="w-4 h-4 text-purple-600" />;
+      case 'PASSWORD_CHANGE': return <Key className="w-4 h-4 text-amber-600" />;
+      case 'USER_CREATED': return <UserPlus className="w-4 h-4 text-green-600" />;
+      case 'USER_DELETED': return <UserX className="w-4 h-4 text-red-600" />;
+      case 'ROLE_CHANGED': return <UserCog className="w-4 h-4 text-blue-600" />;
       default: return <CheckCircle className="w-4 h-4 text-gray-600" />;
     }
   };
 
-  const getEventLabel = (type: string) => {
-    switch (type) {
-      case 'login': return 'Login';
-      case 'failed_login': return 'Failed Login';
-      case 'data_access': return 'Data Access';
-      case 'data_export': return 'Data Export';
-      case 'password_change': return 'Password Change';
-      default: return type;
-    }
+  const getEventLabel = (action: string) => {
+    return action.split('_').map(word => 
+      word.charAt(0) + word.slice(1).toLowerCase()
+    ).join(' ');
+  };
+
+  const getEventStatus = (action: string): 'success' | 'blocked' | 'warning' => {
+    if (action === 'FAILED_LOGIN') return 'blocked';
+    if (action === 'USER_DELETED') return 'warning';
+    return 'success';
   };
 
   return (
@@ -97,7 +77,7 @@ export function SecurityMonitor({ users, alerts }: SecurityMonitorProps) {
             </div>
             <div>
               <p className="text-sm text-gray-600">Security Status</p>
-              <p className="text-gray-900">Secure</p>
+              <p className="text-gray-900">{failedLogins.length > 5 ? 'Warning' : 'Secure'}</p>
             </div>
           </div>
         </Card>
@@ -109,7 +89,7 @@ export function SecurityMonitor({ users, alerts }: SecurityMonitorProps) {
             </div>
             <div>
               <p className="text-sm text-gray-600">Login Attempts</p>
-              <p className="text-2xl text-gray-900">{totalLogins}</p>
+              <p className="text-2xl text-gray-900">{loginEvents.length}</p>
             </div>
           </div>
         </Card>
@@ -121,7 +101,7 @@ export function SecurityMonitor({ users, alerts }: SecurityMonitorProps) {
             </div>
             <div>
               <p className="text-sm text-gray-600">Failed Logins</p>
-              <p className="text-2xl text-gray-900">{failedLogins}</p>
+              <p className="text-2xl text-gray-900">{failedLogins.length}</p>
             </div>
           </div>
         </Card>
@@ -133,7 +113,7 @@ export function SecurityMonitor({ users, alerts }: SecurityMonitorProps) {
             </div>
             <div>
               <p className="text-sm text-gray-600">Data Access</p>
-              <p className="text-2xl text-gray-900">{dataAccess}</p>
+              <p className="text-2xl text-gray-900">{dataAccessEvents.length}</p>
             </div>
           </div>
         </Card>
@@ -197,49 +177,95 @@ export function SecurityMonitor({ users, alerts }: SecurityMonitorProps) {
       <Card>
         <div className="p-6 border-b">
           <h3 className="text-gray-900">Recent Security Events</h3>
-          <p className="text-sm text-gray-600">Last 24 hours of security activity</p>
+          <p className="text-sm text-gray-600">
+            {isLoading ? 'Loading security events...' : `Showing ${securityEvents.length} recent events`}
+          </p>
         </div>
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Event Type</TableHead>
-              <TableHead>User</TableHead>
-              <TableHead>Timestamp</TableHead>
-              <TableHead>IP Address</TableHead>
-              <TableHead>Location</TableHead>
-              <TableHead>Status</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {securityEvents.map(event => (
-              <TableRow key={event.id} className={event.status === 'blocked' ? 'bg-red-50 dark:bg-red-950' : ''}>
-                <TableCell>
-                  <div className="flex items-center gap-2">
-                    {getEventIcon(event.type)}
-                    <span>{getEventLabel(event.type)}</span>
-                  </div>
-                </TableCell>
-                <TableCell>{event.user}</TableCell>
-                <TableCell>
-                  {new Date(event.timestamp).toLocaleString(undefined, { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
-                </TableCell>
-                <TableCell>
-                  <code className="text-xs bg-gray-100 dark:bg-gray-800 px-2 py-1 rounded">{event.ip}</code>
-                </TableCell>
-                <TableCell>{event.location}</TableCell>
-                <TableCell>
-                  <Badge variant={
-                    event.status === 'success' ? 'default' : 
-                    event.status === 'blocked' ? 'destructive' : 
-                    'secondary'
-                  }>
-                    {event.status}
-                  </Badge>
-                </TableCell>
+        {isLoading ? (
+          <div className="p-8 text-center">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-600 mx-auto mb-2"></div>
+            <p className="text-sm text-gray-600">Loading audit logs...</p>
+          </div>
+        ) : securityEvents.length === 0 ? (
+          <div className="p-8 text-center text-gray-600">
+            <Shield className="w-12 h-12 mx-auto mb-2 opacity-50" />
+            <p>No security events recorded yet</p>
+            <p className="text-sm text-gray-500">Events will appear here as actions are performed</p>
+          </div>
+        ) : (
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Event Type</TableHead>
+                <TableHead>User</TableHead>
+                <TableHead>Timestamp</TableHead>
+                <TableHead>IP Address</TableHead>
+                <TableHead>Details</TableHead>
+                <TableHead>Status</TableHead>
               </TableRow>
-            ))}
-          </TableBody>
-        </Table>
+            </TableHeader>
+            <TableBody>
+              {securityEvents.map(event => {
+                const status = getEventStatus(event.action);
+                return (
+                  <TableRow key={event.log_id} className={status === 'blocked' ? 'bg-red-50 dark:bg-red-950' : ''}>
+                    <TableCell>
+                      <div className="flex items-center gap-2">
+                        {getEventIcon(event.action)}
+                        <span>{getEventLabel(event.action)}</span>
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <div>
+                        <p className="text-sm">{event.admin_name || 'System'}</p>
+                        {event.target_entity_type && (
+                          <p className="text-xs text-gray-500">
+                            {event.target_entity_type}: {event.target_entity_id?.slice(0, 8)}...
+                          </p>
+                        )}
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      {new Date(event.timestamp).toLocaleString(undefined, { 
+                        month: 'short',
+                        day: 'numeric',
+                        hour: '2-digit', 
+                        minute: '2-digit'
+                      })}
+                    </TableCell>
+                    <TableCell>
+                      {event.ip_address ? (
+                        <code className="text-xs bg-gray-100 dark:bg-gray-800 px-2 py-1 rounded">
+                          {event.ip_address}
+                        </code>
+                      ) : (
+                        <span className="text-xs text-gray-400">N/A</span>
+                      )}
+                    </TableCell>
+                    <TableCell>
+                      {event.details ? (
+                        <span className="text-xs text-gray-600 truncate max-w-[200px] block">
+                          {typeof event.details === 'string' ? event.details : JSON.stringify(event.details).slice(0, 50)}
+                        </span>
+                      ) : (
+                        <span className="text-xs text-gray-400">-</span>
+                      )}
+                    </TableCell>
+                    <TableCell>
+                      <Badge variant={
+                        status === 'success' ? 'default' : 
+                        status === 'blocked' ? 'destructive' : 
+                        'secondary'
+                      }>
+                        {status}
+                      </Badge>
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
+            </TableBody>
+          </Table>
+        )}
       </Card>
 
       {/* Data Protection */}

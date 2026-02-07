@@ -156,9 +156,9 @@ export function NotificationsPage({
   };
 
   return (
-    <div className="h-full flex flex-col">
+    <div className="h-full w-full flex flex-col overflow-hidden">
       {/* Header */}
-      <div className="border-b bg-card">
+      <div className="flex-shrink-0 border-b bg-card">
         <div className="flex items-center gap-4 p-4">
           <Button
             variant="ghost"
@@ -258,8 +258,10 @@ export function NotificationsPage({
       </div>
 
       {/* Notifications List */}
-      <ScrollArea className="flex-1">
-        {filteredNotifications.length === 0 ? (
+      <div className="flex-1 overflow-hidden">
+        <ScrollArea className="h-full">
+          <div className="h-full">
+            {filteredNotifications.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-20 px-4 text-center">
             <Bell className="w-16 h-16 text-muted-foreground/40 mb-4" />
             <p className="text-lg font-medium text-muted-foreground">
@@ -347,7 +349,9 @@ export function NotificationsPage({
             })}
           </div>
         )}
-      </ScrollArea>
+          </div>
+        </ScrollArea>
+      </div>
     </div>
   );
 }

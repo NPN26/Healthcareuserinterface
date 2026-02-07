@@ -67,8 +67,8 @@ export function NotificationsPopover({
   const [isOpen, setIsOpen] = useState(false);
   const [loadingId, setLoadingId] = useState<string | null>(null);
 
-  // Show only recent 5 notifications in popover
-  const recentNotifications = notifications.slice(0, 5);
+  // Show only recent 3 notifications in popover
+  const recentNotifications = notifications.slice(0, 3);
 
   const handleMarkAsRead = async (notificationId: string, e: React.MouseEvent) => {
     e.stopPropagation();
@@ -121,8 +121,8 @@ export function NotificationsPopover({
           )}
         </Button>
       </PopoverTrigger>
-      <PopoverContent className="w-[380px] p-0" align="end">
-        <div className="flex items-center justify-between p-4 border-b">
+      <PopoverContent className="w-[380px] p-0 flex flex-col max-h-[85vh]" align="end">
+        <div className="flex items-center justify-between p-4 border-b flex-shrink-0">
           <h3 className="font-semibold text-sm">Notifications</h3>
           <div className="flex items-center gap-2">
             {unreadCount > 0 && (
@@ -140,17 +140,18 @@ export function NotificationsPopover({
           </div>
         </div>
 
-        <ScrollArea className="h-[400px]">
-          {recentNotifications.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-12 px-4 text-center">
-              <Bell className="w-12 h-12 text-muted-foreground/40 mb-3" />
-              <p className="text-sm text-muted-foreground font-medium">No notifications yet</p>
-              <p className="text-xs text-muted-foreground mt-1">
-                We'll notify you when something important happens
-              </p>
-            </div>
-          ) : (
-            <div className="divide-y">
+        <ScrollArea className="flex-1 overflow-auto">
+          <div>
+            {recentNotifications.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-12 px-4 text-center">
+                <Bell className="w-12 h-12 text-muted-foreground/40 mb-3" />
+                <p className="text-sm text-muted-foreground font-medium">No notifications yet</p>
+                <p className="text-xs text-muted-foreground mt-1">
+                  We'll notify you when something important happens
+                </p>
+              </div>
+            ) : (
+              <div className="divide-y">
               {recentNotifications.map((notification) => {
                 const config = notificationTypeConfig[notification.type];
                 const isLoading = loadingId === notification.notification_id;
@@ -216,13 +217,13 @@ export function NotificationsPopover({
                   </div>
                 );
               })}
-            </div>
-          )}
+              </div>
+            )}
+          </div>
         </ScrollArea>
 
         {notifications.length > 0 && (
-          <>
-            <Separator />
+          <div className="flex-shrink-0 border-t">
             <div className="p-3">
               <Button
                 variant="ghost"
@@ -233,13 +234,13 @@ export function NotificationsPopover({
                   onViewAll();
                 }}
               >
-                {notifications.length > 5 
+                {notifications.length > 3 
                   ? `View all notifications (${notifications.length})` 
                   : 'View all notifications'
                 }
               </Button>
             </div>
-          </>
+          </div>
         )}
       </PopoverContent>
     </Popover>

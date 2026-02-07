@@ -183,6 +183,42 @@ export function UserDashboard({ user, onLogout }: UserDashboardProps) {
     }
   };
 
+  // Sync all active devices - updates their last_sync timestamp
+  const syncAllDevices = async () => {
+    const activeDevices = devices.filter(d => d.status === 'active');
+    
+    if (activeDevices.length === 0) {
+      toast.info('No active devices to sync');
+      return;
+    }
+
+    toast.info(`Syncing ${activeDevices.length} device(s)...`);
+    
+    const syncTime = new Date().toISOString();
+    
+    try {
+      const { supabase } = await import('../utils/supabase');
+      
+      // Update last_sync for all active devices
+      const updatePromises = activeDevices.map(device => 
+        supabase
+          .from('data_sources')
+          .update({ last_sync: syncTime })
+          .eq('source_id', device.id)
+      );
+      
+      await Promise.all(updatePromises);
+      
+      // Reload data to get updated timestamps
+      await loadData();
+      
+      toast.success(`Successfully synced ${activeDevices.length} device(s)`);
+    } catch (error) {
+      console.error('Error syncing devices:', error);
+      toast.error('Failed to sync devices');
+    }
+  };
+
   // Helper function to check and unlock achievements
   const checkAchievements = (biomarkerCount: number, stepCount?: number) => {
     const userId = user.id || user.user_id;
@@ -648,10 +684,7 @@ export function UserDashboard({ user, onLogout }: UserDashboardProps) {
             <div className="flex justify-between items-center">
               <h2 className="text-2xl font-bold text-foreground">My Devices</h2>
               <div className="flex gap-2">
-                <Button variant="outline" onClick={() => {
-                  toast.info('Syncing devices...');
-                  loadData();
-                }}>
+                <Button variant="outline" onClick={syncAllDevices}>
                   <RefreshCw className="w-4 h-4 mr-2" />
                   Sync Devices
                 </Button>

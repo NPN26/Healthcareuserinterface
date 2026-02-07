@@ -1116,3 +1116,766 @@ export async function revokeAccessConsent(consentId: string): Promise<{ success:
     return { success: false, message: 'An error occurred while revoking access' }
   }
 }
+
+// =========================================
+// ADMIN FUNCTIONS
+// =========================================
+
+export interface AdminUser {
+  id: string;
+  email: string;
+  name: string;
+  role: 'END_USER' | 'PROVIDER' | 'ADMIN';
+  age?: number;
+  created_at: string;
+  last_login: string | null;
+}
+
+/**
+ * Fetch all users from Supabase (Admin only)
+ * @returns Array of all users
+ */
+export async function fetchAllUsers(): Promise<AdminUser[]> {
+  try {
+    const { data, error } = await supabase
+      .from('users')
+      .select('user_id, email, name, role, age, created_at, last_login')
+      .order('created_at', { ascending: false })
+
+    if (error) {
+      console.error('Error fetching all users:', error)
+      return []
+    }
+
+    if (!data) return []
+
+    return data.map(user => ({
+      id: user.user_id,
+      email: user.email,
+      name: user.name,
+      role: user.role as 'END_USER' | 'PROVIDER' | 'ADMIN',
+      age: user.age,
+      created_at: user.created_at,
+      last_login: user.last_login
+    }))
+  } catch (error) {
+    console.error('Error in fetchAllUsers:', error)
+    return []
+  }
+}
+
+/**
+ * Fetch all devices from all users (Admin only)
+ * @returns Array of all devices
+ */
+export async function fetchAllDevices(): Promise<Device[]> {
+  try {
+    const { data, error } = await supabase
+      .from('data_sources')
+      .select('*')
+      .order('created_at', { ascending: false })
+
+    if (error) {
+      console.error('Error fetching all devices:', error)
+      return []
+    }
+
+    if (!data) return []
+
+    return data.map(source => {
+      const metadata = source.metadata || {}
+      return {
+        id: source.source_id,
+        userId: source.user_id,
+        name: source.name,
+        type: metadata.device_type || 'smartwatch',
+        status: metadata.status || (source.status === 'CONNECTED' ? 'active' : 'inactive'),
+        batteryLevel: metadata.battery_level || 100,
+        lastSync: source.last_sync,
+        autoMode: metadata.auto_mode !== false,
+        supportedBiomarkers: metadata.supported_biomarkers || []
+      } as Device
+    })
+  } catch (error) {
+    console.error('Error in fetchAllDevices:', error)
+    return []
+  }
+}
+
+/**
+ * Fetch all biomarkers from all users (Admin only)
+ * @returns Array of all biomarkers
+ */
+export async function fetchAllBiomarkers(): Promise<Biomarker[]> {
+  try {
+    const { data, error } = await supabase
+      .from('data_points')
+      .select(`
+        data_point_id,
+        user_id,
+        timestamp,
+        source_id,
+        biomarker_data (
+          type,
+          value,
+          secondary_value,
+          unit
+        )
+      `)
+      .eq('data_type', 'BIOMARKER')
+      .order('timestamp', { ascending: false })
+      .limit(5000)
+
+    if (error) {
+      console.error('Error fetching all biomarkers:', error)
+      return []
+    }
+
+    if (!data) return []
+
+    const typeMapping: Record<string, Biomarker['type']> = {
+      'HEART_RATE': 'heartRate',
+      'BLOOD_PRESSURE': 'bloodPressure',
+      'BLOOD_GLUCOSE': 'glucose',
+      'SPO2': 'oxygen',
+      'STEPS': 'steps',
+      'SLEEP': 'sleep',
+      'RESPIRATORY_RATE': 'temperature',
+      'WEIGHT': 'weight'
+    }
+
+    return data
+      .filter(item => item.biomarker_data)
+      .map(item => {
+        const biomarkerData = Array.isArray(item.biomarker_data) 
+          ? item.biomarker_data[0] 
+          : item.biomarker_data
+        
+        const frontendType = typeMapping[biomarkerData.type] || 'heartRate';
+        
+        const biomarker: Biomarker = {
+          id: item.data_point_id,
+          userId: item.user_id,
+          deviceId: item.source_id || 'deleted-device',
+          type: frontendType,
+          value: biomarkerData.value,
+          timestamp: item.timestamp.includes('Z') || item.timestamp.includes('+') || item.timestamp.includes('-') 
+            ? item.timestamp 
+            : `${item.timestamp}Z`,
+          isFaulty: false
+        };
+        
+        if (frontendType === 'bloodPressure') {
+          biomarker.systolic = biomarkerData.value;
+          biomarker.diastolic = biomarkerData.secondary_value;
+        } else if (biomarkerData.secondary_value) {
+          biomarker.diastolic = biomarkerData.secondary_value;
+        }
+        
+        return biomarker;
+      })
+  } catch (error) {
+    console.error('Error in fetchAllBiomarkers:', error)
+    return []
+  }
+}
+
+/**
+ * Fetch all alerts from all users (Admin only)
+ * @returns Array of all alerts
+ */
+export async function fetchAllAlerts(): Promise<Alert[]> {
+  try {
+    const { data, error } = await supabase
+      .from('notifications')
+      .select('*')
+      .order('timestamp', { ascending: false })
+      .limit(1000)
+
+    if (error) {
+      console.error('Error fetching all alerts:', error)
+      return []
+    }
+
+    if (!data) return []
+
+    return data.map(notification => ({
+      id: notification.notification_id,
+      userId: notification.user_id,
+      type: notification.type === 'ALERT' ? 'warning' : 'info',
+      message: notification.content,
+      timestamp: notification.timestamp,
+      biomarkerType: undefined,
+      read: notification.is_read
+    }))
+  } catch (error) {
+    console.error('Error in fetchAllAlerts:', error)
+    return []
+  }
+}
+
+/**
+ * Update a user's role (Admin only)
+ * @param userId - The user ID to update
+ * @param newRole - The new role
+ * @returns Success status
+ */
+export async function updateUserRole(userId: string, newRole: 'END_USER' | 'PROVIDER' | 'ADMIN'): Promise<{ success: boolean; message: string }> {
+  try {
+    const { error } = await supabase
+      .from('users')
+      .update({ role: newRole })
+      .eq('user_id', userId)
+
+    if (error) {
+      console.error('Error updating user role:', error)
+      return { success: false, message: 'Failed to update user role' }
+    }
+
+    return { success: true, message: 'User role updated successfully' }
+  } catch (error) {
+    console.error('Error in updateUserRole:', error)
+    return { success: false, message: 'An error occurred while updating user role' }
+  }
+}
+
+/**
+ * Delete a user and all associated data (Admin only)
+ * WARNING: This is a destructive operation
+ * @param userId - The user ID to delete
+ * @returns Success status
+ */
+export async function deleteUserAndData(userId: string): Promise<{ success: boolean; message: string }> {
+  try {
+    // Note: Cascade delete should handle related data through foreign key constraints
+    // This includes: data_points, data_sources, notifications, goals, etc.
+    const { error } = await supabase
+      .from('users')
+      .delete()
+      .eq('user_id', userId)
+
+    if (error) {
+      console.error('Error deleting user:', error)
+      return { success: false, message: 'Failed to delete user' }
+    }
+
+    return { success: true, message: 'User and associated data deleted successfully' }
+  } catch (error) {
+    console.error('Error in deleteUserAndData:', error)
+    return { success: false, message: 'An error occurred while deleting user' }
+  }
+}
+
+/**
+ * Update device status (Admin only)
+ * @param deviceId - The device ID
+ * @param status - New status
+ * @returns Success status
+ */
+export async function updateDeviceStatus(deviceId: string, status: 'active' | 'inactive' | 'faulty'): Promise<{ success: boolean; message: string }> {
+  try {
+    // Get current metadata
+    const { data: currentData } = await supabase
+      .from('data_sources')
+      .select('metadata')
+      .eq('source_id', deviceId)
+      .single()
+
+    const currentMetadata = currentData?.metadata || {}
+    
+    const dbStatus = status === 'active' ? 'CONNECTED' : status === 'faulty' ? 'ERROR' : 'DISCONNECTED'
+    
+    const { error } = await supabase
+      .from('data_sources')
+      .update({
+        status: dbStatus,
+        metadata: {
+          ...currentMetadata,
+          status: status
+        }
+      })
+      .eq('source_id', deviceId)
+
+    if (error) {
+      console.error('Error updating device status:', error)
+      return { success: false, message: 'Failed to update device status' }
+    }
+
+    return { success: true, message: 'Device status updated successfully' }
+  } catch (error) {
+    console.error('Error in updateDeviceStatus:', error)
+    return { success: false, message: 'An error occurred while updating device status' }
+  }
+}
+
+/**
+ * Update all devices to a specific status (Admin only)
+ * @param status - New status for all devices
+ * @returns Success status
+ */
+export async function updateAllDevicesStatus(status: 'active' | 'inactive' | 'faulty'): Promise<{ success: boolean; message: string; count: number }> {
+  try {
+    // First, fetch all devices to get their current metadata
+    const { data: devices, error: fetchError } = await supabase
+      .from('data_sources')
+      .select('source_id, metadata')
+
+    if (fetchError) {
+      console.error('Error fetching devices:', fetchError)
+      return { success: false, message: 'Failed to fetch devices', count: 0 }
+    }
+
+    if (!devices || devices.length === 0) {
+      return { success: true, message: 'No devices to update', count: 0 }
+    }
+
+    const dbStatus = status === 'active' ? 'CONNECTED' : status === 'faulty' ? 'ERROR' : 'DISCONNECTED'
+
+    // Update each device
+    let successCount = 0
+    for (const device of devices) {
+      const currentMetadata = device.metadata || {}
+      const { error } = await supabase
+        .from('data_sources')
+        .update({
+          status: dbStatus,
+          metadata: {
+            ...currentMetadata,
+            status: status
+          }
+        })
+        .eq('source_id', device.source_id)
+
+      if (!error) {
+        successCount++
+      }
+    }
+
+    return { success: true, message: `Updated ${successCount} devices`, count: successCount }
+  } catch (error) {
+    console.error('Error in updateAllDevicesStatus:', error)
+    return { success: false, message: 'An error occurred while updating devices', count: 0 }
+  }
+}
+
+/**
+ * Clear all alerts for all users (Admin only)
+ * Marks all notifications as read
+ * @returns Success status
+ */
+export async function clearAllAlertsForAllUsers(): Promise<{ success: boolean; message: string }> {
+  try {
+    const { error } = await supabase
+      .from('notifications')
+      .update({
+        is_read: true,
+        read_at: new Date().toISOString()
+      })
+      .eq('is_read', false)
+
+    if (error) {
+      console.error('Error clearing all alerts:', error)
+      return { success: false, message: 'Failed to clear alerts' }
+    }
+
+    return { success: true, message: 'All alerts cleared successfully' }
+  } catch (error) {
+    console.error('Error in clearAllAlertsForAllUsers:', error)
+    return { success: false, message: 'An error occurred while clearing alerts' }
+  }
+}
+
+/**
+ * Create a new user (Admin only)
+ * Note: This creates a user in the users table, but not in auth.users
+ * For production, you'd need to use Supabase Admin API to create auth users
+ * @param userData - User data
+ * @returns Success status with user ID
+ */
+export async function createNewUser(userData: {
+  email: string;
+  name: string;
+  role: 'END_USER' | 'PROVIDER' | 'ADMIN';
+  age?: number;
+}): Promise<{ success: boolean; message: string; userId?: string }> {
+  try {
+    const userId = generateUUID()
+    
+    const { error } = await supabase
+      .from('users')
+      .insert({
+        user_id: userId,
+        email: userData.email,
+        name: userData.name,
+        role: userData.role,
+        age: userData.age,
+        created_at: new Date().toISOString()
+      })
+
+    if (error) {
+      console.error('Error creating user:', error)
+      return { success: false, message: 'Failed to create user. Email may already exist.' }
+    }
+
+    return { success: true, message: 'User created successfully', userId }
+  } catch (error) {
+    console.error('Error in createNewUser:', error)
+    return { success: false, message: 'An error occurred while creating user' }
+  }
+}
+
+/**
+ * Update user details (Admin only)
+ * @param userId - User ID to update
+ * @param updates - Fields to update
+ * @returns Success status
+ */
+export async function updateUserDetails(userId: string, updates: {
+  name?: string;
+  email?: string;
+  age?: number;
+}): Promise<{ success: boolean; message: string }> {
+  try {
+    const { error } = await supabase
+      .from('users')
+      .update(updates)
+      .eq('user_id', userId)
+
+    if (error) {
+      console.error('Error updating user:', error)
+      return { success: false, message: 'Failed to update user' }
+    }
+
+    return { success: true, message: 'User updated successfully' }
+  } catch (error) {
+    console.error('Error in updateUserDetails:', error)
+    return { success: false, message: 'An error occurred while updating user' }
+  }
+}
+
+// =========================================
+// AUDIT LOGS & SECURITY MONITORING
+// =========================================
+
+export interface AuditLog {
+  log_id: string;
+  admin_id: string;
+  admin_name?: string;
+  action: string;
+  target_entity_id?: string;
+  target_entity_type?: string;
+  timestamp: string;
+  ip_address?: string;
+  details?: any;
+}
+
+/**
+ * Log an audit event (Admin actions)
+ * @param adminId - Admin user ID performing the action
+ * @param action - Action being performed
+ * @param targetEntityId - Optional ID of the entity being acted upon
+ * @param targetEntityType - Optional type of entity (user, device, etc.)
+ * @param details - Optional additional details as JSON
+ * @param ipAddress - Optional IP address
+ * @returns Success status
+ */
+export async function logAuditEvent(
+  adminId: string,
+  action: string,
+  targetEntityId?: string,
+  targetEntityType?: string,
+  details?: any,
+  ipAddress?: string
+): Promise<{ success: boolean; message: string }> {
+  try {
+    const { error } = await supabase
+      .from('audit_logs')
+      .insert({
+        admin_id: adminId,
+        action,
+        target_entity_id: targetEntityId,
+        target_entity_type: targetEntityType,
+        timestamp: new Date().toISOString(),
+        ip_address: ipAddress,
+        details: details ? JSON.stringify(details) : null
+      })
+
+    if (error) {
+      console.error('Error logging audit event:', error)
+      return { success: false, message: 'Failed to log audit event' }
+    }
+
+    return { success: true, message: 'Audit event logged' }
+  } catch (error) {
+    console.error('Error in logAuditEvent:', error)
+    return { success: false, message: 'An error occurred while logging audit event' }
+  }
+}
+
+/**
+ * Fetch audit logs with admin user details (Admin only)
+ * @param limit - Number of logs to fetch
+ * @returns Array of audit logs
+ */
+export async function fetchAuditLogs(limit: number = 100): Promise<AuditLog[]> {
+  try {
+    const { data, error } = await supabase
+      .from('audit_logs')
+      .select(`
+        log_id,
+        admin_id,
+        action,
+        target_entity_id,
+        target_entity_type,
+        timestamp,
+        ip_address,
+        details,
+        admin:users!audit_logs_admin_id_fkey(name)
+      `)
+      .order('timestamp', { ascending: false })
+      .limit(limit)
+
+    if (error) {
+      console.error('Error fetching audit logs:', error)
+      return []
+    }
+
+    if (!data) return []
+
+    return data.map(log => ({
+      log_id: log.log_id,
+      admin_id: log.admin_id,
+      admin_name: log.admin?.name,
+      action: log.action,
+      target_entity_id: log.target_entity_id,
+      target_entity_type: log.target_entity_type,
+      timestamp: log.timestamp,
+      ip_address: log.ip_address,
+      details: log.details
+    }))
+  } catch (error) {
+    console.error('Error in fetchAuditLogs:', error)
+    return []
+  }
+}
+
+/**
+ * Fetch audit logs for a specific admin user
+ * @param adminId - Admin user ID
+ * @param limit - Number of logs to fetch
+ * @returns Array of audit logs
+ */
+export async function fetchAuditLogsByAdmin(adminId: string, limit: number = 100): Promise<AuditLog[]> {
+  try {
+    const { data, error } = await supabase
+      .from('audit_logs')
+      .select('*')
+      .eq('admin_id', adminId)
+      .order('timestamp', { ascending: false })
+      .limit(limit)
+
+    if (error) {
+      console.error('Error fetching audit logs:', error)
+      return []
+    }
+
+    if (!data) return []
+
+    return data.map(log => ({
+      log_id: log.log_id,
+      admin_id: log.admin_id,
+      action: log.action,
+      target_entity_id: log.target_entity_id,
+      target_entity_type: log.target_entity_type,
+      timestamp: log.timestamp,
+      ip_address: log.ip_address,
+      details: log.details
+    }))
+  } catch (error) {
+    console.error('Error in fetchAuditLogsByAdmin:', error)
+    return []
+  }
+}
+
+/**
+ * Fetch recent security events from audit logs
+ * Filters for security-relevant actions like logins, access changes, etc.
+ * @param limit - Number of events to fetch
+ * @returns Array of security events
+ */
+export async function fetchSecurityEvents(limit: number = 50): Promise<AuditLog[]> {
+  try {
+    const securityActions = [
+      'LOGIN',
+      'FAILED_LOGIN',
+      'LOGOUT',
+      'PASSWORD_CHANGE',
+      'USER_CREATED',
+      'USER_DELETED',
+      'ROLE_CHANGED',
+      'ACCESS_GRANTED',
+      'ACCESS_REVOKED',
+      'DATA_EXPORT',
+      'DATA_ACCESS',
+      'SETTINGS_CHANGED'
+    ];
+
+    const { data, error } = await supabase
+      .from('audit_logs')
+      .select(`
+        log_id,
+        admin_id,
+        action,
+        target_entity_id,
+        target_entity_type,
+        timestamp,
+        ip_address,
+        details,
+        admin:users!audit_logs_admin_id_fkey(name)
+      `)
+      .in('action', securityActions)
+      .order('timestamp', { ascending: false })
+      .limit(limit)
+
+    if (error) {
+      console.error('Error fetching security events:', error)
+      return []
+    }
+
+    if (!data) return []
+
+    return data.map(log => ({
+      log_id: log.log_id,
+      admin_id: log.admin_id,
+      admin_name: log.admin?.name,
+      action: log.action,
+      target_entity_id: log.target_entity_id,
+      target_entity_type: log.target_entity_type,
+      timestamp: log.timestamp,
+      ip_address: log.ip_address,
+      details: log.details
+    }))
+  } catch (error) {
+    console.error('Error in fetchSecurityEvents:', error)
+    return []
+  }
+}
+
+// =========================================
+// SYSTEM METRICS & MONITORING
+// =========================================
+
+export interface SystemMetrics {
+  totalUsers: number;
+  activeUsers: number;
+  totalDevices: number;
+  activeDevices: number;
+  totalDataPoints: number;
+  todayDataPoints: number;
+  storageUsedMB: number;
+  databaseSizeMB?: number;
+}
+
+/**
+ * Fetch comprehensive system metrics (Admin only)
+ * Calculates real-time statistics from the database
+ * @returns System metrics
+ */
+export async function fetchSystemMetrics(): Promise<SystemMetrics> {
+  try {
+    // Fetch all counts in parallel
+    const [
+      usersResult,
+      devicesResult,
+      dataPointsResult,
+      todayDataPointsResult
+    ] = await Promise.all([
+      // Total and active users
+      supabase.from('users').select('user_id, last_login', { count: 'exact', head: true }),
+      // Total and active devices
+      supabase.from('data_sources').select('source_id, status', { count: 'exact', head: true }),
+      // Total data points
+      supabase.from('data_points').select('data_point_id', { count: 'exact', head: true }),
+      // Today's data points
+      supabase.from('data_points')
+        .select('data_point_id', { count: 'exact', head: true })
+        .gte('timestamp', new Date(new Date().setHours(0, 0, 0, 0)).toISOString())
+    ]);
+
+    // Get active users (logged in within last 7 days)
+    const sevenDaysAgo = new Date();
+    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+    const { count: activeUsersCount } = await supabase
+      .from('users')
+      .select('user_id', { count: 'exact', head: true })
+      .gte('last_login', sevenDaysAgo.toISOString());
+
+    // Get active devices (connected status)
+    const { count: activeDevicesCount } = await supabase
+      .from('data_sources')
+      .select('source_id', { count: 'exact', head: true })
+      .eq('status', 'CONNECTED');
+
+    // Estimate storage (rough calculation based on data points)
+    // Average ~1KB per data point (biomarker + metadata)
+    const totalDataPoints = dataPointsResult.count || 0;
+    const storageUsedMB = (totalDataPoints * 1) / 1024; // Convert KB to MB
+
+    return {
+      totalUsers: usersResult.count || 0,
+      activeUsers: activeUsersCount || 0,
+      totalDevices: devicesResult.count || 0,
+      activeDevices: activeDevicesCount || 0,
+      totalDataPoints: totalDataPoints,
+      todayDataPoints: todayDataPointsResult.count || 0,
+      storageUsedMB: Math.round(storageUsedMB * 100) / 100
+    };
+  } catch (error) {
+    console.error('Error fetching system metrics:', error)
+    return {
+      totalUsers: 0,
+      activeUsers: 0,
+      totalDevices: 0,
+      activeDevices: 0,
+      totalDataPoints: 0,
+      todayDataPoints: 0,
+      storageUsedMB: 0
+    };
+  }
+}
+
+/**
+ * Fetch data throughput over the last 24 hours
+ * Returns hourly data point counts
+ * @returns Array of hourly data counts
+ */
+export async function fetchDataThroughput(): Promise<{ hour: string; count: number }[]> {
+  try {
+    const now = new Date();
+    const results = [];
+
+    for (let i = 23; i >= 0; i--) {
+      const hourStart = new Date(now);
+      hourStart.setHours(now.getHours() - i, 0, 0, 0);
+      
+      const hourEnd = new Date(hourStart);
+      hourEnd.setHours(hourStart.getHours() + 1);
+
+      const { count } = await supabase
+        .from('data_points')
+        .select('data_point_id', { count: 'exact', head: true })
+        .gte('timestamp', hourStart.toISOString())
+        .lt('timestamp', hourEnd.toISOString());
+
+      results.push({
+        hour: hourStart.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' }),
+        count: count || 0
+      });
+    }
+
+    return results;
+  } catch (error) {
+    console.error('Error fetching data throughput:', error)
+    return [];
+  }
+}
