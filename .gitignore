@@ -1,5 +1,6 @@
 node_modules
 .env
+guide
 .env.local
 dist
 database
