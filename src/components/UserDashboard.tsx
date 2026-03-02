@@ -1,6 +1,6 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Card } from './ui/card';
-import { Activity, Flame, Droplet, Settings, Smartphone, Bell, User, Heart, Wind, Footprints, Moon, Plus, Scale, Zap, Target, Trophy, Star, Crown, Sparkles, Award, Shield, RefreshCw } from 'lucide-react';
+import { Activity, Flame, Droplet, Settings, User, Heart, Wind, Footprints, Moon, Plus, Scale, Zap, Target, Trophy, Star, Crown, Sparkles, Award, RefreshCw } from 'lucide-react';
 import { 
   BiomarkerChart, 
   DeviceCard, 
@@ -18,9 +18,9 @@ import {
   SidebarFooterAlerts,
   NotificationsPage,
   AchievementUnlockAnimation,
-  SharingSettingsPage,
   type Notification,
-  type Achievement
+  type Achievement,
+  type ProfileTab
 } from './user';
 import { 
   Biomarker, 
@@ -64,19 +64,20 @@ export function UserDashboard({ user, onLogout }: UserDashboardProps) {
   const [showGoals, setShowGoals] = useState(false);
   const [showManualEntry, setShowManualEntry] = useState(false);
   const [showProfile, setShowProfile] = useState(false);
+  const [profileInitialTab, setProfileInitialTab] = useState<ProfileTab>('personal');
   const [showAddDevice, setShowAddDevice] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
-  const [showSharingSettings, setShowSharingSettings] = useState(false);
   const [selectedPeriod, setSelectedPeriod] = useState<'today' | 'week' | 'month'>('today');
-  const [activeView, setActiveView] = useState<'overview' | 'trends' | 'devices' | 'heartRate' | 'bloodPressure' | 'activities' | 'weight' | 'calories' | 'settings'>('overview');
+  const [activeView, setActiveView] = useState<'overview' | 'trends' | 'devices' | 'heartRate' | 'bloodPressure' | 'activities' | 'weight' | 'calories'>('overview');
   const [isDarkMode, setIsDarkMode] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [unreadNotificationsCount, setUnreadNotificationsCount] = useState(0);
   const [achievementToShow, setAchievementToShow] = useState<Achievement | null>(null);
+  const [selectedDate, setSelectedDate] = useState<Date>(new Date());
   
-  // Track last generation time for each biomarker type
-  const [lastGeneratedTime, setLastGeneratedTime] = useState<Record<string, number>>({});
+  // Track last generation time for each biomarker type (ref avoids stale closure issues in interval)
+  const lastGeneratedTimeRef = useRef<Record<string, number>>({});
 
   useEffect(() => {
     loadData();
@@ -124,7 +125,7 @@ export function UserDashboard({ user, onLogout }: UserDashboardProps) {
     // Simulate real-time updates
     const interval = setInterval(() => {
       simulateNewReading();
-    }, 10000); // Every 10 seconds
+    }, 5000); // Every 5 seconds
 
     return () => clearInterval(interval);
   }, [devices]);
@@ -298,7 +299,7 @@ export function UserDashboard({ user, onLogout }: UserDashboardProps) {
     // Filter types based on frequency rules
     const now = Date.now();
     const availableTypes = types.filter(type => {
-      const lastTime = lastGeneratedTime[type] || 0;
+      const lastTime = lastGeneratedTimeRef.current[type] || 0;
       const timeSince = now - lastTime;
       
       // Steps: only generate every 10 minutes (600000 ms)
@@ -327,7 +328,7 @@ export function UserDashboard({ user, onLogout }: UserDashboardProps) {
     const newReading = generateBiomarkerData(user.id, device.id, type);
     
     // Update last generated time for this type
-    setLastGeneratedTime(prev => ({ ...prev, [type]: now }));
+    lastGeneratedTimeRef.current = { ...lastGeneratedTimeRef.current, [type]: now };
     console.log(`Generated new reading: ${type} for device "${device.name}":`, 
       type === 'bloodPressure' 
         ? `${newReading.systolic}/${newReading.diastolic} mmHg` 
@@ -424,8 +425,7 @@ export function UserDashboard({ user, onLogout }: UserDashboardProps) {
       }
 
       // Dual-write: Also save to localStorage for safety
-      const updatedAlerts = [...alerts, newAlert];
-      setAlerts(updatedAlerts);
+      setAlerts(prev => [...prev, newAlert]);
 
       const allAlerts = JSON.parse(localStorage.getItem('healthApp_alerts') || '[]');
       localStorage.setItem('healthApp_alerts', JSON.stringify([...allAlerts, newAlert]));
@@ -434,15 +434,16 @@ export function UserDashboard({ user, onLogout }: UserDashboardProps) {
     }
 
     // Dual-write: Update local state and localStorage
-    const updatedBiomarkers = [...biomarkers, newReading];
-    setBiomarkers(updatedBiomarkers);
+    // Use functional update to avoid stale closure overwriting fresh data from loadData()
+    setBiomarkers(prev => {
+      const updated = [...prev, newReading];
+      const userBiomarkers = updated.filter(b => b.userId === user.id);
+      checkAchievements(userBiomarkers.length, newReading.type === 'steps' ? newReading.value : undefined);
+      return updated;
+    });
 
     const allBiomarkers = JSON.parse(localStorage.getItem('healthApp_biomarkers') || '[]');
     localStorage.setItem('healthApp_biomarkers', JSON.stringify([...allBiomarkers, newReading]));
-
-    // Check for achievements
-    const userBiomarkers = updatedBiomarkers.filter(b => b.userId === user.id);
-    checkAchievements(userBiomarkers.length, newReading.type === 'steps' ? newReading.value : undefined);
   };
 
   const getLatestBiomarker = (type: Biomarker['type']) => {
@@ -467,8 +468,51 @@ export function UserDashboard({ user, onLogout }: UserDashboardProps) {
   };
 
   const handleLogout = () => {
-    onLogout();
     toast.success('Logged out successfully');
+    onLogout();
+  };
+
+  // Date navigation handlers
+  const handlePrevDay = () => {
+    setSelectedDate(prev => {
+      const d = new Date(prev);
+      d.setDate(d.getDate() - 1);
+      return d;
+    });
+  };
+
+  const handleNextDay = () => {
+    setSelectedDate(prev => {
+      const d = new Date(prev);
+      d.setDate(d.getDate() + 1);
+      const today = new Date();
+      return d > today ? today : d;
+    });
+  };
+
+  const handleToday = () => {
+    setSelectedDate(new Date());
+  };
+
+  // Filter biomarkers by selected date for QuickStatsGrid
+  const selectedDateStr = selectedDate.toDateString();
+  const filteredBiomarkers = biomarkers.filter(b =>
+    new Date(b.timestamp).toDateString() === selectedDateStr
+  );
+
+  const getFilteredLatestBiomarker = (type: Biomarker['type']) => {
+    const filtered = filteredBiomarkers.filter(b => b.type === type);
+    return filtered.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())[0];
+  };
+
+  const getFilteredTrend = (type: Biomarker['type']): 'up' | 'down' | 'stable' => {
+    const filtered = filteredBiomarkers.filter(b => b.type === type).slice(-10);
+    if (filtered.length < 2) return 'stable';
+    const recent = filtered.slice(-3).reduce((sum, b) => sum + b.value, 0) / 3;
+    const previous = filtered.slice(-6, -3).reduce((sum, b) => sum + b.value, 0) / 3;
+    if (recent > previous * 1.05) return 'up';
+    if (recent < previous * 0.95) return 'down';
+    return 'stable';
   };
 
   const handleUpdateUser = (updatedUser: any) => {
@@ -649,12 +693,12 @@ export function UserDashboard({ user, onLogout }: UserDashboardProps) {
       case 'overview':
         return (
           <div className="space-y-6">
-            <DailySummary biomarkers={biomarkers} />
+            <DailySummary biomarkers={biomarkers} selectedDate={selectedDate} />
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               {biomarkerCards.slice(0, 4).map(({ type }) => (
                 <BiomarkerChart 
                   key={type}
-                  biomarkers={biomarkers.filter(b => b.type === type)}
+                  biomarkers={filteredBiomarkers.filter(b => b.type === type)}
                   type={type}
                   devices={devices}
                 />
@@ -816,72 +860,6 @@ export function UserDashboard({ user, onLogout }: UserDashboardProps) {
           </div>
         );
       
-      case 'settings':
-        return (
-          <div className="space-y-6">
-            <Card className="p-6">
-              <h3 className="text-foreground mb-6">Settings</h3>
-              <div className="space-y-3">
-                <button onClick={() => setShowProfile(true)} className="w-full p-4 border border-border rounded-lg hover:bg-accent transition-colors text-left">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-lg bg-blue-500/10 flex items-center justify-center">
-                      <User className="w-5 h-5 text-blue-600 dark:text-blue-400" />
-                    </div>
-                    <div>
-                      <h4>Profile Settings</h4>
-                      <p className="text-sm text-muted-foreground">Manage your personal information</p>
-                    </div>
-                  </div>
-                </button>
-                <button onClick={() => setShowSharingSettings(true)} className="w-full p-4 border border-border rounded-lg hover:bg-accent transition-colors text-left">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-lg bg-indigo-500/10 flex items-center justify-center">
-                      <Shield className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
-                    </div>
-                    <div>
-                      <h4>Data Sharing Settings</h4>
-                      <p className="text-sm text-muted-foreground">Manage healthcare provider access</p>
-                    </div>
-                  </div>
-                </button>
-                <button className="w-full p-4 border border-border rounded-lg hover:bg-accent transition-colors text-left">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-lg bg-purple-500/10 flex items-center justify-center">
-                      <Bell className="w-5 h-5 text-purple-600 dark:text-purple-400" />
-                    </div>
-                    <div>
-                      <h4>Notifications</h4>
-                      <p className="text-sm text-muted-foreground">Configure alerts and reminders</p>
-                    </div>
-                  </div>
-                </button>
-                <button className="w-full p-4 border border-border rounded-lg hover:bg-accent transition-colors text-left">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-lg bg-green-500/10 flex items-center justify-center">
-                      <Settings className="w-5 h-5 text-green-600 dark:text-green-400" />
-                    </div>
-                    <div>
-                      <h4>Privacy & Security</h4>
-                      <p className="text-sm text-muted-foreground">Control your data and privacy</p>
-                    </div>
-                  </div>
-                </button>
-                <button className="w-full p-4 border border-border rounded-lg hover:bg-accent transition-colors text-left">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-lg bg-orange-500/10 flex items-center justify-center">
-                      <Smartphone className="w-5 h-5 text-orange-600 dark:text-orange-400" />
-                    </div>
-                    <div>
-                      <h4>Device Sync</h4>
-                      <p className="text-sm text-muted-foreground">Manage connected devices</p>
-                    </div>
-                  </div>
-                </button>
-              </div>
-            </Card>
-          </div>
-        );
-      
       default:
         return null;
     }
@@ -894,6 +872,7 @@ export function UserDashboard({ user, onLogout }: UserDashboardProps) {
           user={currentUser} 
           onBack={() => setShowProfile(false)} 
           onUpdate={handleUpdateUser}
+          initialTab={profileInitialTab}
         />
       ) : (
       <div className="flex min-h-screen w-full">
@@ -921,8 +900,7 @@ export function UserDashboard({ user, onLogout }: UserDashboardProps) {
                 <SidebarMenu>
                   <SidebarMenuItem>
                     <SidebarMenuButton
-                      isActive={activeView === 'settings'}
-                      onClick={() => setActiveView('settings')}
+                      onClick={() => { setProfileInitialTab('personal'); setShowProfile(true); }}
                     >
                       <Settings className="w-4 h-4" />
                       <span>Settings</span>
@@ -945,9 +923,13 @@ export function UserDashboard({ user, onLogout }: UserDashboardProps) {
               isDarkMode={isDarkMode}
               onToggleDarkMode={toggleDarkMode}
               alertCount={alerts.length}
-              onProfileClick={() => setShowProfile(true)}
-              onSettingsClick={() => setActiveView('settings')}
+              onProfileClick={() => { setProfileInitialTab('personal'); setShowProfile(true); }}
+              onSettingsClick={() => { setProfileInitialTab('personal'); setShowProfile(true); }}
               onLogout={handleLogout}
+              selectedDate={selectedDate}
+              onPrevDay={handlePrevDay}
+              onNextDay={handleNextDay}
+              onToday={handleToday}
               notifications={notifications}
               unreadCount={unreadNotificationsCount}
               onMarkNotificationAsRead={handleMarkNotificationAsRead}
@@ -969,9 +951,9 @@ export function UserDashboard({ user, onLogout }: UserDashboardProps) {
                 {/* Quick Stats Grid - Only on Overview */}
                 {activeView === 'overview' && (
                   <QuickStatsGrid
-                    biomarkers={biomarkers}
-                    getLatestBiomarker={getLatestBiomarker}
-                    getTrend={getTrend}
+                    biomarkers={filteredBiomarkers}
+                    getLatestBiomarker={getFilteredLatestBiomarker}
+                    getTrend={getFilteredTrend}
                     onCardClick={handleCardClick}
                   />
                 )}
@@ -1022,16 +1004,6 @@ export function UserDashboard({ user, onLogout }: UserDashboardProps) {
             onDelete={handleDeleteNotification}
             onDeleteAll={handleDeleteAllNotifications}
             onRefresh={handleRefreshNotifications}
-          />
-        </div>
-      )}
-
-      {/* Sharing Settings Page */}
-      {showSharingSettings && (
-        <div className="fixed inset-0 z-50 bg-background">
-          <SharingSettingsPage
-            userId={user.user_id || user.id}
-            onBack={() => setShowSharingSettings(false)}
           />
         </div>
       )}

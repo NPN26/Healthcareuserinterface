@@ -12,6 +12,7 @@ export { DeviceCard } from './DeviceCard';
 export { GoalsManager } from './GoalsManager';
 export { ManualDataEntry } from './ManualDataEntry';
 export { ProfilePage } from './ProfilePage';
+export type { ProfileTab } from './ProfilePage';
 export { VirtualCompanion } from './VirtualCompanion';
 export { NotificationsPopover } from './NotificationsPopover';
 export { NotificationsPage } from './NotificationsPage';

@@ -6,12 +6,13 @@ import { Biomarker, getBiomarkerLabel, getBiomarkerUnit } from '../../utils/mock
 
 interface DailySummaryProps {
   biomarkers: Biomarker[];
+  selectedDate?: Date;
 }
 
-export function DailySummary({ biomarkers }: DailySummaryProps) {
-  const today = new Date().toDateString();
+export function DailySummary({ biomarkers, selectedDate }: DailySummaryProps) {
+  const targetDate = (selectedDate || new Date()).toDateString();
   const todaysBiomarkers = biomarkers.filter(b => 
-    new Date(b.timestamp).toDateString() === today
+    new Date(b.timestamp).toDateString() === targetDate
   );
 
   const getLatestToday = (type: Biomarker['type']) => {
@@ -58,7 +59,7 @@ export function DailySummary({ biomarkers }: DailySummaryProps) {
       <div className="space-y-6">
         <div>
           <h3 className="text-foreground mb-1">Daily Health Summary</h3>
-          <p className="text-sm text-gray-600">{new Date().toLocaleDateString(undefined, { 
+          <p className="text-sm text-gray-600">{(selectedDate || new Date()).toLocaleDateString(undefined, { 
             weekday: 'long', 
             year: 'numeric', 
             month: 'long', 

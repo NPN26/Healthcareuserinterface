@@ -6,6 +6,7 @@ import { AuthScreen } from './components/AuthScreen';
 import { DatabaseTest } from './components/DatabaseTest';
 import { initializeMockData, User } from './utils/mockData';
 import { Toaster } from './components/ui/sonner';
+import { toast } from 'sonner';
 
 export default function App() {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
@@ -41,6 +42,7 @@ export default function App() {
   const handleLogout = () => {
     setCurrentUser(null);
     localStorage.removeItem('healthApp_currentUser');
+    toast.success('Logged out successfully');
   };
 
   // Show database test if in test mode

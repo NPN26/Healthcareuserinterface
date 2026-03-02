@@ -2,8 +2,8 @@ import { Card } from '../ui/card';
 import { Button } from '../ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
 import { Badge } from '../ui/badge';
-import { ArrowLeft, Download, Share2, User } from 'lucide-react';
-import { Biomarker, Alert, User as UserType, getBiomarkerLabel } from '../../utils/mockData';
+import { ArrowLeft, Download, Share2, User, AlertTriangle } from 'lucide-react';
+import { Biomarker, Alert, User as UserType, getBiomarkerLabel, isAbnormalReading, getBiomarkerUnit } from '../../utils/mockData';
 import { BiomarkerChart } from '../user/BiomarkerChart';
 import { toast } from 'sonner';
 
@@ -173,12 +173,31 @@ export function PatientDetail({ patient, biomarkers, alerts, onBack }: PatientDe
             {biomarkerTypes.map(type => {
               const avg = getAverageByType(type, 7);
               const trend = getTrendAnalysis(type);
+              const abnormal = avg !== null && isAbnormalReading(type, avg);
               
               return (
-                <div key={type} className="p-4 bg-gray-50 dark:bg-gray-900 rounded-lg">
-                  <p className="text-sm text-gray-600 mb-1">{getBiomarkerLabel(type)}</p>
-                  <p className="text-xl text-gray-900">
+                <div
+                  key={type}
+                  className={`p-4 rounded-lg ${
+                    abnormal
+                      ? 'bg-red-50 dark:bg-red-950 border border-red-300 dark:border-red-700'
+                      : 'bg-gray-50 dark:bg-gray-900'
+                  }`}
+                >
+                  <div className="flex items-center justify-between mb-1">
+                    <p className="text-sm text-gray-600">{getBiomarkerLabel(type)}</p>
+                    {abnormal && (
+                      <div className="flex items-center gap-1 text-red-600 dark:text-red-400">
+                        <AlertTriangle className="w-4 h-4" />
+                        <span className="text-xs font-medium">Abnormal</span>
+                      </div>
+                    )}
+                  </div>
+                  <p className={`text-xl ${abnormal ? 'text-red-700 dark:text-red-300 font-semibold' : 'text-gray-900'}`}>
                     {avg ? avg.toFixed(1) : '--'}
+                    {avg !== null && (
+                      <span className="text-sm text-gray-500 ml-1">{getBiomarkerUnit(type)}</span>
+                    )}
                   </p>
                   <p className="text-xs text-gray-500 mt-1">{trend}</p>
                 </div>

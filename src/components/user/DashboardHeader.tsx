@@ -1,4 +1,4 @@
-import { Bell, User, LogOut, Search, Sun, MoonIcon, Settings } from 'lucide-react';
+import { Bell, User, LogOut, Search, Sun, MoonIcon, Settings, ChevronLeft, ChevronRight, Calendar } from 'lucide-react';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
 import { SidebarTrigger } from '../ui/sidebar';
@@ -23,6 +23,11 @@ interface DashboardHeaderProps {
   onProfileClick: () => void;
   onSettingsClick: () => void;
   onLogout: () => void;
+  // Date navigation props
+  selectedDate: Date;
+  onPrevDay: () => void;
+  onNextDay: () => void;
+  onToday: () => void;
   // Notification props
   notifications: Notification[];
   unreadCount: number;
@@ -42,6 +47,10 @@ export function DashboardHeader({
   onProfileClick,
   onSettingsClick,
   onLogout,
+  selectedDate,
+  onPrevDay,
+  onNextDay,
+  onToday,
   notifications,
   unreadCount,
   onMarkNotificationAsRead,
@@ -49,9 +58,43 @@ export function DashboardHeader({
   onDeleteNotification,
   onViewAllNotifications,
 }: DashboardHeaderProps) {
+  const isToday = selectedDate.toDateString() === new Date().toDateString();
+
   return (
     <header className="sticky top-0 z-10 flex h-16 shrink-0 items-center gap-4 border-b bg-white/80 dark:bg-gray-900/80 backdrop-blur-xl px-4">
       <SidebarTrigger className="-ml-1" />
+
+      {/* Date Navigation */}
+      <div className="flex items-center gap-1">
+        <Button variant="ghost" size="icon" className="h-8 w-8" onClick={onPrevDay}>
+          <ChevronLeft className="w-4 h-4" />
+        </Button>
+        <button
+          onClick={onToday}
+          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
+            isToday
+              ? 'bg-primary/10 text-primary'
+              : 'hover:bg-accent text-muted-foreground'
+          }`}
+        >
+          <Calendar className="w-3.5 h-3.5" />
+          {selectedDate.toLocaleDateString(undefined, {
+            month: 'short',
+            day: 'numeric',
+            year: selectedDate.getFullYear() !== new Date().getFullYear() ? 'numeric' : undefined,
+          })}
+          {isToday && <span className="text-xs">(Today)</span>}
+        </button>
+        <Button
+          variant="ghost"
+          size="icon"
+          className="h-8 w-8"
+          onClick={onNextDay}
+          disabled={isToday}
+        >
+          <ChevronRight className="w-4 h-4" />
+        </Button>
+      </div>
       
       {/* Search Bar */}
       <div className="flex-1 max-w-md">
