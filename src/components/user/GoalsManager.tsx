@@ -11,7 +11,7 @@ import { Textarea } from '../ui/textarea';
 import { Target, Plus, Edit2, Trash2, CheckCircle2, TrendingUp, ChevronRight, ChevronLeft, History, ListTodo, Clock } from 'lucide-react';
 import { toast } from 'sonner';
 import { Biomarker } from '../../utils/mockData';
-import { HealthGoal, fetchGoals, createGoal, updateGoal, deleteGoal } from '../../utils/supabase';
+import { HealthGoal, fetchGoals, createGoal, updateGoal, deleteGoal, createNotification } from '../../utils/supabase';
 
 // Re-export HealthGoal for backward compatibility
 export type { HealthGoal } from '../../utils/supabase';
@@ -56,6 +56,29 @@ export function GoalsManager({ isOpen, onClose, userId, biomarkers }: GoalsManag
       loadGoals();
     }
   }, [userId, isOpen]);
+
+  // Track which goals have already been notified to avoid duplicates
+  const [notifiedGoals, setNotifiedGoals] = useState<Set<string>>(new Set());
+
+  // Check if any goal just hit 100% and fire a GOAL notification
+  useEffect(() => {
+    if (goals.length === 0 || biomarkers.length === 0) return;
+
+    goals.forEach(goal => {
+      if (goal.status === 'completed' || notifiedGoals.has(goal.id)) return;
+      const progress = getGoalProgress(goal);
+      if (progress >= 100) {
+        const label = getGoalTypeLabel(goal.type);
+        createNotification(
+          userId,
+          'GOAL',
+          `🎯 Goal Completed: ${label} — You reached your target of ${getGoalTargetText(goal)}!`
+        ).catch(console.error);
+        toast.success(`🎯 Goal completed: ${label}!`);
+        setNotifiedGoals(prev => new Set(prev).add(goal.id));
+      }
+    });
+  }, [goals, biomarkers]);
 
   const loadGoals = async () => {
     setLoading(true);

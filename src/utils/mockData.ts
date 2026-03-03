@@ -331,7 +331,8 @@ export function getBiomarkerColor(type: Biomarker['type']): string {
   return colors[type];
 }
 
-export function isAbnormalReading(type: Biomarker['type'], value: number): boolean {
+export function isAbnormalReading(type: Biomarker['type'], value: number, customThresholds?: Record<string, { low: number; high: number }>): boolean {
+  // Default ranges
   const ranges: Record<Biomarker['type'], { min: number; max: number }> = {
     heartRate: { min: 60, max: 100 },
     bloodPressure: { min: 90, max: 140 },
@@ -342,6 +343,19 @@ export function isAbnormalReading(type: Biomarker['type'], value: number): boole
     temperature: { min: 36, max: 38 },
     weight: { min: 40, max: 200 },
   };
+
+  // Override with user custom thresholds if provided
+  if (customThresholds) {
+    if (type === 'heartRate' && customThresholds.heartRate) {
+      return value < customThresholds.heartRate.low || value > customThresholds.heartRate.high;
+    }
+    if (type === 'bloodPressure' && customThresholds.bloodPressureSystolic) {
+      return value < customThresholds.bloodPressureSystolic.low || value > customThresholds.bloodPressureSystolic.high;
+    }
+    if (type === 'glucose' && customThresholds.glucose) {
+      return value < customThresholds.glucose.low || value > customThresholds.glucose.high;
+    }
+  }
 
   return value < ranges[type].min || value > ranges[type].max;
 }

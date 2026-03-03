@@ -19,5 +19,8 @@ export { NotificationsPage } from './NotificationsPage';
 export { AchievementsPage } from './AchievementsPage';
 export { AchievementUnlockAnimation } from './AchievementUnlockAnimation';
 export { SharingSettingsPage } from './SharingSettingsPage';
+export { CriticalAlertModal, isCriticalReading } from './CriticalAlertModal';
+export type { CriticalAlert } from './CriticalAlertModal';
+export { AnnouncementBanner } from './AnnouncementBanner';
 export type { Notification } from './NotificationsPopover';
 export type { Achievement } from './AchievementsPage';

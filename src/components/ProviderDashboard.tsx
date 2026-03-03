@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
 import { ProviderHeader, ProviderStatsCards, PatientListTable, CriticalAlertsPanel, PatientDetail, PatternAnalysis, AccessRequestDialog } from './provider';
+import { AnnouncementBanner } from './user';
 import { Biomarker, User, Alert } from '../utils/mockData';
 import { toast } from 'sonner';
 
@@ -127,6 +128,7 @@ export function ProviderDashboard({ user, onLogout }: ProviderDashboardProps) {
   return (
     <div className="min-h-screen bg-gradient-to-br from-green-50 via-white to-blue-50 dark:from-gray-950 dark:via-gray-900 dark:to-gray-950 p-4 md:p-8">
       <div className="max-w-7xl mx-auto space-y-6">
+        <AnnouncementBanner />
         <ProviderHeader
           userName={user.name}
           isDarkMode={isDarkMode}

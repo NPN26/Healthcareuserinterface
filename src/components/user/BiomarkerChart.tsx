@@ -79,8 +79,13 @@ export function BiomarkerChart({ biomarkers, type, showDetails, devices = [] }: 
         ? hourData.reduce((sum, b) => sum + (b.diastolic || 0), 0) / hourData.length
         : hourData[0].diastolic;
       
-      // Use the first reading of the hour as the base
-      const firstReading = hourData[0];
+      // Use the highest-priority device's reading as the base
+      const sortedByPriority = [...hourData].sort((a, b) => {
+        const devA = devices.find(d => d.id === a.deviceId);
+        const devB = devices.find(d => d.id === b.deviceId);
+        return (devB?.priority ?? 0) - (devA?.priority ?? 0);
+      });
+      const firstReading = sortedByPriority[0];
       const [year, month, day, hour] = hourKey.split('-');
       return {
         ...firstReading,
@@ -151,8 +156,13 @@ export function BiomarkerChart({ biomarkers, type, showDetails, devices = [] }: 
         ? dayData.reduce((sum, b) => sum + (b.diastolic || 0), 0) / dayData.length
         : dayData[0].diastolic;
       
-      // Use the first reading of the day as the base
-      const firstReading = dayData[0];
+      // Use the highest-priority device's reading as the base
+      const sortedByPriority = [...dayData].sort((a, b) => {
+        const devA = devices.find(d => d.id === a.deviceId);
+        const devB = devices.find(d => d.id === b.deviceId);
+        return (devB?.priority ?? 0) - (devA?.priority ?? 0);
+      });
+      const firstReading = sortedByPriority[0];
       return {
         ...firstReading,
         value: aggregatedValue,

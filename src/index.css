@@ -1694,6 +1694,10 @@
     background-color: var(--color-red-500);
   }
 
+  .bg-red-200 {
+    background-color: var(--color-red-200);
+  }
+
   .bg-secondary {
     background-color: var(--secondary);
   }
@@ -2402,6 +2406,10 @@
 
   .text-red-700 {
     color: var(--color-red-700);
+  }
+
+  .text-red-800 {
+    color: var(--color-red-800);
   }
 
   .text-secondary-foreground {

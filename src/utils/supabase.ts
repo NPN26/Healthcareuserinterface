@@ -335,6 +335,76 @@ export async function deleteAllNotifications(userId: string): Promise<boolean> {
   }
 }
 
+/**
+ * Client-side cleanup of expired notifications (older than 90 days).
+ * Should be called on app load or periodically.
+ * @returns Number of deleted notifications
+ */
+export async function cleanupExpiredNotifications(): Promise<number> {
+  try {
+    // Delete notifications whose expires_at has passed, OR that are older than 90 days
+    const ninetyDaysAgo = new Date()
+    ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - 90)
+
+    const { data, error } = await supabase
+      .from('notifications')
+      .delete()
+      .or(`expires_at.lte.${new Date().toISOString()},timestamp.lte.${ninetyDaysAgo.toISOString()}`)
+      .select('notification_id')
+
+    if (error) {
+      console.error('Error cleaning up expired notifications:', error)
+      return 0
+    }
+
+    const count = data?.length || 0
+    if (count > 0) {
+      console.log(`Cleaned up ${count} expired notifications`)
+    }
+    return count
+  } catch (error) {
+    console.error('Error in cleanupExpiredNotifications:', error)
+    return 0
+  }
+}
+
+/**
+ * Create a notification entry in the database
+ */
+export async function createNotification(
+  userId: string,
+  type: 'ALERT' | 'ACHIEVEMENT' | 'GOAL' | 'REMINDER' | 'SYSTEM',
+  content: string
+): Promise<NotificationData | null> {
+  try {
+    const expiresAt = new Date()
+    expiresAt.setDate(expiresAt.getDate() + 90)
+
+    const { data, error } = await supabase
+      .from('notifications')
+      .insert({
+        user_id: userId,
+        type,
+        content,
+        is_read: false,
+        timestamp: new Date().toISOString(),
+        expires_at: expiresAt.toISOString()
+      })
+      .select()
+      .single()
+
+    if (error) {
+      console.error('Error creating notification:', error)
+      return null
+    }
+
+    return data
+  } catch (error) {
+    console.error('Error in createNotification:', error)
+    return null
+  }
+}
+
 // =========================================
 // GOALS FUNCTIONS
 // =========================================
@@ -1900,4 +1970,337 @@ export async function fetchDataThroughput(): Promise<{ hour: string; count: numb
     console.error('Error fetching data throughput:', error)
     return [];
   }
+}
+
+// =========================================
+// EMERGENCY CONTACTS
+// =========================================
+
+export interface EmergencyContact {
+  contact_id: string;
+  user_id: string;
+  name: string;
+  phone: string | null;
+  email: string | null;
+  relationship: string | null;
+  is_primary: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface EmergencyAlertLog {
+  alert_id: string;
+  user_id: string;
+  contact_id: string;
+  alert_type: string;
+  trigger_reading: any;
+  status: string;
+  sent_at: string | null;
+  created_at: string;
+}
+
+/**
+ * Fetch all emergency contacts for a user
+ */
+export async function fetchEmergencyContacts(userId: string): Promise<EmergencyContact[]> {
+  try {
+    const { data, error } = await supabase
+      .from('emergency_contacts')
+      .select('*')
+      .eq('user_id', userId)
+      .order('is_primary', { ascending: false })
+      .order('created_at', { ascending: true })
+
+    if (error) {
+      console.error('Error fetching emergency contacts:', error)
+      return []
+    }
+    return data || []
+  } catch (error) {
+    console.error('Error in fetchEmergencyContacts:', error)
+    return []
+  }
+}
+
+/**
+ * Add a new emergency contact
+ */
+export async function addEmergencyContact(
+  userId: string,
+  contact: { name: string; phone?: string; email?: string; relationship?: string; is_primary?: boolean }
+): Promise<EmergencyContact | null> {
+  try {
+    const { data, error } = await supabase
+      .from('emergency_contacts')
+      .insert({
+        user_id: userId,
+        name: contact.name,
+        phone: contact.phone || null,
+        email: contact.email || null,
+        relationship: contact.relationship || null,
+        is_primary: contact.is_primary || false,
+      })
+      .select()
+      .single()
+
+    if (error) {
+      console.error('Error adding emergency contact:', error)
+      return null
+    }
+    return data
+  } catch (error) {
+    console.error('Error in addEmergencyContact:', error)
+    return null
+  }
+}
+
+/**
+ * Update an emergency contact
+ */
+export async function updateEmergencyContact(
+  contactId: string,
+  updates: Partial<{ name: string; phone: string; email: string; relationship: string; is_primary: boolean }>
+): Promise<boolean> {
+  try {
+    const { error } = await supabase
+      .from('emergency_contacts')
+      .update({ ...updates, updated_at: new Date().toISOString() })
+      .eq('contact_id', contactId)
+
+    if (error) {
+      console.error('Error updating emergency contact:', error)
+      return false
+    }
+    return true
+  } catch (error) {
+    console.error('Error in updateEmergencyContact:', error)
+    return false
+  }
+}
+
+/**
+ * Delete an emergency contact
+ */
+export async function deleteEmergencyContact(contactId: string): Promise<boolean> {
+  try {
+    const { error } = await supabase
+      .from('emergency_contacts')
+      .delete()
+      .eq('contact_id', contactId)
+
+    if (error) {
+      console.error('Error deleting emergency contact:', error)
+      return false
+    }
+    return true
+  } catch (error) {
+    console.error('Error in deleteEmergencyContact:', error)
+    return false
+  }
+}
+
+/**
+ * Fetch emergency alert history for a user
+ */
+export async function fetchEmergencyAlertHistory(userId: string): Promise<EmergencyAlertLog[]> {
+  try {
+    const { data, error } = await supabase
+      .from('emergency_alert_history')
+      .select('*')
+      .eq('user_id', userId)
+      .order('created_at', { ascending: false })
+      .limit(50)
+
+    if (error) {
+      console.error('Error fetching emergency alert history:', error)
+      return []
+    }
+    return data || []
+  } catch (error) {
+    console.error('Error in fetchEmergencyAlertHistory:', error)
+    return []
+  }
+}
+
+/**
+ * Send emergency alert to all contacts (STUB — logs to DB with status STUBBED)
+ * In production, this would call an SMS/email API (Twilio, SendGrid, etc.)
+ */
+export async function sendEmergencyAlerts(
+  userId: string,
+  triggerReading: { type: string; value: number; timestamp: string }
+): Promise<{ sent: number; failed: number }> {
+  try {
+    const contacts = await fetchEmergencyContacts(userId)
+    if (contacts.length === 0) return { sent: 0, failed: 0 }
+
+    let sent = 0
+    let failed = 0
+
+    for (const contact of contacts) {
+      const alertType = contact.phone && contact.email ? 'BOTH'
+        : contact.phone ? 'SMS' : 'EMAIL'
+
+      try {
+        // STUB: In production, send actual SMS/email here
+        // e.g. await twilioClient.messages.create({ to: contact.phone, ... })
+        // e.g. await sendgridClient.send({ to: contact.email, ... })
+        console.log(`[STUB] Emergency alert sent to ${contact.name} (${alertType}):`, triggerReading)
+
+        await supabase
+          .from('emergency_alert_history')
+          .insert({
+            user_id: userId,
+            contact_id: contact.contact_id,
+            alert_type: alertType,
+            trigger_reading: triggerReading,
+            status: 'STUBBED',
+            sent_at: new Date().toISOString(),
+          })
+
+        sent++
+      } catch (err) {
+        console.error(`Failed to send alert to ${contact.name}:`, err)
+
+        await supabase
+          .from('emergency_alert_history')
+          .insert({
+            user_id: userId,
+            contact_id: contact.contact_id,
+            alert_type: alertType,
+            trigger_reading: triggerReading,
+            status: 'FAILED',
+          })
+
+        failed++
+      }
+    }
+
+    return { sent, failed }
+  } catch (error) {
+    console.error('Error in sendEmergencyAlerts:', error)
+    return { sent: 0, failed: 0 }
+  }
+}
+
+// =========================================
+// ANNOUNCEMENTS
+// =========================================
+
+export interface Announcement {
+  announcement_id: string;
+  title: string;
+  message: string;
+  type: 'info' | 'warning' | 'success' | 'urgent';
+  is_active: boolean;
+  created_by: string;
+  created_at: string;
+  updated_at: string;
+  expires_at: string | null;
+}
+
+/**
+ * Fetch all active announcements
+ */
+export async function fetchActiveAnnouncements(): Promise<Announcement[]> {
+  try {
+    const { data, error } = await supabase
+      .from('announcements')
+      .select('*')
+      .eq('is_active', true)
+      .or(`expires_at.is.null,expires_at.gt.${new Date().toISOString()}`)
+      .order('created_at', { ascending: false })
+
+    if (error) {
+      console.error('Error fetching announcements:', error)
+      return []
+    }
+    return data || []
+  } catch (error) {
+    console.error('Error in fetchActiveAnnouncements:', error)
+    return []
+  }
+}
+
+/**
+ * Fetch all announcements (admin)
+ */
+export async function fetchAllAnnouncements(): Promise<Announcement[]> {
+  try {
+    const { data, error } = await supabase
+      .from('announcements')
+      .select('*')
+      .order('created_at', { ascending: false })
+
+    if (error) {
+      console.error('Error fetching all announcements:', error)
+      return []
+    }
+    return data || []
+  } catch (error) {
+    console.error('Error in fetchAllAnnouncements:', error)
+    return []
+  }
+}
+
+/**
+ * Create an announcement (admin)
+ */
+export async function createAnnouncement(
+  announcement: { title: string; message: string; type: string; created_by: string; expires_at?: string }
+): Promise<Announcement | null> {
+  try {
+    const { data, error } = await supabase
+      .from('announcements')
+      .insert({
+        title: announcement.title,
+        message: announcement.message,
+        type: announcement.type,
+        is_active: true,
+        created_by: announcement.created_by,
+        expires_at: announcement.expires_at || null,
+      })
+      .select()
+      .single()
+
+    if (error) {
+      console.error('Error creating announcement:', error)
+      return null
+    }
+    return data
+  } catch (error) {
+    console.error('Error in createAnnouncement:', error)
+    return null
+  }
+}
+
+/**
+ * Update an announcement (admin)
+ */
+export async function updateAnnouncement(
+  announcementId: string,
+  updates: Partial<{ title: string; message: string; type: string; is_active: boolean; expires_at: string }>
+): Promise<boolean> {
+  try {
+    const { error } = await supabase
+      .from('announcements')
+      .update({ ...updates, updated_at: new Date().toISOString() })
+      .eq('announcement_id', announcementId)
+
+    if (error) {
+      console.error('Error updating announcement:', error)
+      return false
+    }
+    return true
+  } catch (error) {
+    console.error('Error in updateAnnouncement:', error)
+    return false
+  }
+}
+
+/**
+ * Dismiss (deactivate) an announcement
+ */
+export async function dismissAnnouncement(announcementId: string): Promise<boolean> {
+  return updateAnnouncement(announcementId, { is_active: false })
 }

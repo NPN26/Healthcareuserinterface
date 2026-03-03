@@ -18,6 +18,10 @@ import {
   SidebarFooterAlerts,
   NotificationsPage,
   AchievementUnlockAnimation,
+  CriticalAlertModal,
+  isCriticalReading,
+  AnnouncementBanner,
+  type CriticalAlert,
   type Notification,
   type Achievement,
   type ProfileTab
@@ -75,12 +79,18 @@ export function UserDashboard({ user, onLogout }: UserDashboardProps) {
   const [unreadNotificationsCount, setUnreadNotificationsCount] = useState(0);
   const [achievementToShow, setAchievementToShow] = useState<Achievement | null>(null);
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
+  const [criticalAlert, setCriticalAlert] = useState<CriticalAlert | null>(null);
+  const criticalAlertQueueRef = useRef<CriticalAlert[]>([]);
   
   // Track last generation time for each biomarker type (ref avoids stale closure issues in interval)
   const lastGeneratedTimeRef = useRef<Record<string, number>>({});
 
   useEffect(() => {
     loadData();
+    // Cleanup expired notifications on load
+    import('../utils/supabase').then(({ cleanupExpiredNotifications }) => {
+      cleanupExpiredNotifications();
+    });
     // Check for dark mode preference
     const darkMode = localStorage.getItem('healthApp_darkMode') === 'true';
     setIsDarkMode(darkMode);
@@ -251,6 +261,15 @@ export function UserDashboard({ user, onLogout }: UserDashboardProps) {
       
       toast.success('🏆 Achievement Unlocked: First Step!');
       localStorage.setItem(`achievements_${userId}`, JSON.stringify(achievements));
+
+      // Create ACHIEVEMENT notification in database
+      import('../utils/supabase').then(({ createNotification }) => {
+        createNotification(
+          user.user_id || user.id,
+          'ACHIEVEMENT',
+          '🏆 Achievement Unlocked: First Step — You recorded your first health reading!'
+        );
+      });
     }
 
     // Check for step master achievement
@@ -269,6 +288,15 @@ export function UserDashboard({ user, onLogout }: UserDashboardProps) {
         
         toast.success('🏆 Achievement Unlocked: Step Master!');
         localStorage.setItem(`achievements_${userId}`, JSON.stringify(achievements));
+
+        // Create ACHIEVEMENT notification in database
+        import('../utils/supabase').then(({ createNotification }) => {
+          createNotification(
+            user.user_id || user.id,
+            'ACHIEVEMENT',
+            '🏆 Achievement Unlocked: Step Master — You reached 10,000 steps in a single day!'
+          );
+        });
       }
     }
   };
@@ -390,8 +418,9 @@ export function UserDashboard({ user, onLogout }: UserDashboardProps) {
       // Continue with localStorage as fallback
     }
 
-    // Check for abnormal reading
-    if (isAbnormalReading(type, newReading.value) || newReading.isFaulty) {
+    // Check for abnormal reading (using user's custom thresholds if set)
+    const userThresholds = currentUser.alertThresholds || undefined;
+    if (isAbnormalReading(type, newReading.value, userThresholds) || newReading.isFaulty) {
       // Import UUID generator
       const { generateUUID } = await import('../utils/supabase');
       
@@ -430,7 +459,26 @@ export function UserDashboard({ user, onLogout }: UserDashboardProps) {
       const allAlerts = JSON.parse(localStorage.getItem('healthApp_alerts') || '[]');
       localStorage.setItem('healthApp_alerts', JSON.stringify([...allAlerts, newAlert]));
 
-      toast.error(newAlert.message);
+      // Check if this reading is critically dangerous → show full-screen modal
+      const readingValue = type === 'bloodPressure' ? (newReading.systolic || newReading.value) : newReading.value;
+      if (isCriticalReading(type, readingValue)) {
+        const critical: CriticalAlert = {
+          id: newAlert.id,
+          type: type as CriticalAlert['type'],
+          value: readingValue,
+          secondaryValue: type === 'bloodPressure' ? newReading.diastolic : undefined,
+          message: newAlert.message,
+          timestamp: newAlert.timestamp,
+        };
+        // Queue it – if a modal is already open, add to queue
+        if (criticalAlert) {
+          criticalAlertQueueRef.current.push(critical);
+        } else {
+          setCriticalAlert(critical);
+        }
+      } else {
+        toast.error(newAlert.message);
+      }
     }
 
     // Dual-write: Update local state and localStorage
@@ -470,6 +518,16 @@ export function UserDashboard({ user, onLogout }: UserDashboardProps) {
   const handleLogout = () => {
     toast.success('Logged out successfully');
     onLogout();
+  };
+
+  // Critical alert acknowledgement handler
+  const handleAcknowledgeCriticalAlert = (alertId: string) => {
+    setCriticalAlert(null);
+    // Show next queued critical alert if any
+    if (criticalAlertQueueRef.current.length > 0) {
+      const next = criticalAlertQueueRef.current.shift()!;
+      setTimeout(() => setCriticalAlert(next), 300);
+    }
   };
 
   // Date navigation handlers
@@ -940,6 +998,7 @@ export function UserDashboard({ user, onLogout }: UserDashboardProps) {
 
             <div className="p-4 md:p-8">
               <div className="max-w-7xl mx-auto space-y-6">
+                <AnnouncementBanner />
                 {/* Quick Actions */}
                 <QuickActionsGrid
                   onLogReading={() => setShowManualEntry(true)}
@@ -1110,6 +1169,12 @@ export function UserDashboard({ user, onLogout }: UserDashboardProps) {
           </form>
         </DialogContent>
       </Dialog>
+
+      {/* Critical Alert Modal — must-acknowledge overlay for dangerous readings */}
+      <CriticalAlertModal
+        alert={criticalAlert}
+        onAcknowledge={handleAcknowledgeCriticalAlert}
+      />
 
       {/* Achievement Unlock Animation */}
       {achievementToShow && (

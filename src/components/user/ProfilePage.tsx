@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Card } from '../ui/card';
+import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
 import { Badge } from '../ui/badge';
@@ -24,6 +24,10 @@ import {
   Loader2,
   Eye,
   EyeOff,
+  Phone,
+  Plus,
+  Trash2,
+  AlertTriangle,
 } from 'lucide-react';
 import { AchievementsPage } from './AchievementsPage';
 import {
@@ -46,7 +50,7 @@ import {
 import { toast } from 'sonner';
 import { Switch } from '../ui/switch';
 
-export type ProfileTab = 'personal' | 'achievements' | 'security' | 'notifications' | 'sharing';
+export type ProfileTab = 'personal' | 'achievements' | 'security' | 'notifications' | 'sharing' | 'emergency';
 
 interface ProfilePageProps {
   user: any;
@@ -81,6 +85,17 @@ export function ProfilePage({ user, onBack, onUpdate, initialTab = 'personal' }:
     alertThreshold: user.alertThreshold || 'medium',
   });
 
+  // Per-metric alert thresholds
+  const defaultThresholds = {
+    heartRate: { low: 60, high: 100 },
+    bloodPressureSystolic: { low: 90, high: 140 },
+    bloodPressureDiastolic: { low: 60, high: 90 },
+    glucose: { low: 70, high: 130 },
+  };
+  const [alertThresholds, setAlertThresholds] = useState(
+    user.alertThresholds || defaultThresholds
+  );
+
   // Sharing settings state
   const [pendingRequests, setPendingRequests] = useState<any[]>([]);
   const [activeConsents, setActiveConsents] = useState<any[]>([]);
@@ -92,6 +107,13 @@ export function ProfilePage({ user, onBack, onUpdate, initialTab = 'personal' }:
     consentId: null
   });
 
+  // Emergency contacts state
+  const [emergencyContacts, setEmergencyContacts] = useState<any[]>([]);
+  const [emergencyAlertHistory, setEmergencyAlertHistory] = useState<any[]>([]);
+  const [isEmergencyLoading, setIsEmergencyLoading] = useState(false);
+  const [showAddContact, setShowAddContact] = useState(false);
+  const [newContact, setNewContact] = useState({ name: '', phone: '', email: '', relationship: '' });
+
   // Update active tab when initialTab prop changes
   useEffect(() => {
     setActiveTab(initialTab);
@@ -101,6 +123,9 @@ export function ProfilePage({ user, onBack, onUpdate, initialTab = 'personal' }:
   useEffect(() => {
     if (activeTab === 'sharing') {
       loadSharingData();
+    }
+    if (activeTab === 'emergency') {
+      loadEmergencyData();
     }
   }, [activeTab]);
 
@@ -190,6 +215,72 @@ export function ProfilePage({ user, onBack, onUpdate, initialTab = 'personal' }:
     } finally {
       setActionInProgress(null);
       setRevokeDialog({ open: false, consentId: null });
+    }
+  };
+
+  // --- Emergency contacts helpers ---
+  const loadEmergencyData = async () => {
+    setIsEmergencyLoading(true);
+    try {
+      const { fetchEmergencyContacts, fetchEmergencyAlertHistory } = await import('../../utils/supabase');
+      const userId = user.user_id || user.id;
+      const [contacts, history] = await Promise.all([
+        fetchEmergencyContacts(userId),
+        fetchEmergencyAlertHistory(userId),
+      ]);
+      setEmergencyContacts(contacts);
+      setEmergencyAlertHistory(history);
+    } catch (error) {
+      console.error('Error loading emergency data:', error);
+      toast.error('Failed to load emergency contacts');
+    } finally {
+      setIsEmergencyLoading(false);
+    }
+  };
+
+  const handleAddEmergencyContact = async () => {
+    if (!newContact.name.trim()) {
+      toast.error('Contact name is required');
+      return;
+    }
+    if (!newContact.phone.trim() && !newContact.email.trim()) {
+      toast.error('At least a phone number or email is required');
+      return;
+    }
+    try {
+      const { addEmergencyContact } = await import('../../utils/supabase');
+      const result = await addEmergencyContact(user.user_id || user.id, {
+        name: newContact.name,
+        phone: newContact.phone || undefined,
+        email: newContact.email || undefined,
+        relationship: newContact.relationship || undefined,
+        is_primary: emergencyContacts.length === 0, // First contact is primary
+      });
+      if (result) {
+        toast.success('Emergency contact added');
+        setNewContact({ name: '', phone: '', email: '', relationship: '' });
+        setShowAddContact(false);
+        await loadEmergencyData();
+      } else {
+        toast.error('Failed to add emergency contact');
+      }
+    } catch (error) {
+      toast.error('Failed to add emergency contact');
+    }
+  };
+
+  const handleDeleteEmergencyContact = async (contactId: string) => {
+    try {
+      const { deleteEmergencyContact } = await import('../../utils/supabase');
+      const success = await deleteEmergencyContact(contactId);
+      if (success) {
+        toast.success('Emergency contact removed');
+        await loadEmergencyData();
+      } else {
+        toast.error('Failed to remove contact');
+      }
+    } catch (error) {
+      toast.error('Failed to remove contact');
     }
   };
 
@@ -303,9 +394,40 @@ export function ProfilePage({ user, onBack, onUpdate, initialTab = 'personal' }:
     toast.success('Password updated successfully');
   };
 
-  const handleSaveNotifications = () => {
-    const updatedUser = { ...user, ...notificationSettings };
+  const handleSaveNotifications = async () => {
+    const updatedUser = { ...user, ...notificationSettings, alertThresholds };
     onUpdate(updatedUser);
+
+    // Persist thresholds to Supabase alert_thresholds table
+    try {
+      const { supabase } = await import('../../utils/supabase');
+      const userId = user.user_id || user.id;
+
+      // Upsert each metric threshold
+      const thresholdRows = [
+        { biomarker: 'HEART_RATE', low: alertThresholds.heartRate.low, high: alertThresholds.heartRate.high },
+        { biomarker: 'BLOOD_PRESSURE_SYS', low: alertThresholds.bloodPressureSystolic.low, high: alertThresholds.bloodPressureSystolic.high },
+        { biomarker: 'BLOOD_PRESSURE_DIA', low: alertThresholds.bloodPressureDiastolic.low, high: alertThresholds.bloodPressureDiastolic.high },
+        { biomarker: 'BLOOD_GLUCOSE', low: alertThresholds.glucose.low, high: alertThresholds.glucose.high },
+      ];
+
+      for (const row of thresholdRows) {
+        await supabase
+          .from('alert_thresholds')
+          .upsert(
+            {
+              user_id: userId,
+              biomarker: row.biomarker,
+              low_threshold: row.low,
+              high_threshold: row.high,
+              updated_at: new Date().toISOString(),
+            },
+            { onConflict: 'user_id,biomarker' }
+          );
+      }
+    } catch (error) {
+      console.warn('Failed to persist thresholds to DB:', error);
+    }
 
     const users = JSON.parse(localStorage.getItem('healthApp_users') || '[]');
     const updatedUsers = users.map((u: any) =>
@@ -322,6 +444,7 @@ export function ProfilePage({ user, onBack, onUpdate, initialTab = 'personal' }:
     { id: 'security' as const, label: 'Security', icon: Shield },
     { id: 'notifications' as const, label: 'Notifications', icon: Bell },
     { id: 'sharing' as const, label: 'Data Sharing', icon: Share2 },
+    { id: 'emergency' as const, label: 'Emergency', icon: Phone },
     { id: 'achievements' as const, label: 'Achievements', icon: Trophy },
   ];
 
@@ -658,22 +781,160 @@ export function ProfilePage({ user, onBack, onUpdate, initialTab = 'personal' }:
 
               <Separator />
 
-              <div className="space-y-2">
-                <Label>Alert Threshold</Label>
-                <p className="text-sm text-muted-foreground mb-2">Choose which alerts you want to be notified about</p>
-                <Select
-                  value={notificationSettings.alertThreshold}
-                  onValueChange={(value: string) => setNotificationSettings({ ...notificationSettings, alertThreshold: value })}
-                >
-                  <SelectTrigger className="max-w-xs">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="low">Low — All notifications</SelectItem>
-                    <SelectItem value="medium">Medium — Important only</SelectItem>
-                    <SelectItem value="high">High — Critical only</SelectItem>
-                  </SelectContent>
-                </Select>
+              {/* Per-Metric Alert Thresholds */}
+              <div className="space-y-4">
+                <div>
+                  <Label className="text-base font-semibold">Per-Metric Alert Thresholds</Label>
+                  <p className="text-sm text-muted-foreground mt-1">
+                    Customize the safe range for each vital sign. You'll be alerted when readings fall outside these bounds.
+                  </p>
+                </div>
+
+                {/* Heart Rate */}
+                <div className="p-4 border rounded-xl space-y-3 bg-red-50/50 dark:bg-red-950/20">
+                  <div className="flex items-center gap-2">
+                    <div className="w-8 h-8 rounded-full bg-red-100 dark:bg-red-900 flex items-center justify-center">
+                      <span className="text-red-600 dark:text-red-300 text-sm">❤️</span>
+                    </div>
+                    <Label className="font-medium">Heart Rate (bpm)</Label>
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-1">
+                      <Label className="text-xs text-muted-foreground">Low Threshold</Label>
+                      <Input
+                        type="number"
+                        value={alertThresholds.heartRate.low}
+                        onChange={(e) => setAlertThresholds({
+                          ...alertThresholds,
+                          heartRate: { ...alertThresholds.heartRate, low: Number(e.target.value) }
+                        })}
+                        min={30} max={100} placeholder="60"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <Label className="text-xs text-muted-foreground">High Threshold</Label>
+                      <Input
+                        type="number"
+                        value={alertThresholds.heartRate.high}
+                        onChange={(e) => setAlertThresholds({
+                          ...alertThresholds,
+                          heartRate: { ...alertThresholds.heartRate, high: Number(e.target.value) }
+                        })}
+                        min={60} max={220} placeholder="100"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Blood Pressure */}
+                <div className="p-4 border rounded-xl space-y-3 bg-purple-50/50 dark:bg-purple-950/20">
+                  <div className="flex items-center gap-2">
+                    <div className="w-8 h-8 rounded-full bg-purple-100 dark:bg-purple-900 flex items-center justify-center">
+                      <span className="text-purple-600 dark:text-purple-300 text-sm">🩺</span>
+                    </div>
+                    <Label className="font-medium">Blood Pressure (mmHg)</Label>
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-1">
+                      <Label className="text-xs text-muted-foreground">Systolic Low</Label>
+                      <Input
+                        type="number"
+                        value={alertThresholds.bloodPressureSystolic.low}
+                        onChange={(e) => setAlertThresholds({
+                          ...alertThresholds,
+                          bloodPressureSystolic: { ...alertThresholds.bloodPressureSystolic, low: Number(e.target.value) }
+                        })}
+                        min={60} max={140} placeholder="90"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <Label className="text-xs text-muted-foreground">Systolic High</Label>
+                      <Input
+                        type="number"
+                        value={alertThresholds.bloodPressureSystolic.high}
+                        onChange={(e) => setAlertThresholds({
+                          ...alertThresholds,
+                          bloodPressureSystolic: { ...alertThresholds.bloodPressureSystolic, high: Number(e.target.value) }
+                        })}
+                        min={100} max={250} placeholder="140"
+                      />
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-1">
+                      <Label className="text-xs text-muted-foreground">Diastolic Low</Label>
+                      <Input
+                        type="number"
+                        value={alertThresholds.bloodPressureDiastolic.low}
+                        onChange={(e) => setAlertThresholds({
+                          ...alertThresholds,
+                          bloodPressureDiastolic: { ...alertThresholds.bloodPressureDiastolic, low: Number(e.target.value) }
+                        })}
+                        min={40} max={90} placeholder="60"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <Label className="text-xs text-muted-foreground">Diastolic High</Label>
+                      <Input
+                        type="number"
+                        value={alertThresholds.bloodPressureDiastolic.high}
+                        onChange={(e) => setAlertThresholds({
+                          ...alertThresholds,
+                          bloodPressureDiastolic: { ...alertThresholds.bloodPressureDiastolic, high: Number(e.target.value) }
+                        })}
+                        min={50} max={130} placeholder="90"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Glucose */}
+                <div className="p-4 border rounded-xl space-y-3 bg-blue-50/50 dark:bg-blue-950/20">
+                  <div className="flex items-center gap-2">
+                    <div className="w-8 h-8 rounded-full bg-blue-100 dark:bg-blue-900 flex items-center justify-center">
+                      <span className="text-blue-600 dark:text-blue-300 text-sm">💧</span>
+                    </div>
+                    <Label className="font-medium">Blood Glucose (mg/dL)</Label>
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-1">
+                      <Label className="text-xs text-muted-foreground">Low Threshold</Label>
+                      <Input
+                        type="number"
+                        value={alertThresholds.glucose.low}
+                        onChange={(e) => setAlertThresholds({
+                          ...alertThresholds,
+                          glucose: { ...alertThresholds.glucose, low: Number(e.target.value) }
+                        })}
+                        min={30} max={100} placeholder="70"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <Label className="text-xs text-muted-foreground">High Threshold</Label>
+                      <Input
+                        type="number"
+                        value={alertThresholds.glucose.high}
+                        onChange={(e) => setAlertThresholds({
+                          ...alertThresholds,
+                          glucose: { ...alertThresholds.glucose, high: Number(e.target.value) }
+                        })}
+                        min={80} max={500} placeholder="130"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Reset to defaults */}
+                <div className="flex justify-start">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setAlertThresholds(defaultThresholds)}
+                    className="text-muted-foreground"
+                  >
+                    Reset to defaults
+                  </Button>
+                </div>
               </div>
 
               <div className="flex justify-end pt-2">
@@ -829,6 +1090,198 @@ export function ProfilePage({ user, onBack, onUpdate, initialTab = 'personal' }:
                 </AlertDialogFooter>
               </AlertDialogContent>
             </AlertDialog>
+          </div>
+        )}
+
+        {/* ========== Emergency Contacts Tab ========== */}
+        {activeTab === 'emergency' && (
+          <div className="space-y-6">
+            {/* Header */}
+            <Card className="border-red-200 bg-red-200">
+              <CardContent className="p-4 flex items-start gap-3">
+                <AlertTriangle className="h-5 w-5 text-red-500 mt-0.5 shrink-0" />
+                <div>
+                  <h3 className="font-semibold text-red-800">Emergency Contacts</h3>
+                  <p className="text-sm text-red-600 mt-0.5">
+                    These contacts will be notified automatically when a critical health reading is detected.
+                    Make sure contact information is accurate and up-to-date.
+                  </p>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Contact List */}
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between pb-3">
+                <CardTitle className="text-lg">Your Emergency Contacts</CardTitle>
+                <Button
+                  size="sm"
+                  onClick={() => setShowAddContact(true)}
+                  className="gap-1"
+                >
+                  <Plus className="h-4 w-4" /> Add Contact
+                </Button>
+              </CardHeader>
+              <CardContent>
+                {isEmergencyLoading ? (
+                  <div className="text-center py-8 text-muted-foreground">Loading contacts...</div>
+                ) : emergencyContacts.length === 0 ? (
+                  <div className="text-center py-8">
+                    <Phone className="h-10 w-10 mx-auto text-muted-foreground/40 mb-2" />
+                    <p className="text-muted-foreground">No emergency contacts added yet.</p>
+                    <p className="text-xs text-muted-foreground mt-1">Add at least one contact so we can reach someone during a health emergency.</p>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {emergencyContacts.map((contact) => (
+                      <div
+                        key={contact.id}
+                        className="flex items-center justify-between rounded-lg border p-3 hover:bg-muted/50 transition-colors"
+                      >
+                        <div className="flex items-center gap-3">
+                          <div className="flex h-10 w-10 items-center justify-center rounded-full bg-blue-100 text-blue-600 font-semibold text-sm">
+                            {contact.name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)}
+                          </div>
+                          <div>
+                            <p className="font-medium text-sm">{contact.name}</p>
+                            <p className="text-xs text-muted-foreground capitalize">{contact.relationship}</p>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-4">
+                          <div className="text-right hidden sm:block">
+                            <p className="text-sm">{contact.phone}</p>
+                            {contact.email && <p className="text-xs text-muted-foreground">{contact.email}</p>}
+                          </div>
+                          <div className="flex items-center gap-1">
+                            {contact.is_primary && (
+                              <span className="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full font-medium">
+                                Primary
+                              </span>
+                            )}
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8 text-red-500 hover:text-red-700 hover:bg-red-50"
+                              onClick={() => handleDeleteEmergencyContact(contact.id)}
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* Add Contact Form */}
+            {showAddContact && (
+              <Card className="border-blue-200">
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-lg">Add Emergency Contact</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div className="space-y-1.5">
+                      <Label>Full Name *</Label>
+                      <Input
+                        placeholder="Jane Doe"
+                        value={newContact.name}
+                        onChange={(e) => setNewContact({ ...newContact, name: e.target.value })}
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label>Phone Number *</Label>
+                      <Input
+                        placeholder="+1 (555) 123-4567"
+                        value={newContact.phone}
+                        onChange={(e) => setNewContact({ ...newContact, phone: e.target.value })}
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label>Email (optional)</Label>
+                      <Input
+                        type="email"
+                        placeholder="jane@example.com"
+                        value={newContact.email}
+                        onChange={(e) => setNewContact({ ...newContact, email: e.target.value })}
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label>Relationship *</Label>
+                      <Select
+                        value={newContact.relationship}
+                        onValueChange={(v) => setNewContact({ ...newContact, relationship: v })}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select..." />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="spouse">Spouse / Partner</SelectItem>
+                          <SelectItem value="parent">Parent</SelectItem>
+                          <SelectItem value="child">Child</SelectItem>
+                          <SelectItem value="sibling">Sibling</SelectItem>
+                          <SelectItem value="friend">Friend</SelectItem>
+                          <SelectItem value="doctor">Doctor / Physician</SelectItem>
+                          <SelectItem value="caregiver">Caregiver</SelectItem>
+                          <SelectItem value="other">Other</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Switch
+                      checked={newContact.is_primary}
+                      onCheckedChange={(v) => setNewContact({ ...newContact, is_primary: v })}
+                    />
+                    <Label className="text-sm">Mark as primary contact</Label>
+                  </div>
+                  <div className="flex gap-2 justify-end pt-2">
+                    <Button variant="outline" onClick={() => setShowAddContact(false)}>Cancel</Button>
+                    <Button
+                      onClick={handleAddEmergencyContact}
+                      disabled={!newContact.name.trim() || !newContact.phone.trim() || !newContact.relationship}
+                    >
+                      Save Contact
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+
+            {/* Alert History */}
+            {emergencyAlertHistory.length > 0 && (
+              <Card>
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-lg">Alert History</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-2">
+                    {emergencyAlertHistory.slice(0, 10).map((log, idx) => (
+                      <div key={idx} className="flex items-center justify-between rounded border p-2.5 text-sm">
+                        <div className="flex items-center gap-2">
+                          <AlertTriangle className="h-4 w-4 text-amber-500" />
+                          <span>{log.alert_type || 'Critical Reading'}</span>
+                        </div>
+                        <div className="flex items-center gap-3">
+                          <span className={`text-xs px-2 py-0.5 rounded-full ${
+                            log.status === 'sent' ? 'bg-green-100 text-green-700' :
+                            log.status === 'failed' ? 'bg-red-100 text-red-700' :
+                            'bg-yellow-100 text-yellow-700'
+                          }`}>
+                            {log.status}
+                          </span>
+                          <span className="text-xs text-muted-foreground">
+                            {new Date(log.created_at).toLocaleDateString()}
+                          </span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
+            )}
           </div>
         )}
 
