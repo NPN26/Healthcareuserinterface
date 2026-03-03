@@ -40,6 +40,7 @@ export interface Device {
   lastSync: string;
   autoMode: boolean;
   supportedBiomarkers?: Biomarker['type'][];
+  priority?: number;
 }
 
 export interface Alert {

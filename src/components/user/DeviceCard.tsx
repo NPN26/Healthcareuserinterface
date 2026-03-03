@@ -14,7 +14,11 @@ import {
   AlertCircle,
   Power,
   Settings,
-  Trash2
+  Trash2,
+  Loader2,
+  RefreshCw,
+  ArrowUp,
+  ArrowDown
 } from 'lucide-react';
 import {
   AlertDialog,
@@ -36,6 +40,7 @@ interface DeviceCardProps {
 
 export function DeviceCard({ device, onUpdate }: DeviceCardProps) {
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const [isSyncing, setIsSyncing] = useState(false);
 
   const getDeviceIcon = () => {
     switch (device.type) {
@@ -140,6 +145,7 @@ export function DeviceCard({ device, onUpdate }: DeviceCardProps) {
   };
 
   const syncDevice = async () => {
+    setIsSyncing(true);
     const syncTime = new Date().toISOString();
     
     // Generate new biomarker readings based on device's supported biomarkers
@@ -221,6 +227,7 @@ export function DeviceCard({ device, onUpdate }: DeviceCardProps) {
       } catch (error) {
         console.error('Error generating biomarker data:', error);
         toast.error('Failed to sync device data');
+        setIsSyncing(false);
       }
     }
     
@@ -249,6 +256,7 @@ export function DeviceCard({ device, onUpdate }: DeviceCardProps) {
         : d
     );
     localStorage.setItem('healthApp_devices', JSON.stringify(updated));
+    setIsSyncing(false);
     onUpdate();
   };
 
@@ -411,9 +419,17 @@ export function DeviceCard({ device, onUpdate }: DeviceCardProps) {
         <Progress value={device.batteryLevel} className="h-2" />
       </div>
 
+      {isSyncing && (
+        <div className="flex items-center gap-2 p-3 bg-blue-50 dark:bg-blue-950 border border-blue-200 dark:border-blue-800 rounded-lg">
+          <Loader2 className="w-4 h-4 text-blue-600 animate-spin" />
+          <span className="text-sm text-blue-700 dark:text-blue-300">Syncing device data...</span>
+          <Progress value={66} className="h-1.5 flex-1" />
+        </div>
+      )}
+
       <div className="flex items-center justify-between text-sm">
         <span className="text-gray-600">Last synced</span>
-        <span className="text-gray-900">{timeSinceSync()}</span>
+        <span className="text-gray-900">{isSyncing ? 'Syncing...' : timeSinceSync()}</span>
       </div>
 
       <div className="flex items-center justify-between">
@@ -423,6 +439,65 @@ export function DeviceCard({ device, onUpdate }: DeviceCardProps) {
           onCheckedChange={toggleAutoMode}
           disabled={device.status !== 'active'}
         />
+      </div>
+
+      <div className="flex items-center justify-between">
+        <span className="text-sm text-gray-600">Data Priority</span>
+        <div className="flex items-center gap-1">
+          <Button
+            size="icon"
+            variant="ghost"
+            className="h-6 w-6"
+            onClick={async () => {
+              const newPriority = Math.max(0, (device.priority ?? 0) - 1);
+              try {
+                const { supabase } = await import('../../utils/supabase');
+                await supabase
+                  .from('data_sources')
+                  .update({ priority: newPriority })
+                  .eq('source_id', device.id);
+              } catch (error) {
+                console.error('Error updating priority:', error);
+              }
+              const devices = JSON.parse(localStorage.getItem('healthApp_devices') || '[]');
+              const updated = devices.map((d: Device) =>
+                d.id === device.id ? { ...d, priority: newPriority } : d
+              );
+              localStorage.setItem('healthApp_devices', JSON.stringify(updated));
+              onUpdate();
+            }}
+          >
+            <ArrowDown className="w-3 h-3" />
+          </Button>
+          <Badge variant="outline" className="min-w-[2rem] justify-center">
+            {device.priority ?? 0}
+          </Badge>
+          <Button
+            size="icon"
+            variant="ghost"
+            className="h-6 w-6"
+            onClick={async () => {
+              const newPriority = (device.priority ?? 0) + 1;
+              try {
+                const { supabase } = await import('../../utils/supabase');
+                await supabase
+                  .from('data_sources')
+                  .update({ priority: newPriority })
+                  .eq('source_id', device.id);
+              } catch (error) {
+                console.error('Error updating priority:', error);
+              }
+              const devices = JSON.parse(localStorage.getItem('healthApp_devices') || '[]');
+              const updated = devices.map((d: Device) =>
+                d.id === device.id ? { ...d, priority: newPriority } : d
+              );
+              localStorage.setItem('healthApp_devices', JSON.stringify(updated));
+              onUpdate();
+            }}
+          >
+            <ArrowUp className="w-3 h-3" />
+          </Button>
+        </div>
       </div>
 
       <div className="pt-2 border-t flex gap-2">
@@ -439,10 +514,14 @@ export function DeviceCard({ device, onUpdate }: DeviceCardProps) {
           size="sm" 
           className="flex-1"
           onClick={syncDevice}
-          disabled={device.status !== 'active'}
+          disabled={device.status !== 'active' || isSyncing}
         >
-          <WifiOff className="w-4 h-4 mr-2" />
-          Sync
+          {isSyncing ? (
+            <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+          ) : (
+            <RefreshCw className="w-4 h-4 mr-2" />
+          )}
+          {isSyncing ? 'Syncing...' : 'Sync'}
         </Button>
       </div>
 

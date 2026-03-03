@@ -1,7 +1,20 @@
-import { Heart, Activity, Droplet, Wind, Footprints, Moon, TrendingUp, TrendingDown, Minus } from 'lucide-react';
+import { Heart, Activity, Droplet, Wind, Footprints, Moon, TrendingUp, TrendingDown, Minus, Clock } from 'lucide-react';
 import { Card } from '../ui/card';
 import { Badge } from '../ui/badge';
 import { Biomarker, getBiomarkerLabel, getBiomarkerUnit } from '../../utils/mockData';
+
+function formatTimeAgo(timestamp: string): string {
+  const now = Date.now();
+  const then = new Date(timestamp).getTime();
+  const diffMs = now - then;
+  const diffMin = Math.floor(diffMs / 60000);
+  if (diffMin < 1) return 'Just now';
+  if (diffMin < 60) return `${diffMin}m ago`;
+  const diffHours = Math.floor(diffMin / 60);
+  if (diffHours < 24) return `${diffHours}h ago`;
+  const diffDays = Math.floor(diffHours / 24);
+  return `${diffDays}d ago`;
+}
 
 interface QuickStatsGridProps {
   biomarkers: Biomarker[];
@@ -60,6 +73,12 @@ export function QuickStatsGrid({ biomarkers, getLatestBiomarker, getTrend, onCar
             </div>
             {latest?.isFaulty && (
               <Badge variant="destructive" className="mt-3">Faulty Reading</Badge>
+            )}
+            {latest && (
+              <div className="flex items-center gap-1 mt-2 text-xs text-muted-foreground">
+                <Clock className="w-3 h-3" />
+                <span>Updated {formatTimeAgo(latest.timestamp)}</span>
+              </div>
             )}
           </Card>
         );

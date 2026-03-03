@@ -132,7 +132,8 @@ export async function fetchDevices(userId: string): Promise<Device[]> {
         batteryLevel: metadata.battery_level || 100,
         lastSync: source.last_sync,
         autoMode: metadata.auto_mode !== false,
-        supportedBiomarkers: metadata.supported_biomarkers || []
+        supportedBiomarkers: metadata.supported_biomarkers || [],
+        priority: source.priority ?? 0
       } as Device
     })
   } catch (error) {
@@ -348,6 +349,14 @@ export interface HealthGoal {
   period: 'daily' | 'weekly' | 'monthly';
   createdAt: string;
   deadline?: string;
+  status?: 'active' | 'completed' | 'expired';
+  completedAt?: string;
+  finalProgress?: number;
+  // SMART goal metadata
+  smartSpecific?: string;
+  smartMeasurable?: string;
+  smartAchievable?: string;
+  smartRelevant?: string;
 }
 
 // Map frontend goal types to database categories
@@ -394,6 +403,7 @@ export async function fetchGoals(userId: string): Promise<HealthGoal[]> {
     }
 
     // Map database format to frontend format
+    const now = new Date();
     const goals = data.map(goal => {
       const frontendType = categoryToGoalType[goal.category] || 'steps';
       
@@ -406,6 +416,15 @@ export async function fetchGoals(userId: string): Promise<HealthGoal[]> {
       if (daysDiff > 20) period = 'monthly';
       else if (daysDiff > 5) period = 'weekly';
 
+      // Determine status
+      const progress = goal.progress || 0;
+      let status: HealthGoal['status'] = 'active';
+      if (progress >= 100) {
+        status = 'completed';
+      } else if (endDate < now) {
+        status = 'expired';
+      }
+
       return {
         id: goal.goal_id,
         userId: goal.user_id,
@@ -413,7 +432,10 @@ export async function fetchGoals(userId: string): Promise<HealthGoal[]> {
         target: goal.target_value,
         period: period,
         createdAt: goal.created_at,
-        deadline: goal.end_date
+        deadline: goal.end_date,
+        status,
+        finalProgress: progress,
+        completedAt: status === 'completed' ? goal.updated_at : undefined,
       } as HealthGoal;
     });
 
