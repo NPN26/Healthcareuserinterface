@@ -108,7 +108,7 @@ export function CriticalAlertModal({ alert, onAcknowledge, onCallEmergency }: Cr
           <DialogHeader className="space-y-3">
             <DialogTitle className="text-2xl text-center text-red-600 dark:text-red-400 flex items-center justify-center gap-2">
               <Icon className="w-7 h-7" />
-              {threshold?.label || 'Vital Sign'} — {isHigh ? 'Dangerously High' : 'Dangerously Low'}
+              {threshold?.label || 'Vital Sign'} - {isHigh ? 'Dangerously High' : 'Dangerously Low'}
             </DialogTitle>
             <DialogDescription className="text-center text-base">
               {alert.message}
@@ -205,7 +205,7 @@ export function CriticalAlertModal({ alert, onAcknowledge, onCallEmergency }: Cr
                 onAcknowledge(alert.id);
               }}
             >
-              I Understand — Dismiss
+              I Understand - Dismiss
             </Button>
           </DialogFooter>
         </div>

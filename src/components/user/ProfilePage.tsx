@@ -28,6 +28,7 @@ import {
   Plus,
   Trash2,
   AlertTriangle,
+  History,
 } from 'lucide-react';
 import { AchievementsPage } from './AchievementsPage';
 import {
@@ -50,7 +51,7 @@ import {
 import { toast } from 'sonner';
 import { Switch } from '../ui/switch';
 
-export type ProfileTab = 'personal' | 'achievements' | 'security' | 'notifications' | 'sharing' | 'emergency';
+export type ProfileTab = 'personal' | 'achievements' | 'security' | 'notifications' | 'sharing' | 'emergency' | 'alertHistory';
 
 interface ProfilePageProps {
   user: any;
@@ -114,6 +115,10 @@ export function ProfilePage({ user, onBack, onUpdate, initialTab = 'personal' }:
   const [showAddContact, setShowAddContact] = useState(false);
   const [newContact, setNewContact] = useState({ name: '', phone: '', email: '', relationship: '' });
 
+  // Alert history state (FR8.2.4)
+  const [alertHistory, setAlertHistory] = useState<any[]>([]);
+  const [isAlertHistoryLoading, setIsAlertHistoryLoading] = useState(false);
+
   // Update active tab when initialTab prop changes
   useEffect(() => {
     setActiveTab(initialTab);
@@ -126,6 +131,9 @@ export function ProfilePage({ user, onBack, onUpdate, initialTab = 'personal' }:
     }
     if (activeTab === 'emergency') {
       loadEmergencyData();
+    }
+    if (activeTab === 'alertHistory') {
+      loadAlertHistory();
     }
   }, [activeTab]);
 
@@ -235,6 +243,26 @@ export function ProfilePage({ user, onBack, onUpdate, initialTab = 'personal' }:
       toast.error('Failed to load emergency contacts');
     } finally {
       setIsEmergencyLoading(false);
+    }
+  };
+
+  // --- Alert History helpers (FR8.2.4) ---
+  const loadAlertHistory = async () => {
+    setIsAlertHistoryLoading(true);
+    try {
+      const { fetchAlerts } = await import('../../utils/supabase');
+      const userId = user.user_id || user.id;
+      const alerts = await fetchAlerts(userId);
+      // Sort most recent first
+      const sorted = [...alerts].sort(
+        (a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
+      );
+      setAlertHistory(sorted);
+    } catch (error) {
+      console.error('Error loading alert history:', error);
+      toast.error('Failed to load alert history');
+    } finally {
+      setIsAlertHistoryLoading(false);
     }
   };
 
@@ -445,6 +473,7 @@ export function ProfilePage({ user, onBack, onUpdate, initialTab = 'personal' }:
     { id: 'notifications' as const, label: 'Notifications', icon: Bell },
     { id: 'sharing' as const, label: 'Data Sharing', icon: Share2 },
     { id: 'emergency' as const, label: 'Emergency', icon: Phone },
+    { id: 'alertHistory' as const, label: 'Alert History', icon: History },
     { id: 'achievements' as const, label: 'Achievements', icon: Trophy },
   ];
 
@@ -1282,6 +1311,72 @@ export function ProfilePage({ user, onBack, onUpdate, initialTab = 'personal' }:
                 </CardContent>
               </Card>
             )}
+          </div>
+        )}
+
+        {/* ========== Alert History Tab (FR8.2.4) ========== */}
+        {activeTab === 'alertHistory' && (
+          <div className="space-y-4">
+            <Card className="shadow-xl bg-white/90 dark:bg-gray-800/90 backdrop-blur-sm">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <History className="w-5 h-5 text-amber-500" />
+                  Alert History
+                </CardTitle>
+                <p className="text-sm text-muted-foreground">
+                  All past critical and warning alerts with timestamps, values, and acknowledgement status.
+                </p>
+              </CardHeader>
+              <CardContent>
+                {isAlertHistoryLoading ? (
+                  <div className="flex items-center justify-center p-8">
+                    <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
+                  </div>
+                ) : alertHistory.length === 0 ? (
+                  <div className="text-center p-8 text-muted-foreground">
+                    <AlertTriangle className="w-10 h-10 mx-auto opacity-30 mb-2" />
+                    <p>No alerts recorded yet. Alerts will appear here when abnormal readings are detected.</p>
+                  </div>
+                ) : (
+                  <div className="space-y-2 max-h-[500px] overflow-y-auto">
+                    {alertHistory.map((alert: any, idx: number) => (
+                      <div
+                        key={alert.alert_id || idx}
+                        className={`flex items-center justify-between rounded-lg border p-3 text-sm transition-colors ${
+                          alert.type === 'critical' || alert.alert_type === 'CRITICAL'
+                            ? 'border-red-200 bg-red-50/50 dark:bg-red-950/30 dark:border-red-800'
+                            : alert.type === 'warning'
+                            ? 'border-amber-200 bg-amber-50/50 dark:bg-amber-950/30 dark:border-amber-800'
+                            : 'border-gray-200 dark:border-gray-700'
+                        }`}
+                      >
+                        <div className="flex items-center gap-3 flex-1 min-w-0">
+                          <div className={`w-2 h-2 rounded-full flex-shrink-0 ${
+                            alert.type === 'critical' || alert.alert_type === 'CRITICAL' ? 'bg-red-500' :
+                            alert.type === 'warning' ? 'bg-amber-500' : 'bg-blue-500'
+                          }`} />
+                          <div className="min-w-0 flex-1">
+                            <p className="font-medium truncate">{alert.message || alert.alert_type || 'Alert'}</p>
+                            <p className="text-xs text-muted-foreground">
+                              {alert.biomarkerType || alert.biomarker_type || ''}
+                              {alert.value ? ` - Value: ${alert.value}` : ''}
+                            </p>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-3 flex-shrink-0">
+                          <Badge variant={alert.read || alert.acknowledged ? 'secondary' : 'outline'} className="text-xs">
+                            {alert.read || alert.acknowledged ? '✓ Acknowledged' : 'Unread'}
+                          </Badge>
+                          <span className="text-xs text-muted-foreground whitespace-nowrap">
+                            {new Date(alert.timestamp || alert.created_at).toLocaleString()}
+                          </span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
           </div>
         )}
 

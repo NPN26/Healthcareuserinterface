@@ -22,5 +22,8 @@ export { SharingSettingsPage } from './SharingSettingsPage';
 export { CriticalAlertModal, isCriticalReading } from './CriticalAlertModal';
 export type { CriticalAlert } from './CriticalAlertModal';
 export { AnnouncementBanner } from './AnnouncementBanner';
+export { GoalCelebration } from './GoalCelebration';
+export { StreakCelebration, calculateStreak, checkStreakMilestone } from './StreakCelebration';
+export type { StreakMilestone } from './StreakCelebration';
 export type { Notification } from './NotificationsPopover';
 export type { Achievement } from './AchievementsPage';

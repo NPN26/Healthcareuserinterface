@@ -331,31 +331,212 @@ export function getBiomarkerColor(type: Biomarker['type']): string {
   return colors[type];
 }
 
-export function isAbnormalReading(type: Biomarker['type'], value: number, customThresholds?: Record<string, { low: number; high: number }>): boolean {
-  // Default ranges
-  const ranges: Record<Biomarker['type'], { min: number; max: number }> = {
-    heartRate: { min: 60, max: 100 },
-    bloodPressure: { min: 90, max: 140 },
-    glucose: { min: 70, max: 130 },
-    oxygen: { min: 95, max: 100 },
-    steps: { min: 0, max: 50000 },
-    sleep: { min: 4, max: 12 },
-    temperature: { min: 36, max: 38 },
-    weight: { min: 40, max: 200 },
-  };
+/** Severity levels for anomaly classification */
+export type AnomalySeverity = 'normal' | 'borderline' | 'warning' | 'critical';
 
-  // Override with user custom thresholds if provided
+export interface AnomalyResult {
+  isAbnormal: boolean;
+  severity: AnomalySeverity;
+  message: string;
+  rangeLow: number;
+  rangeHigh: number;
+}
+
+/**
+ * Comprehensive physiological ranges for all 9 biomarker types.
+ * Each biomarker has nested severity bands:
+ *   critical-low < warning-low < borderline-low < NORMAL < borderline-high < warning-high < critical-high
+ */
+export const PHYSIOLOGICAL_RANGES: Record<
+  Biomarker['type'],
+  {
+    unit: string;
+    criticalLow: number;
+    warningLow: number;
+    normalLow: number;
+    normalHigh: number;
+    warningHigh: number;
+    criticalHigh: number;
+    labels: Record<AnomalySeverity, string>;
+  }
+> = {
+  heartRate: {
+    unit: 'bpm',
+    criticalLow: 40,
+    warningLow: 50,
+    normalLow: 60,
+    normalHigh: 100,
+    warningHigh: 120,
+    criticalHigh: 150,
+    labels: {
+      normal: 'Normal resting heart rate',
+      borderline: 'Slightly outside normal range',
+      warning: 'Bradycardia / Tachycardia detected',
+      critical: 'Dangerously abnormal heart rate - seek medical attention',
+    },
+  },
+  bloodPressure: {
+    unit: 'mmHg',
+    criticalLow: 70,
+    warningLow: 80,
+    normalLow: 90,
+    normalHigh: 130,
+    warningHigh: 150,
+    criticalHigh: 180,
+    labels: {
+      normal: 'Normal blood pressure',
+      borderline: 'Elevated / Low-normal blood pressure',
+      warning: 'Stage 1 hypertension or hypotension',
+      critical: 'Hypertensive crisis - seek immediate care',
+    },
+  },
+  glucose: {
+    unit: 'mg/dL',
+    criticalLow: 40,
+    warningLow: 55,
+    normalLow: 70,
+    normalHigh: 130,
+    warningHigh: 180,
+    criticalHigh: 300,
+    labels: {
+      normal: 'Normal blood glucose',
+      borderline: 'Mildly outside target range',
+      warning: 'Hypoglycemia or Hyperglycemia risk',
+      critical: 'Severe hypo/hyperglycemia - urgent attention needed',
+    },
+  },
+  oxygen: {
+    unit: '%',
+    criticalLow: 88,
+    warningLow: 91,
+    normalLow: 95,
+    normalHigh: 100,
+    warningHigh: 101,
+    criticalHigh: 101,
+    labels: {
+      normal: 'Normal SpO₂ saturation',
+      borderline: 'Slightly low oxygen saturation',
+      warning: 'Low SpO₂ - monitor closely',
+      critical: 'Critically low oxygen - seek emergency care',
+    },
+  },
+  steps: {
+    unit: 'steps',
+    criticalLow: 0,
+    warningLow: 0,
+    normalLow: 0,
+    normalHigh: 40000,
+    warningHigh: 60000,
+    criticalHigh: 100000,
+    labels: {
+      normal: 'Normal activity level',
+      borderline: 'Unusually high step count',
+      warning: 'Very high steps - possible sensor error',
+      critical: 'Implausible step count - likely faulty reading',
+    },
+  },
+  sleep: {
+    unit: 'hours',
+    criticalLow: 2,
+    warningLow: 3,
+    normalLow: 4,
+    normalHigh: 10,
+    warningHigh: 12,
+    criticalHigh: 16,
+    labels: {
+      normal: 'Healthy sleep duration',
+      borderline: 'Slightly short or long sleep',
+      warning: 'Sleep deprivation or hypersomnia',
+      critical: 'Severe sleep abnormality',
+    },
+  },
+  temperature: {
+    unit: '°C',
+    criticalLow: 34,
+    warningLow: 35.5,
+    normalLow: 36,
+    normalHigh: 37.5,
+    warningHigh: 38.5,
+    criticalHigh: 40,
+    labels: {
+      normal: 'Normal body temperature',
+      borderline: 'Slightly elevated or low temperature',
+      warning: 'Mild fever or hypothermia',
+      critical: 'High fever / Severe hypothermia - seek care',
+    },
+  },
+  weight: {
+    unit: 'kg',
+    criticalLow: 30,
+    warningLow: 35,
+    normalLow: 40,
+    normalHigh: 150,
+    warningHigh: 180,
+    criticalHigh: 250,
+    labels: {
+      normal: 'Within typical range',
+      borderline: 'Slightly outside expected range',
+      warning: 'Significant weight anomaly',
+      critical: 'Extreme weight value - verify reading',
+    },
+  },
+};
+
+/**
+ * Classify a biomarker reading into a severity band.
+ * Returns a rich result with severity, message, and reference ranges.
+ */
+export function classifyReading(
+  type: Biomarker['type'],
+  value: number,
+  customThresholds?: Record<string, { low: number; high: number }>
+): AnomalyResult {
+  const range = PHYSIOLOGICAL_RANGES[type];
+
+  // Allow custom thresholds to override normal band
+  let normalLow = range.normalLow;
+  let normalHigh = range.normalHigh;
   if (customThresholds) {
-    if (type === 'heartRate' && customThresholds.heartRate) {
-      return value < customThresholds.heartRate.low || value > customThresholds.heartRate.high;
-    }
-    if (type === 'bloodPressure' && customThresholds.bloodPressureSystolic) {
-      return value < customThresholds.bloodPressureSystolic.low || value > customThresholds.bloodPressureSystolic.high;
-    }
-    if (type === 'glucose' && customThresholds.glucose) {
-      return value < customThresholds.glucose.low || value > customThresholds.glucose.high;
+    const key = type === 'bloodPressure' ? 'bloodPressureSystolic' : type;
+    if (customThresholds[key]) {
+      normalLow = customThresholds[key].low;
+      normalHigh = customThresholds[key].high;
     }
   }
 
-  return value < ranges[type].min || value > ranges[type].max;
+  if (value >= normalLow && value <= normalHigh) {
+    return { isAbnormal: false, severity: 'normal', message: range.labels.normal, rangeLow: normalLow, rangeHigh: normalHigh };
+  }
+
+  // Critical
+  if (value <= range.criticalLow || value >= range.criticalHigh) {
+    return { isAbnormal: true, severity: 'critical', message: range.labels.critical, rangeLow: normalLow, rangeHigh: normalHigh };
+  }
+
+  // Warning
+  if (value <= range.warningLow || value >= range.warningHigh) {
+    return { isAbnormal: true, severity: 'warning', message: range.labels.warning, rangeLow: normalLow, rangeHigh: normalHigh };
+  }
+
+  // Borderline
+  return { isAbnormal: true, severity: 'borderline', message: range.labels.borderline, rangeLow: normalLow, rangeHigh: normalHigh };
+}
+
+/**
+ * Backward-compatible simple boolean check.
+ */
+export function isAbnormalReading(type: Biomarker['type'], value: number, customThresholds?: Record<string, { low: number; high: number }>): boolean {
+  return classifyReading(type, value, customThresholds).isAbnormal;
+}
+
+/**
+ * Return a CSS colour class for the severity badge.
+ */
+export function severityColor(severity: AnomalySeverity): string {
+  switch (severity) {
+    case 'critical': return 'text-red-700 bg-red-100 border-red-300 dark:text-red-300 dark:bg-red-950 dark:border-red-800';
+    case 'warning': return 'text-amber-700 bg-amber-100 border-amber-300 dark:text-amber-300 dark:bg-amber-950 dark:border-amber-800';
+    case 'borderline': return 'text-yellow-700 bg-yellow-50 border-yellow-300 dark:text-yellow-300 dark:bg-yellow-950 dark:border-yellow-800';
+    default: return 'text-green-700 bg-green-50 border-green-300 dark:text-green-300 dark:bg-green-950 dark:border-green-800';
+  }
 }

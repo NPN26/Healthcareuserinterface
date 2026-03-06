@@ -7,7 +7,7 @@ import { Badge } from './ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from './ui/table';
 import { Switch } from './ui/switch';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
-import { UserPlus, Trash2, Megaphone, X } from 'lucide-react';
+import { UserPlus, Trash2, Megaphone, X, Mail, ShieldCheck, ShieldOff, UserX, UserCheck, CheckCircle2, XCircle, Clock } from 'lucide-react';
 import { Device, Biomarker, Alert } from '../utils/mockData';
 import { toast } from 'sonner';
 import { AdminHeader, AdminStatsCards, QuickActionsCard, SystemAlertsCard, SystemHealth, SecurityMonitor } from './admin';
@@ -25,9 +25,12 @@ import {
   fetchAllAnnouncements,
   createAnnouncement,
   updateAnnouncement,
-  Announcement
+  Announcement,
+  updateUserActiveStatus,
+  updateProviderVerification,
 } from '../utils/supabase';
 import { AnnouncementBanner } from './user';
+import { fetchAllEmailLogs, EmailLog } from '../utils/emailService';
 
 interface AdminDashboardProps {
   user: any;
@@ -43,6 +46,8 @@ export function AdminDashboard({ user, onLogout }: AdminDashboardProps) {
   const [isLoading, setIsLoading] = useState(true);
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
   const [newAnnouncement, setNewAnnouncement] = useState({ title: '', message: '', type: 'info', expires_days: '' });
+  const [emailLogs, setEmailLogs] = useState<EmailLog[]>([]);
+  const [emailFilter, setEmailFilter] = useState<string>('all');
   const [systemStatus, setSystemStatus] = useState({
     uptime: '99.9%',
     activeUsers: 0,
@@ -81,6 +86,9 @@ export function AdminDashboard({ user, onLogout }: AdminDashboardProps) {
       setBiomarkers(supabaseBiomarkers);
       setAlerts(supabaseAlerts);
       setAnnouncements(supabaseAnnouncements);
+
+      // Load email logs from localStorage
+      setEmailLogs(fetchAllEmailLogs());
 
       setSystemStatus(prev => ({
         ...prev,
@@ -243,6 +251,58 @@ export function AdminDashboard({ user, onLogout }: AdminDashboardProps) {
     }
   };
 
+  const toggleUserActive = async (userId: string) => {
+    const targetUser = users.find(u => u.id === userId);
+    if (!targetUser || targetUser.role === 'ADMIN') return;
+
+    const newStatus = !targetUser.is_active;
+    try {
+      const result = await updateUserActiveStatus(userId, newStatus);
+      if (result.success) {
+        await logAuditEvent(
+          user.user_id || user.id,
+          'USER_STATUS_CHANGED',
+          userId,
+          'user',
+          { is_active: newStatus, changedBy: user.name }
+        );
+        setUsers(users.map(u => u.id === userId ? { ...u, is_active: newStatus } : u));
+        toast.success(newStatus ? 'User account enabled' : 'User account disabled');
+      } else {
+        toast.error(result.message);
+      }
+    } catch (error) {
+      console.error('Error toggling user active status:', error);
+      toast.error('Failed to update user status');
+    }
+  };
+
+  const handleVerifyProvider = async (userId: string, verified: boolean) => {
+    try {
+      const result = await updateProviderVerification(userId, verified);
+      if (result.success) {
+        await logAuditEvent(
+          user.user_id || user.id,
+          'PROVIDER_VERIFICATION',
+          userId,
+          'user',
+          { verified, changedBy: user.name }
+        );
+        setUsers(users.map(u => u.id === userId ? {
+          ...u,
+          is_verified: verified,
+          verification_status: verified ? 'approved' as const : 'denied' as const,
+        } : u));
+        toast.success(verified ? 'Provider verified successfully' : 'Provider verification denied');
+      } else {
+        toast.error(result.message);
+      }
+    } catch (error) {
+      console.error('Error updating provider verification:', error);
+      toast.error('Failed to update verification status');
+    }
+  };
+
   const handleCreateAnnouncement = async () => {
     if (!newAnnouncement.title.trim() || !newAnnouncement.message.trim()) {
       toast.error('Title and message are required');
@@ -322,9 +382,11 @@ export function AdminDashboard({ user, onLogout }: AdminDashboardProps) {
           criticalAlertsCount={criticalAlerts.length}
         />
         <Tabs defaultValue="users" className="space-y-6">
-          <TabsList className="w-full">
+          <TabsList className="w-full flex-wrap">
             <TabsTrigger value="users">Users</TabsTrigger>
             <TabsTrigger value="devices">Devices</TabsTrigger>
+            <TabsTrigger value="verification">Verification</TabsTrigger>
+            <TabsTrigger value="emails">Emails</TabsTrigger>
             <TabsTrigger value="announcements">Announcements</TabsTrigger>
             <TabsTrigger value="system">System Health</TabsTrigger>
             <TabsTrigger value="security">Security</TabsTrigger>
@@ -348,6 +410,7 @@ export function AdminDashboard({ user, onLogout }: AdminDashboardProps) {
                     <TableHead>Name</TableHead>
                     <TableHead>Email</TableHead>
                     <TableHead>Role</TableHead>
+                    <TableHead>Status</TableHead>
                     <TableHead>Age</TableHead>
                     <TableHead>Devices</TableHead>
                     <TableHead>Data Points</TableHead>
@@ -356,13 +419,29 @@ export function AdminDashboard({ user, onLogout }: AdminDashboardProps) {
                 </TableHeader>
                 <TableBody>
                   {users.map(u => (
-                    <TableRow key={u.id}>
-                      <TableCell>{u.name}</TableCell>
+                    <TableRow key={u.id} className={!u.is_active ? 'opacity-60 bg-red-50/50 dark:bg-red-950/20' : ''}>
+                      <TableCell className="font-medium">
+                        {u.name}
+                        {u.role === 'PROVIDER' && u.is_verified && (
+                          <ShieldCheck className="inline w-4 h-4 ml-1 text-emerald-500" />
+                        )}
+                      </TableCell>
                       <TableCell>{u.email}</TableCell>
                       <TableCell>
                         <Badge variant={u.role === 'ADMIN' ? 'destructive' : u.role === 'PROVIDER' ? 'default' : 'secondary'}>
                           {u.role}
                         </Badge>
+                      </TableCell>
+                      <TableCell>
+                        {u.is_active ? (
+                          <Badge variant="default" className="bg-emerald-100 text-emerald-700 dark:bg-emerald-900 dark:text-emerald-300">
+                            <UserCheck className="w-3 h-3 mr-1" /> Active
+                          </Badge>
+                        ) : (
+                          <Badge variant="destructive">
+                            <UserX className="w-3 h-3 mr-1" /> Disabled
+                          </Badge>
+                        )}
                       </TableCell>
                       <TableCell>{u.age || 'N/A'}</TableCell>
                       <TableCell>{devices.filter(d => d.userId === u.id).length}</TableCell>
@@ -371,6 +450,14 @@ export function AdminDashboard({ user, onLogout }: AdminDashboardProps) {
                         <div className="flex gap-2">
                           {u.role !== 'ADMIN' && (
                             <>
+                              <Button
+                                size="sm"
+                                variant={u.is_active ? 'outline' : 'default'}
+                                onClick={() => toggleUserActive(u.id)}
+                                title={u.is_active ? 'Disable account' : 'Enable account'}
+                              >
+                                {u.is_active ? <ShieldOff className="w-4 h-4" /> : <ShieldCheck className="w-4 h-4" />}
+                              </Button>
                               <Button 
                                 size="sm" 
                                 variant="outline"
@@ -449,6 +536,222 @@ export function AdminDashboard({ user, onLogout }: AdminDashboardProps) {
                   })}
                 </TableBody>
               </Table>
+            </Card>
+          </TabsContent>
+
+          {/* Provider Verification Tab */}
+          <TabsContent value="verification">
+            <Card>
+              <div className="p-6 border-b">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h3 className="text-foreground flex items-center gap-2">
+                      <ShieldCheck className="h-5 w-5 text-emerald-600" />
+                      Provider Verification
+                    </h3>
+                    <p className="text-sm text-gray-600 mt-1">
+                      Review and approve healthcare provider accounts
+                    </p>
+                  </div>
+                  <div className="flex gap-2">
+                    <Badge variant="default" className="bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-300">
+                      <Clock className="w-3 h-3 mr-1" />
+                      {users.filter(u => u.role === 'PROVIDER' && u.verification_status === 'pending').length} Pending
+                    </Badge>
+                    <Badge variant="default" className="bg-emerald-100 text-emerald-700 dark:bg-emerald-900 dark:text-emerald-300">
+                      <CheckCircle2 className="w-3 h-3 mr-1" />
+                      {users.filter(u => u.role === 'PROVIDER' && u.is_verified).length} Verified
+                    </Badge>
+                  </div>
+                </div>
+              </div>
+              {users.filter(u => u.role === 'PROVIDER').length === 0 ? (
+                <div className="p-8 text-center text-muted-foreground">
+                  <ShieldCheck className="h-10 w-10 mx-auto opacity-30 mb-2" />
+                  <p>No provider accounts to verify.</p>
+                </div>
+              ) : (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Provider Name</TableHead>
+                      <TableHead>Email</TableHead>
+                      <TableHead>Registered</TableHead>
+                      <TableHead>Last Login</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead>Actions</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {users.filter(u => u.role === 'PROVIDER').map(provider => (
+                      <TableRow key={provider.id} className={!provider.is_verified ? 'bg-amber-50/50 dark:bg-amber-950/10' : ''}>
+                        <TableCell className="font-medium">
+                          {provider.name}
+                        </TableCell>
+                        <TableCell>{provider.email}</TableCell>
+                        <TableCell className="text-sm">
+                          {new Date(provider.created_at).toLocaleDateString()}
+                        </TableCell>
+                        <TableCell className="text-sm">
+                          {provider.last_login ? new Date(provider.last_login).toLocaleDateString() : 'Never'}
+                        </TableCell>
+                        <TableCell>
+                          {provider.is_verified ? (
+                            <Badge className="bg-emerald-100 text-emerald-700 dark:bg-emerald-900 dark:text-emerald-300">
+                              <CheckCircle2 className="w-3 h-3 mr-1" /> Verified
+                            </Badge>
+                          ) : provider.verification_status === 'denied' ? (
+                            <Badge variant="destructive">
+                              <XCircle className="w-3 h-3 mr-1" /> Denied
+                            </Badge>
+                          ) : (
+                            <Badge variant="outline" className="border-amber-400 text-amber-600">
+                              <Clock className="w-3 h-3 mr-1" /> Pending
+                            </Badge>
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex gap-2">
+                            {!provider.is_verified && (
+                              <Button
+                                size="sm"
+                                variant="default"
+                                className="bg-emerald-600 hover:bg-emerald-700"
+                                onClick={() => handleVerifyProvider(provider.id, true)}
+                              >
+                                <CheckCircle2 className="w-4 h-4 mr-1" /> Approve
+                              </Button>
+                            )}
+                            {provider.is_verified ? (
+                              <Button
+                                size="sm"
+                                variant="destructive"
+                                onClick={() => handleVerifyProvider(provider.id, false)}
+                              >
+                                <XCircle className="w-4 h-4 mr-1" /> Revoke
+                              </Button>
+                            ) : provider.verification_status !== 'denied' ? (
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="text-red-600 border-red-300 hover:bg-red-50"
+                                onClick={() => handleVerifyProvider(provider.id, false)}
+                              >
+                                <XCircle className="w-4 h-4 mr-1" /> Deny
+                              </Button>
+                            ) : (
+                              <Button
+                                size="sm"
+                                variant="default"
+                                className="bg-emerald-600 hover:bg-emerald-700"
+                                onClick={() => handleVerifyProvider(provider.id, true)}
+                              >
+                                <CheckCircle2 className="w-4 h-4 mr-1" /> Approve
+                              </Button>
+                            )}
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              )}
+            </Card>
+          </TabsContent>
+
+          {/* Email Logs Tab */}
+          <TabsContent value="emails">
+            <Card>
+              <div className="p-6 border-b">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h3 className="text-foreground flex items-center gap-2">
+                      <Mail className="h-5 w-5 text-blue-600" />
+                      Email Notification Log
+                    </h3>
+                    <p className="text-sm text-gray-600 mt-1">
+                      {emailLogs.length} total emails sent
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <Select value={emailFilter} onValueChange={setEmailFilter}>
+                      <SelectTrigger className="w-[160px]">
+                        <SelectValue placeholder="Filter by type" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All Types</SelectItem>
+                        <SelectItem value="critical_alert">Critical Alert</SelectItem>
+                        <SelectItem value="daily_digest">Daily Digest</SelectItem>
+                        <SelectItem value="weekly_digest">Weekly Digest</SelectItem>
+                        <SelectItem value="goal_completed">Goal Completed</SelectItem>
+                        <SelectItem value="streak_milestone">Streak Milestone</SelectItem>
+                        <SelectItem value="system">System</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <Button variant="outline" size="sm" onClick={() => setEmailLogs(fetchAllEmailLogs())}>
+                      Refresh
+                    </Button>
+                  </div>
+                </div>
+              </div>
+              {emailLogs.length === 0 ? (
+                <div className="p-8 text-center text-muted-foreground">
+                  <Mail className="h-10 w-10 mx-auto opacity-30 mb-2" />
+                  <p>No email notifications have been sent yet.</p>
+                  <p className="text-xs mt-1">Emails are sent for critical alerts, digests, and goal completions.</p>
+                </div>
+              ) : (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Recipient</TableHead>
+                      <TableHead>Type</TableHead>
+                      <TableHead>Subject</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead>Sent At</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {emailLogs
+                      .filter(log => emailFilter === 'all' || log.type === emailFilter)
+                      .map(log => (
+                        <TableRow key={log.id}>
+                          <TableCell className="font-medium">{log.recipientEmail}</TableCell>
+                          <TableCell>
+                            <Badge variant={
+                              log.type === 'critical_alert' ? 'destructive' :
+                              log.type.includes('digest') ? 'default' :
+                              log.type === 'goal_completed' ? 'default' :
+                              'secondary'
+                            } className={
+                              log.type === 'goal_completed' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900 dark:text-emerald-300' :
+                              log.type.includes('digest') ? 'bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300' :
+                              ''
+                            }>
+                              {log.type.replace(/_/g, ' ')}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="max-w-xs truncate">{log.subject}</TableCell>
+                          <TableCell>
+                            <Badge variant={
+                              log.status === 'delivered' ? 'default' :
+                              log.status === 'sent' ? 'default' :
+                              log.status === 'failed' || log.status === 'bounced' ? 'destructive' :
+                              'outline'
+                            } className={
+                              (log.status === 'delivered' || log.status === 'sent') ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900 dark:text-emerald-300' : ''
+                            }>
+                              {log.status}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="text-sm">
+                            {new Date(log.sentAt).toLocaleString()}
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                  </TableBody>
+                </Table>
+              )}
             </Card>
           </TabsContent>
 

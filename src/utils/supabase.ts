@@ -1221,6 +1221,9 @@ export interface AdminUser {
   age?: number;
   created_at: string;
   last_login: string | null;
+  is_active: boolean;
+  is_verified: boolean;
+  verification_status: 'pending' | 'approved' | 'denied' | 'not_applicable';
 }
 
 /**
@@ -1231,7 +1234,7 @@ export async function fetchAllUsers(): Promise<AdminUser[]> {
   try {
     const { data, error } = await supabase
       .from('users')
-      .select('user_id, email, name, role, age, created_at, last_login')
+      .select('*')
       .order('created_at', { ascending: false })
 
     if (error) {
@@ -1241,15 +1244,33 @@ export async function fetchAllUsers(): Promise<AdminUser[]> {
 
     if (!data) return []
 
-    return data.map(user => ({
-      id: user.user_id,
-      email: user.email,
-      name: user.name,
-      role: user.role as 'END_USER' | 'PROVIDER' | 'ADMIN',
-      age: user.age,
-      created_at: user.created_at,
-      last_login: user.last_login
-    }))
+    // Merge localStorage fallbacks for is_active / is_verified when DB columns don't exist
+    const disabledUsers: string[] = JSON.parse(localStorage.getItem('healthApp_disabledUsers') || '[]')
+    const verifiedProviders: string[] = JSON.parse(localStorage.getItem('healthApp_verifiedProviders') || '[]')
+
+    return data.map((user: any) => {
+      // DB column takes precedence; if missing (undefined) check localStorage
+      const dbActive = user.is_active
+      const isActive = dbActive !== undefined ? dbActive !== false : !disabledUsers.includes(user.user_id)
+
+      const dbVerified = user.is_verified
+      const isVerified = dbVerified !== undefined ? !!dbVerified : verifiedProviders.includes(user.user_id)
+
+      return {
+        id: user.user_id,
+        email: user.email,
+        name: user.name,
+        role: user.role as 'END_USER' | 'PROVIDER' | 'ADMIN',
+        age: user.age,
+        created_at: user.created_at,
+        last_login: user.last_login,
+        is_active: isActive,
+        is_verified: isVerified,
+        verification_status: user.role === 'PROVIDER'
+          ? (isVerified ? 'approved' : 'pending')
+          : 'not_applicable' as const,
+      }
+    })
   } catch (error) {
     console.error('Error in fetchAllUsers:', error)
     return []
@@ -1455,6 +1476,98 @@ export async function deleteUserAndData(userId: string): Promise<{ success: bool
   } catch (error) {
     console.error('Error in deleteUserAndData:', error)
     return { success: false, message: 'An error occurred while deleting user' }
+  }
+}
+
+/**
+ * Toggle user active status (Admin only)
+ * @param userId - The user ID
+ * @param isActive - New active status
+ */
+export async function updateUserActiveStatus(userId: string, isActive: boolean): Promise<{ success: boolean; message: string }> {
+  try {
+    const { error } = await supabase
+      .from('users')
+      .update({ is_active: isActive } as any)
+      .eq('user_id', userId)
+
+    if (error) {
+      // Column may not exist yet - fall back to localStorage tracking
+      console.warn('is_active column may not exist, using localStorage fallback:', error.message)
+      const key = 'healthApp_disabledUsers'
+      const disabled: string[] = JSON.parse(localStorage.getItem(key) || '[]')
+      if (isActive) {
+        localStorage.setItem(key, JSON.stringify(disabled.filter(id => id !== userId)))
+      } else {
+        if (!disabled.includes(userId)) disabled.push(userId)
+        localStorage.setItem(key, JSON.stringify(disabled))
+      }
+      return { success: true, message: isActive ? 'User account enabled (local)' : 'User account disabled (local)' }
+    }
+
+    return { success: true, message: isActive ? 'User account enabled' : 'User account disabled' }
+  } catch (error) {
+    console.error('Error in updateUserActiveStatus:', error)
+    return { success: false, message: 'An error occurred while updating user status' }
+  }
+}
+
+/**
+ * Update provider verification status (Admin only)
+ * @param userId - The provider user ID
+ * @param verified - Whether the provider is verified
+ */
+export async function updateProviderVerification(userId: string, verified: boolean): Promise<{ success: boolean; message: string }> {
+  try {
+    const { error } = await supabase
+      .from('users')
+      .update({ is_verified: verified } as any)
+      .eq('user_id', userId)
+
+    if (error) {
+      // Column may not exist yet - fall back to localStorage tracking
+      console.warn('is_verified column may not exist, using localStorage fallback:', error.message)
+      const key = 'healthApp_verifiedProviders'
+      const verified_list: string[] = JSON.parse(localStorage.getItem(key) || '[]')
+      if (verified) {
+        if (!verified_list.includes(userId)) verified_list.push(userId)
+      } else {
+        const idx = verified_list.indexOf(userId)
+        if (idx >= 0) verified_list.splice(idx, 1)
+      }
+      localStorage.setItem(key, JSON.stringify(verified_list))
+      return { success: true, message: verified ? 'Provider verified (local)' : 'Provider verification revoked (local)' }
+    }
+
+    return { success: true, message: verified ? 'Provider verified successfully' : 'Provider verification revoked' }
+  } catch (error) {
+    console.error('Error in updateProviderVerification:', error)
+    return { success: false, message: 'An error occurred while updating verification' }
+  }
+}
+
+/**
+ * Check if a user account is active (for login flow)
+ * @param userId - The user ID to check
+ */
+export async function checkUserIsActive(userId: string): Promise<boolean> {
+  try {
+    // Check localStorage fallback first (always available)
+    const disabledUsers: string[] = JSON.parse(localStorage.getItem('healthApp_disabledUsers') || '[]')
+    if (disabledUsers.includes(userId)) return false
+
+    const { data, error } = await supabase
+      .from('users')
+      .select('*')
+      .eq('user_id', userId)
+      .single()
+
+    if (error || !data) return true // default to active if query fails
+    // If is_active column exists and is explicitly false, block
+    if ((data as any).is_active === false) return false
+    return true
+  } catch {
+    return true
   }
 }
 
@@ -2123,7 +2236,7 @@ export async function fetchEmergencyAlertHistory(userId: string): Promise<Emerge
 }
 
 /**
- * Send emergency alert to all contacts (STUB — logs to DB with status STUBBED)
+ * Send emergency alert to all contacts (STUB - logs to DB with status STUBBED)
  * In production, this would call an SMS/email API (Twilio, SendGrid, etc.)
  */
 export async function sendEmergencyAlerts(

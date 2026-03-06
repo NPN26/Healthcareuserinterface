@@ -1,4 +1,5 @@
 import { supabase } from './supabase'
+import { checkUserIsActive } from './supabase'
 
 export interface User {
   user_id: string
@@ -132,7 +133,17 @@ export async function signIn(email: string, password: string) {
     // Check if this is a mock account first
     if (isMockAccount(email)) {
       console.log('🧪 Using mock authentication for:', email)
-      return authenticateMockAccount(email, password)
+      const result = authenticateMockAccount(email, password)
+
+      // Check if mock user is disabled via Supabase
+      if (result.user) {
+        const isActive = await checkUserIsActive(result.user.user_id)
+        if (!isActive) {
+          return { user: null, error: 'Your account has been disabled. Please contact an administrator.' }
+        }
+      }
+
+      return result
     }
 
     // Otherwise, use real Supabase Auth for new accounts
@@ -144,6 +155,14 @@ export async function signIn(email: string, password: string) {
 
     if (authError) throw authError
     if (!authData.user) throw new Error('No user returned from signin')
+
+    // Check if user account is active
+    const isActive = await checkUserIsActive(authData.user.id)
+    if (!isActive) {
+      // Sign out the Supabase session since account is disabled
+      await supabase.auth.signOut()
+      return { user: null, error: 'Your account has been disabled. Please contact an administrator.' }
+    }
 
     // Get user details from our users table
     const { data: userData, error: userError } = await supabase

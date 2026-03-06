@@ -12,6 +12,7 @@ import { Target, Plus, Edit2, Trash2, CheckCircle2, TrendingUp, ChevronRight, Ch
 import { toast } from 'sonner';
 import { Biomarker } from '../../utils/mockData';
 import { HealthGoal, fetchGoals, createGoal, updateGoal, deleteGoal, createNotification } from '../../utils/supabase';
+import { GoalCelebration } from './GoalCelebration';
 
 // Re-export HealthGoal for backward compatibility
 export type { HealthGoal } from '../../utils/supabase';
@@ -59,6 +60,7 @@ export function GoalsManager({ isOpen, onClose, userId, biomarkers }: GoalsManag
 
   // Track which goals have already been notified to avoid duplicates
   const [notifiedGoals, setNotifiedGoals] = useState<Set<string>>(new Set());
+  const [celebratingGoalLabel, setCelebratingGoalLabel] = useState<string | null>(null);
 
   // Check if any goal just hit 100% and fire a GOAL notification
   useEffect(() => {
@@ -72,9 +74,10 @@ export function GoalsManager({ isOpen, onClose, userId, biomarkers }: GoalsManag
         createNotification(
           userId,
           'GOAL',
-          `🎯 Goal Completed: ${label} — You reached your target of ${getGoalTargetText(goal)}!`
+          `🎯 Goal Completed: ${label} - You reached your target of ${getGoalTargetText(goal)}!`
         ).catch(console.error);
         toast.success(`🎯 Goal completed: ${label}!`);
+        setCelebratingGoalLabel(label);
         setNotifiedGoals(prev => new Set(prev).add(goal.id));
       }
     });
@@ -445,6 +448,7 @@ export function GoalsManager({ isOpen, onClose, userId, biomarkers }: GoalsManag
   };
 
   return (
+    <>
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent className="max-w-3xl max-h-[80vh] flex flex-col">
         <DialogHeader>
@@ -703,5 +707,12 @@ export function GoalsManager({ isOpen, onClose, userId, biomarkers }: GoalsManag
         </div>
       </DialogContent>
     </Dialog>
+
+    {/* Goal completion celebration */}
+    <GoalCelebration
+      goalLabel={celebratingGoalLabel}
+      onDismiss={() => setCelebratingGoalLabel(null)}
+    />
+    </>
   );
 }

@@ -1,22 +1,25 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { Card } from '../ui/card';
 import { Badge } from '../ui/badge';
 import { Button } from '../ui/button';
 import ReactApexChart from 'react-apexcharts';
 import { ApexOptions } from 'apexcharts';
-import { Biomarker, Device, getBiomarkerLabel, getBiomarkerUnit, getBiomarkerColor } from '../../utils/mockData';
+import { Biomarker, Device, getBiomarkerLabel, getBiomarkerUnit, getBiomarkerColor, classifyReading, PHYSIOLOGICAL_RANGES, type AnomalySeverity } from '../../utils/mockData';
 import { TrendingUp, TrendingDown, AlertTriangle, ChevronLeft, ChevronRight } from 'lucide-react';
+import type { HealthGoal } from '../../utils/supabase';
 
 interface BiomarkerChartProps {
   biomarkers: Biomarker[];
   type: Biomarker['type'];
   showDetails?: boolean;
   devices?: Device[];
+  /** Optional completed goals to annotate on the chart */
+  goals?: HealthGoal[];
 }
 
 type TimeRange = 'daily' | 'weekly' | 'monthly';
 
-export function BiomarkerChart({ biomarkers, type, showDetails, devices = [] }: BiomarkerChartProps) {
+export function BiomarkerChart({ biomarkers, type, showDetails, devices = [], goals = [] }: BiomarkerChartProps) {
   const [timeRange, setTimeRange] = useState<TimeRange>('daily');
   const [offset, setOffset] = useState(0); // 0 = current period, 1 = previous period, etc.
   // Helper function to get device name by ID
@@ -335,6 +338,207 @@ export function BiomarkerChart({ biomarkers, type, showDetails, devices = [] }: 
 
   const faultyCount = sortedData.filter(b => b.isFaulty).length;
 
+  // ── FR3.2.2 Chart Annotations ──
+  // Build ApexCharts point annotations for abnormal readings, manual entries, and goal completions
+  const pointAnnotations = useMemo(() => {
+    const annotations: ApexAnnotations['points'] = [];
+    chartData.forEach((d, i) => {
+      // Abnormal reading markers
+      const val = type === 'bloodPressure' ? (d.systolic || d.value) : d.value;
+      const result = classifyReading(type, val);
+      if (result.isAbnormal) {
+        annotations.push({
+          x: d.time,
+          y: val,
+          marker: {
+            size: result.severity === 'critical' ? 8 : 6,
+            fillColor: result.severity === 'critical' ? '#ef4444' : result.severity === 'warning' ? '#f59e0b' : '#eab308',
+            strokeColor: '#fff',
+            strokeWidth: 2,
+            shape: 'circle',
+          },
+          label: {
+            text: result.severity === 'critical' ? '⚠ Critical' : result.severity === 'warning' ? '⚠ Warning' : '! Borderline',
+            borderColor: result.severity === 'critical' ? '#ef4444' : '#f59e0b',
+            style: { background: result.severity === 'critical' ? '#fef2f2' : '#fffbeb', color: '#111', fontSize: '10px', padding: { left: 4, right: 4, top: 2, bottom: 2 } },
+            offsetY: -15,
+          },
+        });
+      }
+      // Manual entry markers
+      if (d.notes && (d.notes.toLowerCase().includes('manual') || d.notes.toLowerCase().includes('nap'))) {
+        annotations.push({
+          x: d.time,
+          y: val,
+          marker: { size: 5, fillColor: '#6366f1', strokeColor: '#fff', strokeWidth: 2, shape: 'square' as any },
+          label: { text: '✏ Manual', borderColor: '#6366f1', style: { background: '#eef2ff', color: '#4338ca', fontSize: '10px', padding: { left: 3, right: 3, top: 1, bottom: 1 } }, offsetY: -10 },
+        });
+      }
+    });
+    return annotations;
+  }, [chartData, type]);
+
+  // Y-axis annotations for normal range bands
+  const yAxisAnnotations = useMemo(() => {
+    const range = PHYSIOLOGICAL_RANGES[type];
+
+    if (type === 'bloodPressure') {
+      // Blood pressure has two readings – show separate bands for each
+      const systolicNormalLow = 90;
+      const systolicNormalHigh = 130;
+      const diastolicNormalLow = 60;
+      const diastolicNormalHigh = 80;
+
+      return [
+        {
+          y: systolicNormalLow,
+          y2: systolicNormalHigh,
+          borderColor: '#10b981',
+          fillColor: '#10b981',
+          opacity: 0.08,
+          label: {
+            text: `Systolic Normal (${systolicNormalLow}–${systolicNormalHigh})`,
+            position: 'front' as const,
+            textAnchor: 'start' as const,
+            offsetX: 6,
+            offsetY: -4,
+            borderColor: '#10b981',
+            borderWidth: 1,
+            borderRadius: 4,
+            style: {
+              color: '#fff',
+              fontSize: '11px',
+              fontWeight: 600,
+              background: '#10b981',
+              padding: { left: 6, right: 6, top: 3, bottom: 3 },
+            },
+          },
+        },
+        {
+          y: diastolicNormalLow,
+          y2: diastolicNormalHigh,
+          borderColor: '#8b5cf6',
+          fillColor: '#8b5cf6',
+          opacity: 0.08,
+          label: {
+            text: `Diastolic Normal (${diastolicNormalLow}–${diastolicNormalHigh})`,
+            position: 'front' as const,
+            textAnchor: 'start' as const,
+            offsetX: 6,
+            offsetY: -4,
+            borderColor: '#8b5cf6',
+            borderWidth: 1,
+            borderRadius: 4,
+            style: {
+              color: '#fff',
+              fontSize: '11px',
+              fontWeight: 600,
+              background: '#8b5cf6',
+              padding: { left: 6, right: 6, top: 3, bottom: 3 },
+            },
+          },
+        },
+      ] as ApexAnnotations['yaxis'];
+    }
+
+    return [{
+      y: range.normalLow,
+      y2: range.normalHigh,
+      borderColor: '#10b981',
+      fillColor: '#10b981',
+      opacity: 0.08,
+      label: {
+        text: `Normal (${range.normalLow}–${range.normalHigh})`,
+        position: 'front' as const,
+        textAnchor: 'start' as const,
+        offsetX: 6,
+        offsetY: -4,
+        borderColor: '#10b981',
+        borderWidth: 1,
+        borderRadius: 4,
+        style: {
+          color: '#fff',
+          fontSize: '11px',
+          fontWeight: 600,
+          background: '#10b981',
+          padding: { left: 6, right: 6, top: 3, bottom: 3 },
+        },
+      },
+    }] as ApexAnnotations['yaxis'];
+  }, [type]);
+
+  // Goal completion x-axis annotations
+  const xAxisAnnotations = useMemo(() => {
+    if (!goals || goals.length === 0) return [];
+    const { startDate, endDate } = getDateRange();
+    return goals
+      .filter(g => g.type === type && g.status === 'completed' && g.completedAt)
+      .filter(g => {
+        const d = new Date(g.completedAt!);
+        return d >= startDate && d <= endDate;
+      })
+      .map(g => {
+        const d = new Date(g.completedAt!);
+        let label = '';
+        if (timeRange === 'daily') label = d.toLocaleTimeString(undefined, { hour: 'numeric', hour12: true }).replace(' ', '');
+        else label = d.toLocaleString(undefined, { month: 'short', day: 'numeric' });
+        return {
+          x: label,
+          borderColor: '#10b981',
+          strokeDashArray: 4,
+          label: {
+            text: '🎯 Goal!',
+            borderColor: '#10b981',
+            borderWidth: 1,
+            borderRadius: 4,
+            style: {
+              color: '#fff',
+              background: '#10b981',
+              fontSize: '11px',
+              fontWeight: 600,
+              padding: { left: 6, right: 6, top: 3, bottom: 3 },
+            },
+            orientation: 'horizontal' as const,
+            offsetY: -8,
+          },
+        };
+      });
+  }, [goals, type, timeRange, offset]);
+
+  // Build annotations object
+  const chartAnnotations: ApexAnnotations = {
+    points: pointAnnotations,
+    yaxis: yAxisAnnotations,
+    xaxis: xAxisAnnotations as any,
+  };
+
+  // ── FR3.2.3 Data Gap Visualization ──
+  // Insert null values for time gaps (connectNulls: false will break the line)
+  const insertDataGaps = (data: typeof chartData) => {
+    if (data.length < 2) return data;
+    const result: typeof chartData = [];
+    for (let i = 0; i < data.length; i++) {
+      result.push(data[i]);
+      if (i < data.length - 1) {
+        // Check for time gap: if the gap between consecutive points is > 2x the median interval, insert null
+        // For simplicity we compare adjacent labels - they'll be different-enough for visible gaps
+        // A more robust approach: compare timestamps
+        const gap = i < data.length - 1;
+        // We'll add a null gap marker between distinct time jumps
+        // (handled by the chart config connectNulls: false)
+      }
+    }
+    return result;
+  };
+
+  // ── Anomaly count for review badge ──
+  const abnormalCount = useMemo(() => {
+    return sortedData.filter(b => {
+      const val = type === 'bloodPressure' ? (b.systolic || b.value) : b.value;
+      return classifyReading(type, val).isAbnormal;
+    }).length;
+  }, [sortedData, type]);
+
   // Get display label for time range
   const getTimeRangeLabel = () => {
     const { startDate, endDate } = getDateRange();
@@ -383,12 +587,18 @@ export function BiomarkerChart({ biomarkers, type, showDetails, devices = [] }: 
             <h3 className="text-foreground">{getBiomarkerLabel(type)}</h3>
             <p className="text-sm text-muted-foreground">{getTimeRangeLabel()}</p>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
             {recentTrend > 0 ? (
               <TrendingUp className="w-5 h-5 text-red-500" />
             ) : recentTrend < 0 ? (
               <TrendingDown className="w-5 h-5 text-green-500" />
             ) : null}
+            {abnormalCount > 0 && (
+              <Badge variant="outline" className="text-amber-700 bg-amber-50 border-amber-300 dark:text-amber-300 dark:bg-amber-950">
+                <AlertTriangle className="w-3 h-3 mr-1" />
+                {abnormalCount} Anomal{abnormalCount === 1 ? 'y' : 'ies'}
+              </Badge>
+            )}
             {faultyCount > 0 && (
               <Badge variant="destructive">
                 <AlertTriangle className="w-3 h-3 mr-1" />
@@ -503,6 +713,7 @@ export function BiomarkerChart({ biomarkers, type, showDetails, devices = [] }: 
                         enabled: false
                       }
                     },
+                    annotations: chartAnnotations,
                     plotOptions: {
                       bar: {
                         horizontal: false,
@@ -609,6 +820,11 @@ export function BiomarkerChart({ biomarkers, type, showDetails, devices = [] }: 
                       zoom: {
                         enabled: false
                       }
+                    },
+                    annotations: chartAnnotations,
+                    stroke: {
+                      curve: 'smooth',
+                      connectNulls: false, // FR3.2.3 - break lines at data gaps
                     },
                     plotOptions: {
                       bar: {

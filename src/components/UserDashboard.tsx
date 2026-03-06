@@ -1,5 +1,9 @@
 import { useState, useEffect, useRef } from 'react';
 import { Card } from './ui/card';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
+import { Chart } from 'chart.js/auto';
+import { Checkbox } from './ui/checkbox';
 import { Activity, Flame, Droplet, Settings, User, Heart, Wind, Footprints, Moon, Plus, Scale, Zap, Target, Trophy, Star, Crown, Sparkles, Award, RefreshCw } from 'lucide-react';
 import { 
   BiomarkerChart, 
@@ -26,6 +30,8 @@ import {
   type Achievement,
   type ProfileTab
 } from './user';
+import { StreakCelebration, calculateStreak, checkStreakMilestone, type StreakMilestone } from './user/StreakCelebration';
+import { sendCriticalAlertEmail } from '../utils/emailService';
 import { 
   Biomarker, 
   Device, 
@@ -78,9 +84,14 @@ export function UserDashboard({ user, onLogout }: UserDashboardProps) {
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [unreadNotificationsCount, setUnreadNotificationsCount] = useState(0);
   const [achievementToShow, setAchievementToShow] = useState<Achievement | null>(null);
+  const [showReportDialog, setShowReportDialog] = useState(false);
+  const [selectedBiomarkers, setSelectedBiomarkers] = useState<Biomarker['type'][]>([]);
+  const [reportDuration, setReportDuration] = useState<'6months' | '1year'>('6months');
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
   const [criticalAlert, setCriticalAlert] = useState<CriticalAlert | null>(null);
   const criticalAlertQueueRef = useRef<CriticalAlert[]>([]);
+  const [streakMilestone, setStreakMilestone] = useState<StreakMilestone | null>(null);
+  const [currentStreak, setCurrentStreak] = useState(0);
   
   // Track last generation time for each biomarker type (ref avoids stale closure issues in interval)
   const lastGeneratedTimeRef = useRef<Record<string, number>>({});
@@ -194,6 +205,18 @@ export function UserDashboard({ user, onLogout }: UserDashboardProps) {
     }
   };
 
+  // ── Streak tracking ──
+  useEffect(() => {
+    if (biomarkers.length === 0) return;
+    const timestamps = biomarkers.map(b => b.timestamp);
+    const streak = calculateStreak(timestamps);
+    setCurrentStreak(streak);
+    const milestone = checkStreakMilestone(user.user_id || user.id, streak);
+    if (milestone) {
+      setStreakMilestone(milestone);
+    }
+  }, [biomarkers]);
+
   // Sync all active devices - updates their last_sync timestamp
   const syncAllDevices = async () => {
     const activeDevices = devices.filter(d => d.status === 'active');
@@ -267,7 +290,7 @@ export function UserDashboard({ user, onLogout }: UserDashboardProps) {
         createNotification(
           user.user_id || user.id,
           'ACHIEVEMENT',
-          '🏆 Achievement Unlocked: First Step — You recorded your first health reading!'
+          '🏆 Achievement Unlocked: First Step - You recorded your first health reading!'
         );
       });
     }
@@ -294,7 +317,7 @@ export function UserDashboard({ user, onLogout }: UserDashboardProps) {
           createNotification(
             user.user_id || user.id,
             'ACHIEVEMENT',
-            '🏆 Achievement Unlocked: Step Master — You reached 10,000 steps in a single day!'
+            '🏆 Achievement Unlocked: Step Master - You reached 10,000 steps in a single day!'
           );
         });
       }
@@ -470,6 +493,19 @@ export function UserDashboard({ user, onLogout }: UserDashboardProps) {
           message: newAlert.message,
           timestamp: newAlert.timestamp,
         };
+
+        // Fire email notification for this critical reading
+        sendCriticalAlertEmail(
+          user.user_id || user.id,
+          user.email || currentUser.email,
+          {
+            biomarker: getBiomarkerLabel(type),
+            value: String(readingValue),
+            severity: 'Critical',
+            timestamp: newAlert.timestamp,
+          }
+        ).catch(console.error);
+
         // Queue it – if a modal is already open, add to queue
         if (criticalAlert) {
           criticalAlertQueueRef.current.push(critical);
@@ -511,8 +547,180 @@ export function UserDashboard({ user, onLogout }: UserDashboardProps) {
     return 'stable';
   };
 
-  const downloadReport = () => {
-    toast.success('Daily report downloaded!');
+  const downloadReport = async () => {
+    setShowReportDialog(true);
+  };
+
+  const generateReport = async () => {
+    try {
+      setShowReportDialog(false);
+
+      // Filter biomarkers by duration
+      const cutoffDate = new Date();
+      if (reportDuration === '6months') {
+        cutoffDate.setMonth(cutoffDate.getMonth() - 6);
+      } else {
+        cutoffDate.setFullYear(cutoffDate.getFullYear() - 1);
+      }
+
+      // Filter biomarkers by selected types and duration
+      const filteredBiomarkers = biomarkers.filter(b =>
+        selectedBiomarkers.includes(b.type) &&
+        new Date(b.timestamp) >= cutoffDate
+      );
+
+      if (filteredBiomarkers.length === 0) {
+        toast.error('No data available for selected filters');
+        return;
+      }
+
+      const doc = new jsPDF();
+      let yPosition = 20;
+
+      // Header
+      doc.setFontSize(20);
+      doc.text('Health Biomarkers Report', 14, yPosition);
+      yPosition += 10;
+
+      // User info
+      doc.setFontSize(12);
+      doc.text(`Patient: ${currentUser.name || 'User'}`, 14, yPosition);
+      yPosition += 7;
+      doc.text(`Date: ${new Date().toLocaleDateString()}`, 14, yPosition);
+      yPosition += 7;
+      doc.text(`Duration: ${reportDuration === '6months' ? 'Last 6 Months' : 'Last 1 Year'}`, 14, yPosition);
+      yPosition += 7;
+      doc.text(`Total Readings: ${filteredBiomarkers.length}`, 14, yPosition);
+      yPosition += 15;
+
+      // Create chart images array first
+      const chartImages = [];
+
+      for (const type of selectedBiomarkers) {
+        const typeBiomarkers = filteredBiomarkers
+          .filter(b => b.type === type)
+          .sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+
+        if (typeBiomarkers.length === 0) continue;
+
+        // Create canvas
+        const canvas = document.createElement('canvas');
+        canvas.width = 800;
+        canvas.height = 300;
+
+        const ctx = canvas.getContext('2d');
+        if (ctx) {
+          const chart = new Chart(ctx, {
+            type: 'line',
+            data: {
+              labels: typeBiomarkers.map(b =>
+                new Date(b.timestamp).toLocaleDateString()
+              ),
+              datasets: [{
+                label: getBiomarkerLabel(type),
+                data: typeBiomarkers.map(b => b.value),
+                borderColor: 'rgb(59, 130, 246)',
+                backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                tension: 0.4,
+                fill: true
+              }]
+            },
+            options: {
+              responsive: false,
+              animation: false,
+              plugins: {
+                title: {
+                  display: true,
+                  text: `${getBiomarkerLabel(type)} Trend`,
+                  font: { size: 16 }
+                },
+                legend: {
+                  display: true
+                }
+              },
+              scales: {
+                y: {
+                  beginAtZero: false,
+                  title: {
+                    display: true,
+                    text: getBiomarkerUnit(type)
+                  }
+                }
+              }
+            }
+          });
+
+          await new Promise(resolve => setTimeout(resolve, 100));
+
+          const imgData = canvas.toDataURL('image/png');
+          chartImages.push(imgData);
+
+          chart.destroy();
+        }
+      }
+
+      // Now add all chart images to PDF
+      for (const imgData of chartImages) {
+        if (yPosition > 200) {
+          doc.addPage();
+          yPosition = 20;
+        }
+
+        doc.addImage(imgData, 'PNG', 14, yPosition, 180, 67.5);
+        yPosition += 75;
+      }
+
+      // Add new page for data table
+      doc.addPage();
+      yPosition = 20;
+
+      // Summary Statistics
+      doc.setFontSize(16);
+      doc.text('Summary Statistics', 14, yPosition);
+      yPosition += 10;
+
+      selectedBiomarkers.forEach(type => {
+        const typeData = filteredBiomarkers.filter(b => b.type === type);
+        if (typeData.length === 0) return;
+
+        const values = typeData.map(b => b.value);
+        const avg = (values.reduce((a, b) => a + b, 0) / values.length).toFixed(1);
+        const min = Math.min(...values).toFixed(1);
+        const max = Math.max(...values).toFixed(1);
+
+        doc.setFontSize(12);
+        doc.text(`${getBiomarkerLabel(type)}: Avg ${avg}, Min ${min}, Max ${max} ${getBiomarkerUnit(type)}`, 14, yPosition);
+        yPosition += 7;
+      });
+
+      yPosition += 10;
+
+      // Detailed data table
+      const tableData = filteredBiomarkers
+        .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
+        .slice(0, 50)
+        .map(bio => [
+          new Date(bio.timestamp).toLocaleString(),
+          getBiomarkerLabel(bio.type),
+          bio.value.toString(),
+          getBiomarkerUnit(bio.type),
+          devices.find(d => d.id === bio.deviceId)?.name || 'Unknown'
+        ]);
+
+      autoTable(doc, {
+        head: [['Date & Time', 'Biomarker', 'Value', 'Unit', 'Device']],
+        body: tableData,
+        startY: yPosition,
+        styles: { fontSize: 8 },
+        headStyles: { fillColor: [59, 130, 246] }
+      });
+
+      doc.save(`health-report-${new Date().toISOString().split('T')[0]}.pdf`);
+      toast.success('Report downloaded successfully!');
+    } catch (error) {
+      console.error('Error generating report:', error);
+      toast.error('Failed to generate report');
+    }
   };
 
   const handleLogout = () => {
@@ -1170,7 +1378,77 @@ export function UserDashboard({ user, onLogout }: UserDashboardProps) {
         </DialogContent>
       </Dialog>
 
-      {/* Critical Alert Modal — must-acknowledge overlay for dangerous readings */}
+      {/* Report Configuration Dialog */}
+      <Dialog open={showReportDialog} onOpenChange={setShowReportDialog}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Generate Health Report</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            {/* Duration Selection */}
+            <div className="space-y-2">
+              <Label htmlFor="duration">Report Duration</Label>
+              <Select value={reportDuration} onValueChange={(value: '6months' | '1year') => setReportDuration(value)}>
+                <SelectTrigger id="duration">
+                  <SelectValue placeholder="Select duration" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="6months">Last 6 Months</SelectItem>
+                  <SelectItem value="1year">Last 1 Year</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Biomarker Selection */}
+            <div className="space-y-3">
+              <Label>Select Biomarkers</Label>
+              <div className="space-y-2 max-h-48 overflow-y-auto border rounded-md p-3 bg-gray-50 dark:bg-gray-900">
+                {(['heartRate', 'bloodPressure', 'glucose', 'oxygen', 'steps', 'sleep', 'temperature', 'weight'] as Biomarker['type'][]).map((type) => (
+                  <div key={type} className="flex items-center space-x-3 p-2 rounded-md hover:bg-white dark:hover:bg-gray-800 transition-colors">
+                    <Checkbox
+                      id={`report-${type}`}
+                      checked={selectedBiomarkers.includes(type)}
+                      onCheckedChange={(checked: any) => {
+                        if (checked) {
+                          setSelectedBiomarkers([...selectedBiomarkers, type]);
+                        } else {
+                          setSelectedBiomarkers(selectedBiomarkers.filter(t => t !== type));
+                        }
+                      }}
+                      className="data-[state=checked]:bg-blue-600 data-[state=checked]:border-blue-600"
+                    />
+                    <label
+                      htmlFor={`report-${type}`}
+                      className="text-sm font-medium leading-none cursor-pointer flex-1"
+                    >
+                      {getBiomarkerLabel(type)}
+                    </label>
+                  </div>
+                ))}
+              </div>
+              {selectedBiomarkers.length === 0 && (
+                <p className="text-sm text-red-500">Please select at least one biomarker</p>
+              )}
+            </div>
+
+            {/* Action Buttons */}
+            <div className="flex gap-2 justify-end pt-2">
+              <Button variant="outline" onClick={() => setShowReportDialog(false)} size="sm">
+                Cancel
+              </Button>
+              <Button
+                onClick={generateReport}
+                disabled={selectedBiomarkers.length === 0}
+                size="sm"
+              >
+                Generate Report
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Critical Alert Modal - must-acknowledge overlay for dangerous readings */}
       <CriticalAlertModal
         alert={criticalAlert}
         onAcknowledge={handleAcknowledgeCriticalAlert}
@@ -1183,6 +1461,13 @@ export function UserDashboard({ user, onLogout }: UserDashboardProps) {
           onClose={() => setAchievementToShow(null)}
         />
       )}
+
+      {/* Streak Milestone Celebration */}
+      <StreakCelebration
+        milestone={streakMilestone}
+        currentStreak={currentStreak}
+        onDismiss={() => setStreakMilestone(null)}
+      />
     </SidebarProvider>
   );
 }
