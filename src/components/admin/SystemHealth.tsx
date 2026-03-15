@@ -358,7 +358,7 @@ export function SystemHealth({ biomarkers, devices, users }: SystemHealthProps) 
       <Card className="p-6">
         <h3 className="text-foreground mb-4">System Information</h3>
         <div className="overflow-x-auto">
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-6 min-w-0">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-6 min-w-0">
             <div>
               <p className="text-sm text-gray-600 mb-1">Database Version</p>
               <p className="text-gray-900">PostgreSQL 15.2</p>

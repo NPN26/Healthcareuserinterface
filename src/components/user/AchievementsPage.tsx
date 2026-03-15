@@ -256,18 +256,18 @@ export function AchievementsPage({ userId }: AchievementsPageProps) {
     <div className="space-y-6">
       {/* Stats Overview */}
       <Card className="p-6 bg-gradient-to-br from-amber-50 via-yellow-50 to-orange-50 dark:from-amber-950 dark:via-yellow-950 dark:to-orange-950 border-2 border-amber-200 dark:border-amber-800">
-        <div className="flex items-center justify-between mb-4">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-4">
           <div className="flex items-center gap-3">
-            <div className="w-16 h-16 rounded-full bg-gradient-to-br from-yellow-400 via-orange-500 to-red-600 flex items-center justify-center shadow-lg">
-              <Trophy className="w-8 h-8 text-white" />
+            <div className="w-12 h-12 sm:w-16 sm:h-16 rounded-full bg-gradient-to-br from-yellow-400 via-orange-500 to-red-600 flex items-center justify-center shadow-lg shrink-0">
+              <Trophy className="w-6 h-6 sm:w-8 sm:h-8 text-white" />
             </div>
             <div>
-              <h3 className="text-2xl font-bold">Achievements</h3>
+              <h3 className="text-xl sm:text-2xl font-bold">Achievements</h3>
               <p className="text-sm text-muted-foreground">Track your wellness milestones</p>
             </div>
           </div>
-          <div className="text-right">
-            <div className="text-4xl font-bold text-transparent text-center">
+          <div className="text-left sm:text-right">
+            <div className="text-3xl sm:text-4xl font-bold text-transparent text-center">
               {unlockedCount}/{totalCount}
             </div>
             <p className="text-sm text-muted-foreground">{completionPercentage}% Complete</p>

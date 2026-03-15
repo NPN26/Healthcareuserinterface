@@ -193,7 +193,7 @@ export function VirtualCompanion({ isOpen, onClose, biomarkers, devices, user }:
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-2xl h-[600px] flex flex-col p-0">
+      <DialogContent className="max-w-2xl h-[85vh] sm:h-[600px] flex flex-col p-0">
         <DialogHeader className="p-6 pb-4 border-b flex-shrink-0">
           <div className="flex items-center gap-3">
             <div className="w-12 h-12 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 dark:from-custom-blue dark:to-custom-purple flex items-center justify-center text-white">

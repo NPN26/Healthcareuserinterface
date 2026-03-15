@@ -50,9 +50,9 @@ export function PatientListTable({
           <TableHeader>
             <TableRow>
               <TableHead>Patient</TableHead>
-              <TableHead>Age</TableHead>
-              <TableHead>Latest Heart Rate</TableHead>
-              <TableHead>Latest Glucose</TableHead>
+              <TableHead className="hidden md:table-cell">Age</TableHead>
+              <TableHead className="hidden md:table-cell">Latest Heart Rate</TableHead>
+              <TableHead className="hidden lg:table-cell">Latest Glucose</TableHead>
               <TableHead>Alerts</TableHead>
               <TableHead>Action</TableHead>
             </TableRow>
@@ -82,8 +82,8 @@ export function PatientListTable({
                       </div>
                     </div>
                   </TableCell>
-                  <TableCell>{patient.age}</TableCell>
-                  <TableCell>
+                  <TableCell className="hidden md:table-cell">{patient.age}</TableCell>
+                  <TableCell className="hidden md:table-cell">
                     {heartRate ? (
                       <span
                         className={
@@ -98,7 +98,7 @@ export function PatientListTable({
                       <span className="text-gray-400">No data</span>
                     )}
                   </TableCell>
-                  <TableCell>
+                  <TableCell className="hidden lg:table-cell">
                     {glucose ? (
                       <span
                         className={

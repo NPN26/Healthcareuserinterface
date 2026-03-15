@@ -140,16 +140,16 @@ export function StatsComparison({ biomarkers }: StatsComparisonProps) {
       </Card>
 
       <Card className="p-6">
-        <div className="flex items-center justify-between mb-6">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-6">
           <div>
             <h3 className="text-foreground">{getBiomarkerLabel(selectedType)} Comparison</h3>
             <p className="text-sm text-gray-600">
-              {comparisonType === 'day' ? 'Today vs Yesterday' : 
-               comparisonType === 'week' ? 'This Week vs Last Week' : 
+              {comparisonType === 'day' ? 'Today vs Yesterday' :
+               comparisonType === 'week' ? 'This Week vs Last Week' :
                'This Month vs Last Month'}
             </p>
           </div>
-          <div className="text-right">
+          <div className="text-left sm:text-right">
             <div className={`flex items-center gap-2 ${
               comparisonResult.change > 0 ? 'text-red-500' : comparisonResult.change < 0 ? 'text-green-500' : 'text-gray-500'
             }`}>

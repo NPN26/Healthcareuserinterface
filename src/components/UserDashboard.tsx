@@ -991,16 +991,16 @@ export function UserDashboard({ user, onLogout }: UserDashboardProps) {
       case 'devices':
         return (
           <div className="space-y-4">
-            <div className="flex justify-between items-center">
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
               <h2 className="text-2xl font-bold text-foreground">My Devices</h2>
               <div className="flex gap-2">
-                <Button variant="outline" onClick={syncAllDevices}>
-                  <RefreshCw className="w-4 h-4 mr-2" />
-                  Sync Devices
+                <Button variant="outline" size="sm" onClick={syncAllDevices}>
+                  <RefreshCw className="w-4 h-4 sm:mr-2" />
+                  <span className="hidden sm:inline">Sync Devices</span>
                 </Button>
-                <Button onClick={() => setShowAddDevice(true)}>
-                  <Plus className="w-4 h-4 mr-2" />
-                  Add Device
+                <Button size="sm" onClick={() => setShowAddDevice(true)}>
+                  <Plus className="w-4 h-4 sm:mr-2" />
+                  <span className="hidden sm:inline">Add Device</span>
                 </Button>
               </div>
             </div>

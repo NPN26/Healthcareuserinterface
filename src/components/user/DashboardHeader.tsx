@@ -61,41 +61,41 @@ export function DashboardHeader({
   const isToday = selectedDate.toDateString() === new Date().toDateString();
 
   return (
-    <header className="sticky top-0 z-10 flex h-16 shrink-0 items-center gap-2 sm:gap-4 border-b bg-white/80 dark:bg-gray-900/80 backdrop-blur-xl px-2 sm:px-4 overflow-x-auto">
+    <header className="sticky top-0 z-10 flex h-14 sm:h-16 shrink-0 items-center gap-1 sm:gap-4 border-b bg-white/80 dark:bg-gray-900/80 backdrop-blur-xl px-2 sm:px-4">
       <SidebarTrigger className="-ml-1 shrink-0" />
 
       {/* Date Navigation */}
-      <div className="flex items-center gap-1 shrink-0">
-        <Button variant="ghost" size="icon" className="h-8 w-8" onClick={onPrevDay}>
+      <div className="flex items-center gap-0.5 sm:gap-1 shrink-0">
+        <Button variant="ghost" size="icon" className="h-7 w-7 sm:h-8 sm:w-8" onClick={onPrevDay}>
           <ChevronLeft className="w-4 h-4" />
         </Button>
         <button
           onClick={onToday}
-          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
+          className={`flex items-center gap-1 sm:gap-1.5 px-2 sm:px-3 py-1.5 rounded-md text-xs sm:text-sm font-medium transition-colors ${
             isToday
               ? 'bg-primary/10 text-primary'
               : 'hover:bg-accent text-muted-foreground'
           }`}
         >
-          <Calendar className="w-3.5 h-3.5" />
+          <Calendar className="w-3.5 h-3.5 hidden sm:block" />
           {selectedDate.toLocaleDateString(undefined, {
             month: 'short',
             day: 'numeric',
             year: selectedDate.getFullYear() !== new Date().getFullYear() ? 'numeric' : undefined,
           })}
-          {isToday && <span className="text-xs">(Today)</span>}
+          {isToday && <span className="text-xs hidden sm:inline">(Today)</span>}
         </button>
         <Button
           variant="ghost"
           size="icon"
-          className="h-8 w-8"
+          className="h-7 w-7 sm:h-8 sm:w-8"
           onClick={onNextDay}
           disabled={isToday}
         >
           <ChevronRight className="w-4 h-4" />
         </Button>
       </div>
-      
+
       {/* Search Bar */}
       <div className="flex-1 min-w-0 max-w-md hidden sm:block">
         <div className="relative">
@@ -111,7 +111,7 @@ export function DashboardHeader({
       </div>
 
       {/* Right Side Actions */}
-      <div className="flex items-center gap-2 ml-auto">
+      <div className="flex items-center gap-1 sm:gap-2 ml-auto">
         <Button
           variant="ghost"
           size="icon"

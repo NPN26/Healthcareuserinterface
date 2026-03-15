@@ -717,7 +717,7 @@ export function BiomarkerChart({ biomarkers, type, showDetails, devices = [], go
         ) : (
           <>
             {showDetails && (
-              <div className="grid grid-cols-3 gap-4 p-4 bg-muted rounded-lg">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 p-4 bg-muted rounded-lg">
                 <div>
                   <p className="text-sm text-muted-foreground">Average</p>
                   <p className="text-foreground">

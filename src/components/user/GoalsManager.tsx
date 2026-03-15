@@ -565,7 +565,7 @@ export function GoalsManager({ isOpen, onClose, userId, biomarkers }: GoalsManag
                     {isEditing ? (
                       <div className="space-y-4">
                         <h3>Edit Goal</h3>
-                        <div className="grid grid-cols-2 gap-4">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                           <div>
                             <Label>Period</Label>
                             <Select value={editingGoal.period} onValueChange={(value: any) => setEditingGoal({ ...editingGoal, period: value })}>
