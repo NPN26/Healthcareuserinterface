@@ -26,7 +26,7 @@ export function CriticalAlertsPanel({ patients, getPatientAlerts, onViewPatient 
                 key={patient.id}
                 className="p-4 border-l-4 border-red-500 bg-red-50 dark:bg-red-950"
               >
-                <div className="flex items-start justify-between">
+                <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
                   <div className="flex items-center gap-3">
                     <Avatar>
                       <AvatarFallback>{patient.name[0]}</AvatarFallback>

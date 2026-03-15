@@ -34,7 +34,7 @@ export function QuickStatsGrid({ biomarkers, getLatestBiomarker, getTrend, onCar
   ];
 
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
       {biomarkerCards.map(({ type, icon: Icon, color }) => {
         const latest = getLatestBiomarker(type);
         const trend = getTrend(type);

@@ -159,7 +159,7 @@ export function NotificationsPage({
     <div className="h-full w-full flex flex-col overflow-hidden">
       {/* Header */}
       <div className="flex-shrink-0 border-b bg-card">
-        <div className="flex items-center gap-4 p-4">
+        <div className="flex items-center gap-3 sm:gap-4 p-4 flex-wrap">
           <Button
             variant="ghost"
             size="icon"
@@ -168,8 +168,8 @@ export function NotificationsPage({
           >
             <ArrowLeft className="w-4 h-4" />
           </Button>
-          <div className="flex-1">
-            <h1 className="text-xl font-semibold flex items-center gap-2">
+          <div className="flex-1 min-w-0">
+            <h1 className="text-lg sm:text-xl font-semibold flex items-center gap-2">
               <Bell className="w-5 h-5" />
               Notifications
             </h1>
@@ -184,8 +184,8 @@ export function NotificationsPage({
             disabled={isRefreshing}
             className="h-9"
           >
-            <RefreshCw className={cn("w-4 h-4 mr-2", isRefreshing && "animate-spin")} />
-            Refresh
+            <RefreshCw className={cn("w-4 h-4 sm:mr-2", isRefreshing && "animate-spin")} />
+            <span className="hidden sm:inline">Refresh</span>
           </Button>
           {unreadCount > 0 && (
             <Button
@@ -195,8 +195,8 @@ export function NotificationsPage({
               disabled={loadingId === 'all'}
               className="h-9"
             >
-              <CheckCheck className="w-4 h-4 mr-2" />
-              Mark all read
+              <CheckCheck className="w-4 h-4 sm:mr-2" />
+              <span className="hidden sm:inline">Mark all read</span>
             </Button>
           )}
         </div>
@@ -216,7 +216,7 @@ export function NotificationsPage({
 
           <div className="flex items-center gap-2 flex-wrap">
             <Select value={filterType} onValueChange={setFilterType}>
-              <SelectTrigger className="w-[140px] h-9">
+              <SelectTrigger className="w-[130px] sm:w-[140px] h-9">
                 <SelectValue placeholder="Type" />
               </SelectTrigger>
               <SelectContent>
@@ -229,7 +229,10 @@ export function NotificationsPage({
               </SelectContent>
             </Select>
 
-            <Select value={filterStatus} onValueChange={(v) => setFilterStatus(v as any)}>
+            <Select
+              value={filterStatus}
+              onValueChange={(v: 'all' | 'unread' | 'read') => setFilterStatus(v)}
+            >
               <SelectTrigger className="w-[120px] h-9">
                 <SelectValue placeholder="Status" />
               </SelectTrigger>
@@ -240,7 +243,10 @@ export function NotificationsPage({
               </SelectContent>
             </Select>
 
-            <Select value={sortBy} onValueChange={(v) => setSortBy(v as any)}>
+            <Select
+              value={sortBy}
+              onValueChange={(v: 'newest' | 'oldest') => setSortBy(v)}
+            >
               <SelectTrigger className="w-[120px] h-9">
                 <SelectValue placeholder="Sort" />
               </SelectTrigger>

@@ -357,22 +357,24 @@ export function SystemHealth({ biomarkers, devices, users }: SystemHealthProps) 
       {/* System Information */}
       <Card className="p-6">
         <h3 className="text-foreground mb-4">System Information</h3>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
-          <div>
-            <p className="text-sm text-gray-600 mb-1">Database Version</p>
-            <p className="text-gray-900">PostgreSQL 15.2</p>
-          </div>
-          <div>
-            <p className="text-sm text-gray-600 mb-1">API Version</p>
-            <p className="text-gray-900">v2.1.0</p>
-          </div>
-          <div>
-            <p className="text-sm text-gray-600 mb-1">Last Backup</p>
-            <p className="text-gray-900">{new Date().toLocaleDateString()}</p>
-          </div>
-          <div>
-            <p className="text-sm text-gray-600 mb-1">Uptime</p>
-            <p className="text-gray-900">99.9%</p>
+        <div className="overflow-x-auto">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-6 min-w-0">
+            <div>
+              <p className="text-sm text-gray-600 mb-1">Database Version</p>
+              <p className="text-gray-900">PostgreSQL 15.2</p>
+            </div>
+            <div>
+              <p className="text-sm text-gray-600 mb-1">API Version</p>
+              <p className="text-gray-900">v2.1.0</p>
+            </div>
+            <div>
+              <p className="text-sm text-gray-600 mb-1">Last Backup</p>
+              <p className="text-gray-900">{new Date().toLocaleDateString()}</p>
+            </div>
+            <div>
+              <p className="text-sm text-gray-600 mb-1">Uptime</p>
+              <p className="text-gray-900">99.9%</p>
+            </div>
           </div>
         </div>
       </Card>

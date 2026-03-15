@@ -129,7 +129,7 @@ export function PatternAnalysis({ patients, biomarkers }: PatternAnalysisProps) 
   return (
     <div className="space-y-6">
       {/* Population Overview */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
         {Object.entries(populationStats).map(([type, stats]) => (
           <Card key={type} className="p-4">
             <p className="text-sm text-gray-600 mb-1">{getBiomarkerLabel(type as Biomarker['type'])}</p>
@@ -168,13 +168,13 @@ export function PatternAnalysis({ patients, biomarkers }: PatternAnalysisProps) 
 
       {/* Population Trend */}
       <Card className="p-6">
-        <div className="flex items-center justify-between mb-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
           <div>
             <h3 className="text-foreground">Population Trend Analysis</h3>
             <p className="text-sm text-gray-600">Average values over last 14 days</p>
           </div>
           <Select value={selectedMetric} onValueChange={(value) => setSelectedMetric(value as Biomarker['type'])}>
-            <SelectTrigger className="w-48">
+            <SelectTrigger className="w-full sm:w-48">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>

@@ -19,21 +19,21 @@ export function QuickActionsCard({
     <Card className="p-6">
       <h3 className="text-foreground mb-4">Quick Actions</h3>
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        <Button onClick={onGenerateData} variant="outline">
-          <RefreshCw className="w-4 h-4 mr-2" />
-          Generate Data
+        <Button onClick={onGenerateData} variant="outline" className="truncate">
+          <RefreshCw className="w-4 h-4 mr-2 shrink-0" />
+          <span className="truncate">Generate Data</span>
         </Button>
-        <Button onClick={onSimulateFaults} variant="outline">
-          <AlertTriangle className="w-4 h-4 mr-2" />
-          Simulate Faults
+        <Button onClick={onSimulateFaults} variant="outline" className="truncate">
+          <AlertTriangle className="w-4 h-4 mr-2 shrink-0" />
+          <span className="truncate">Simulate Faults</span>
         </Button>
-        <Button onClick={onResetDevices} variant="outline">
-          <Activity className="w-4 h-4 mr-2" />
-          Reset Devices
+        <Button onClick={onResetDevices} variant="outline" className="truncate">
+          <Activity className="w-4 h-4 mr-2 shrink-0" />
+          <span className="truncate">Reset Devices</span>
         </Button>
-        <Button onClick={onClearAlerts} variant="outline">
-          <Trash2 className="w-4 h-4 mr-2" />
-          Clear Alerts
+        <Button onClick={onClearAlerts} variant="outline" className="truncate">
+          <Trash2 className="w-4 h-4 mr-2 shrink-0" />
+          <span className="truncate">Clear Alerts</span>
         </Button>
       </div>
     </Card>

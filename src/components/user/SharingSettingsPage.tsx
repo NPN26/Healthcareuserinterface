@@ -169,14 +169,14 @@ export function SharingSettingsPage({ userId, onBack }: SharingSettingsPageProps
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50 dark:from-gray-950 dark:via-gray-900 dark:to-gray-950 p-4 md:p-8">
       <div className="max-w-4xl mx-auto space-y-6">
         {/* Header */}
-        <div className="flex items-center gap-4">
+        <div className="flex flex-col sm:flex-row sm:items-center gap-4">
           <Button variant="outline" onClick={onBack}>
             <ArrowLeft className="w-4 h-4 mr-2" />
             Back
           </Button>
           <div className="flex-1">
-            <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100 flex items-center gap-2">
-              <Shield className="w-8 h-8 text-blue-600" />
+            <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 dark:text-gray-100 flex items-center gap-2">
+              <Shield className="w-7 h-7 sm:w-8 sm:h-8 text-blue-600" />
               Data Sharing Settings
             </h1>
             <p className="text-gray-600 dark:text-gray-400 mt-1">

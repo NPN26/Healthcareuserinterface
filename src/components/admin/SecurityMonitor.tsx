@@ -69,7 +69,7 @@ export function SecurityMonitor({ users, alerts }: SecurityMonitorProps) {
   return (
     <div className="space-y-6">
       {/* Security Overview */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
         <Card className="p-6">
           <div className="flex items-center gap-3">
             <div className="p-3 rounded-xl bg-green-100 dark:bg-green-900">
@@ -193,14 +193,15 @@ export function SecurityMonitor({ users, alerts }: SecurityMonitorProps) {
             <p className="text-sm text-gray-500">Events will appear here as actions are performed</p>
           </div>
         ) : (
+          <div className="overflow-x-auto">
           <Table>
             <TableHeader>
               <TableRow>
                 <TableHead>Event Type</TableHead>
                 <TableHead>User</TableHead>
                 <TableHead>Timestamp</TableHead>
-                <TableHead>IP Address</TableHead>
-                <TableHead>Details</TableHead>
+                <TableHead className="hidden md:table-cell">IP Address</TableHead>
+                <TableHead className="hidden lg:table-cell">Details</TableHead>
                 <TableHead>Status</TableHead>
               </TableRow>
             </TableHeader>
@@ -233,7 +234,7 @@ export function SecurityMonitor({ users, alerts }: SecurityMonitorProps) {
                         minute: '2-digit'
                       })}
                     </TableCell>
-                    <TableCell>
+                    <TableCell className="hidden md:table-cell">
                       {event.ip_address ? (
                         <code className="text-xs bg-gray-100 dark:bg-gray-800 px-2 py-1 rounded">
                           {event.ip_address}
@@ -242,7 +243,7 @@ export function SecurityMonitor({ users, alerts }: SecurityMonitorProps) {
                         <span className="text-xs text-gray-400">N/A</span>
                       )}
                     </TableCell>
-                    <TableCell>
+                    <TableCell className="hidden lg:table-cell">
                       {event.details ? (
                         <span className="text-xs text-gray-600 truncate max-w-[200px] block">
                           {typeof event.details === 'string' ? event.details : JSON.stringify(event.details).slice(0, 50)}
@@ -265,6 +266,7 @@ export function SecurityMonitor({ users, alerts }: SecurityMonitorProps) {
               })}
             </TableBody>
           </Table>
+          </div>
         )}
       </Card>
 

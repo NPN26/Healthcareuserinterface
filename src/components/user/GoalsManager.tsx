@@ -450,7 +450,7 @@ export function GoalsManager({ isOpen, onClose, userId, biomarkers }: GoalsManag
   return (
     <>
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-3xl max-h-[80vh] flex flex-col">
+      <DialogContent className="max-w-3xl max-h-[90vh] sm:max-h-[80vh] flex flex-col">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Target className="w-5 h-5" />
@@ -507,9 +507,9 @@ export function GoalsManager({ isOpen, onClose, userId, biomarkers }: GoalsManag
                   )}
 
                   {showAddGoal && (
-                    <Card className="p-6 border-2 border-primary">
+                    <Card className="p-4 sm:p-6 border-2 border-primary">
                       {/* SMART Step Indicators */}
-                      <div className="flex items-center justify-center gap-1 mb-6">
+                      <div className="flex items-center justify-center gap-1 mb-6 overflow-x-auto pb-2">
                         {SMART_STEPS.map((s, i) => (
                           <div key={s.key} className="flex items-center">
                             <button
@@ -533,7 +533,7 @@ export function GoalsManager({ isOpen, onClose, userId, biomarkers }: GoalsManag
 
                       {renderWizardStep()}
 
-                      <div className="flex gap-2 mt-6">
+                      <div className="flex gap-2 mt-6 flex-wrap">
                         {wizardStep > 0 && (
                           <Button variant="outline" onClick={() => setWizardStep(wizardStep - 1)}>
                             <ChevronLeft className="w-4 h-4 mr-1" />

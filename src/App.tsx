@@ -1,12 +1,30 @@
-import { useState, useEffect } from 'react';
-import { UserDashboard } from './components/UserDashboard';
-import { ProviderDashboard } from './components/ProviderDashboard';
-import { AdminDashboard } from './components/AdminDashboard';
+import { useState, useEffect, lazy, Suspense } from 'react';
 import { AuthScreen } from './components/AuthScreen';
 import { DatabaseTest } from './components/DatabaseTest';
 import { initializeMockData, User } from './utils/mockData';
 import { Toaster } from './components/ui/sonner';
 import { toast } from 'sonner';
+
+const UserDashboard = lazy(() =>
+  import('./components/UserDashboard').then((module) => ({ default: module.UserDashboard }))
+);
+const ProviderDashboard = lazy(() =>
+  import('./components/ProviderDashboard').then((module) => ({ default: module.ProviderDashboard }))
+);
+const AdminDashboard = lazy(() =>
+  import('./components/AdminDashboard').then((module) => ({ default: module.AdminDashboard }))
+);
+
+function DashboardFallback() {
+  return (
+    <div className="min-h-screen flex items-center justify-center bg-background">
+      <div className="text-center space-y-3">
+        <div className="mx-auto h-10 w-10 animate-spin rounded-full border-2 border-primary/20 border-t-primary" />
+        <p className="text-sm text-muted-foreground">Loading dashboard...</p>
+      </div>
+    </div>
+  );
+}
 
 export default function App() {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
@@ -68,9 +86,11 @@ export default function App() {
   // Render appropriate dashboard based on user role
   return (
     <div className="min-h-screen">
-      {currentUser.role === 'END_USER' && <UserDashboard user={currentUser} onLogout={handleLogout} />}
-      {currentUser.role === 'PROVIDER' && <ProviderDashboard user={currentUser} onLogout={handleLogout} />}
-      {currentUser.role === 'ADMIN' && <AdminDashboard user={currentUser} onLogout={handleLogout} />}
+      <Suspense fallback={<DashboardFallback />}>
+        {currentUser.role === 'END_USER' && <UserDashboard user={currentUser} onLogout={handleLogout} />}
+        {currentUser.role === 'PROVIDER' && <ProviderDashboard user={currentUser} onLogout={handleLogout} />}
+        {currentUser.role === 'ADMIN' && <AdminDashboard user={currentUser} onLogout={handleLogout} />}
+      </Suspense>
       <Toaster />
     </div>
   );

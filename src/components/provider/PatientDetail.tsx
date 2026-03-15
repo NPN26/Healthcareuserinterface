@@ -72,23 +72,25 @@ export function PatientDetail({ patient, biomarkers, alerts, onBack }: PatientDe
     <div className="min-h-screen bg-gradient-to-br from-green-50 via-white to-blue-50 dark:from-gray-950 dark:via-gray-900 dark:to-gray-950 p-4 md:p-8">
       <div className="max-w-7xl mx-auto space-y-6">
         {/* Header */}
-        <div className="flex items-center gap-4">
+        <div className="flex flex-col sm:flex-row sm:items-center gap-4">
           <Button variant="outline" onClick={onBack}>
             <ArrowLeft className="w-4 h-4 mr-2" />
             Back
           </Button>
           <div className="flex-1">
-            <h1 className="text-gray-900">{patient.name}</h1>
+            <h1 className="text-xl sm:text-2xl text-gray-900">{patient.name}</h1>
             <p className="text-gray-600">{patient.email} • {patient.age} years old</p>
           </div>
-          <Button variant="outline" onClick={exportPatientData}>
-            <Download className="w-4 h-4 mr-2" />
-            Export
+          <div className="flex gap-2">
+          <Button variant="outline" size="sm" onClick={exportPatientData}>
+            <Download className="w-4 h-4 sm:mr-2" />
+            <span className="hidden sm:inline">Export</span>
           </Button>
-          <Button onClick={shareWithSpecialist}>
-            <Share2 className="w-4 h-4 mr-2" />
-            Share
+          <Button size="sm" onClick={shareWithSpecialist}>
+            <Share2 className="w-4 h-4 sm:mr-2" />
+            <span className="hidden sm:inline">Share</span>
           </Button>
+          </div>
         </div>
 
         {/* Patient Overview */}
@@ -145,7 +147,7 @@ export function PatientDetail({ patient, biomarkers, alerts, onBack }: PatientDe
         {/* Alerts Summary */}
         {unreadAlerts.length > 0 && (
           <Card className="p-4 border-l-4 border-amber-500 bg-amber-50 dark:bg-amber-600">
-            <div className="flex items-start justify-between">
+            <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
               <div>
                 <h3 className="text-gray-900 mb-2">Active Alerts ({unreadAlerts.length})</h3>
                 <div className="space-y-1">
@@ -208,7 +210,7 @@ export function PatientDetail({ patient, biomarkers, alerts, onBack }: PatientDe
 
         {/* Detailed Charts */}
         <Tabs defaultValue="all" className="space-y-6">
-          <TabsList className="grid w-full grid-cols-4 lg:grid-cols-7">
+          <TabsList className="w-full overflow-x-auto flex-nowrap justify-start">
             <TabsTrigger value="all">All Metrics</TabsTrigger>
             <TabsTrigger value="heartRate">Heart Rate</TabsTrigger>
             <TabsTrigger value="bloodPressure">BP</TabsTrigger>

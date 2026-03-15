@@ -61,11 +61,11 @@ export function DashboardHeader({
   const isToday = selectedDate.toDateString() === new Date().toDateString();
 
   return (
-    <header className="sticky top-0 z-10 flex h-16 shrink-0 items-center gap-4 border-b bg-white/80 dark:bg-gray-900/80 backdrop-blur-xl px-4">
-      <SidebarTrigger className="-ml-1" />
+    <header className="sticky top-0 z-10 flex h-16 shrink-0 items-center gap-2 sm:gap-4 border-b bg-white/80 dark:bg-gray-900/80 backdrop-blur-xl px-2 sm:px-4 overflow-x-auto">
+      <SidebarTrigger className="-ml-1 shrink-0" />
 
       {/* Date Navigation */}
-      <div className="flex items-center gap-1">
+      <div className="flex items-center gap-1 shrink-0">
         <Button variant="ghost" size="icon" className="h-8 w-8" onClick={onPrevDay}>
           <ChevronLeft className="w-4 h-4" />
         </Button>
@@ -97,7 +97,7 @@ export function DashboardHeader({
       </div>
       
       {/* Search Bar */}
-      <div className="flex-1 max-w-md">
+      <div className="flex-1 min-w-0 max-w-md hidden sm:block">
         <div className="relative">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
           <Input

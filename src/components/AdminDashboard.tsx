@@ -382,38 +382,39 @@ export function AdminDashboard({ user, onLogout }: AdminDashboardProps) {
           criticalAlertsCount={criticalAlerts.length}
         />
         <Tabs defaultValue="users" className="space-y-6">
-          <TabsList className="w-full flex-wrap">
-            <TabsTrigger value="users">Users</TabsTrigger>
-            <TabsTrigger value="devices">Devices</TabsTrigger>
-            <TabsTrigger value="verification">Verification</TabsTrigger>
-            <TabsTrigger value="emails">Emails</TabsTrigger>
-            <TabsTrigger value="announcements">Announcements</TabsTrigger>
-            <TabsTrigger value="system">System Health</TabsTrigger>
-            <TabsTrigger value="security">Security</TabsTrigger>
-            <TabsTrigger value="settings">Settings</TabsTrigger>
+          <TabsList className="w-full flex flex-nowrap overflow-x-auto scrollbar-hide justify-start h-auto p-1">
+            <TabsTrigger value="users" className="shrink-0 whitespace-nowrap text-xs sm:text-sm">Users</TabsTrigger>
+            <TabsTrigger value="devices" className="shrink-0 whitespace-nowrap text-xs sm:text-sm">Devices</TabsTrigger>
+            <TabsTrigger value="verification" className="shrink-0 whitespace-nowrap text-xs sm:text-sm">Verification</TabsTrigger>
+            <TabsTrigger value="emails" className="shrink-0 whitespace-nowrap text-xs sm:text-sm">Emails</TabsTrigger>
+            <TabsTrigger value="announcements" className="shrink-0 whitespace-nowrap text-xs sm:text-sm">Announcements</TabsTrigger>
+            <TabsTrigger value="system" className="shrink-0 whitespace-nowrap text-xs sm:text-sm">System Health</TabsTrigger>
+            <TabsTrigger value="security" className="shrink-0 whitespace-nowrap text-xs sm:text-sm">Security</TabsTrigger>
+            <TabsTrigger value="settings" className="shrink-0 whitespace-nowrap text-xs sm:text-sm">Settings</TabsTrigger>
           </TabsList>
 
           <TabsContent value="users">
             <Card>
-              <div className="p-6 border-b">
-                <div className="flex items-center justify-between">
+              <div className="p-4 sm:p-6 border-b">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                   <h3 className="text-foreground">User Management</h3>
-                  <Button>
+                  <Button size="sm">
                     <UserPlus className="w-4 h-4 mr-2" />
                     Add User
                   </Button>
                 </div>
               </div>
+              <div className="overflow-x-auto">
               <Table>
                 <TableHeader>
                   <TableRow>
                     <TableHead>Name</TableHead>
-                    <TableHead>Email</TableHead>
+                    <TableHead className="hidden sm:table-cell">Email</TableHead>
                     <TableHead>Role</TableHead>
                     <TableHead>Status</TableHead>
-                    <TableHead>Age</TableHead>
-                    <TableHead>Devices</TableHead>
-                    <TableHead>Data Points</TableHead>
+                    <TableHead className="hidden md:table-cell">Age</TableHead>
+                    <TableHead className="hidden md:table-cell">Devices</TableHead>
+                    <TableHead className="hidden md:table-cell">Data Points</TableHead>
                     <TableHead>Actions</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -426,7 +427,7 @@ export function AdminDashboard({ user, onLogout }: AdminDashboardProps) {
                           <ShieldCheck className="inline w-4 h-4 ml-1 text-emerald-500" />
                         )}
                       </TableCell>
-                      <TableCell>{u.email}</TableCell>
+                      <TableCell className="hidden sm:table-cell">{u.email}</TableCell>
                       <TableCell>
                         <Badge variant={u.role === 'ADMIN' ? 'destructive' : u.role === 'PROVIDER' ? 'default' : 'secondary'}>
                           {u.role}
@@ -443,11 +444,11 @@ export function AdminDashboard({ user, onLogout }: AdminDashboardProps) {
                           </Badge>
                         )}
                       </TableCell>
-                      <TableCell>{u.age || 'N/A'}</TableCell>
-                      <TableCell>{devices.filter(d => d.userId === u.id).length}</TableCell>
-                      <TableCell>{biomarkers.filter(b => b.userId === u.id).length}</TableCell>
+                      <TableCell className="hidden md:table-cell">{u.age || 'N/A'}</TableCell>
+                      <TableCell className="hidden md:table-cell">{devices.filter(d => d.userId === u.id).length}</TableCell>
+                      <TableCell className="hidden md:table-cell">{biomarkers.filter(b => b.userId === u.id).length}</TableCell>
                       <TableCell>
-                        <div className="flex gap-2">
+                        <div className="flex gap-1 sm:gap-2 flex-wrap">
                           {u.role !== 'ADMIN' && (
                             <>
                               <Button
@@ -480,27 +481,29 @@ export function AdminDashboard({ user, onLogout }: AdminDashboardProps) {
                   ))}
                 </TableBody>
               </Table>
+              </div>
             </Card>
           </TabsContent>
 
           <TabsContent value="devices">
             <Card>
-              <div className="p-6 border-b">
+              <div className="p-4 sm:p-6 border-b">
                 <h3 className="text-foreground">Device Management</h3>
                 <p className="text-sm text-gray-600 mt-1">
                   {devices.length} total devices • {devices.filter(d => d.status === 'active').length} active • {faultyDevices.length} faulty
                 </p>
               </div>
+              <div className="overflow-x-auto">
               <Table>
                 <TableHeader>
                   <TableRow>
                     <TableHead>Device Name</TableHead>
                     <TableHead>Type</TableHead>
-                    <TableHead>User</TableHead>
+                    <TableHead className="hidden md:table-cell">User</TableHead>
                     <TableHead>Status</TableHead>
                     <TableHead>Battery</TableHead>
-                    <TableHead>Last Sync</TableHead>
-                    <TableHead>Auto Mode</TableHead>
+                    <TableHead className="hidden md:table-cell">Last Sync</TableHead>
+                    <TableHead className="hidden lg:table-cell">Auto Mode</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -512,7 +515,7 @@ export function AdminDashboard({ user, onLogout }: AdminDashboardProps) {
                         <TableCell className="capitalize">
                           {device.type.replace(/([A-Z])/g, ' $1').trim()}
                         </TableCell>
-                        <TableCell>{deviceUser?.name || 'Unknown'}</TableCell>
+                        <TableCell className="hidden md:table-cell">{deviceUser?.name || 'Unknown'}</TableCell>
                         <TableCell>
                           <Badge variant={
                             device.status === 'active' ? 'default' : 
@@ -523,10 +526,10 @@ export function AdminDashboard({ user, onLogout }: AdminDashboardProps) {
                           </Badge>
                         </TableCell>
                         <TableCell>{device.batteryLevel}%</TableCell>
-                        <TableCell>
+                        <TableCell className="hidden md:table-cell">
                           {new Date(device.lastSync).toLocaleString(undefined, { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
                         </TableCell>
-                        <TableCell>
+                        <TableCell className="hidden lg:table-cell">
                           <Badge variant={device.autoMode ? 'default' : 'outline'}>
                             {device.autoMode ? 'On' : 'Off'}
                           </Badge>
@@ -536,14 +539,15 @@ export function AdminDashboard({ user, onLogout }: AdminDashboardProps) {
                   })}
                 </TableBody>
               </Table>
+              </div>
             </Card>
           </TabsContent>
 
           {/* Provider Verification Tab */}
           <TabsContent value="verification">
             <Card>
-              <div className="p-6 border-b">
-                <div className="flex items-center justify-between">
+              <div className="p-4 sm:p-6 border-b">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                   <div>
                     <h3 className="text-foreground flex items-center gap-2">
                       <ShieldCheck className="h-5 w-5 text-emerald-600" />
@@ -553,7 +557,7 @@ export function AdminDashboard({ user, onLogout }: AdminDashboardProps) {
                       Review and approve healthcare provider accounts
                     </p>
                   </div>
-                  <div className="flex gap-2">
+                  <div className="flex gap-2 flex-wrap">
                     <Badge variant="default" className="bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-300">
                       <Clock className="w-3 h-3 mr-1" />
                       {users.filter(u => u.role === 'PROVIDER' && u.verification_status === 'pending').length} Pending
@@ -571,13 +575,14 @@ export function AdminDashboard({ user, onLogout }: AdminDashboardProps) {
                   <p>No provider accounts to verify.</p>
                 </div>
               ) : (
+                <div className="overflow-x-auto">
                 <Table>
                   <TableHeader>
                     <TableRow>
                       <TableHead>Provider Name</TableHead>
-                      <TableHead>Email</TableHead>
-                      <TableHead>Registered</TableHead>
-                      <TableHead>Last Login</TableHead>
+                      <TableHead className="hidden sm:table-cell">Email</TableHead>
+                      <TableHead className="hidden md:table-cell">Registered</TableHead>
+                      <TableHead className="hidden md:table-cell">Last Login</TableHead>
                       <TableHead>Status</TableHead>
                       <TableHead>Actions</TableHead>
                     </TableRow>
@@ -588,11 +593,11 @@ export function AdminDashboard({ user, onLogout }: AdminDashboardProps) {
                         <TableCell className="font-medium">
                           {provider.name}
                         </TableCell>
-                        <TableCell>{provider.email}</TableCell>
-                        <TableCell className="text-sm">
+                        <TableCell className="hidden sm:table-cell">{provider.email}</TableCell>
+                        <TableCell className="hidden md:table-cell text-sm">
                           {new Date(provider.created_at).toLocaleDateString()}
                         </TableCell>
-                        <TableCell className="text-sm">
+                        <TableCell className="hidden md:table-cell text-sm">
                           {provider.last_login ? new Date(provider.last_login).toLocaleDateString() : 'Never'}
                         </TableCell>
                         <TableCell>
@@ -611,7 +616,7 @@ export function AdminDashboard({ user, onLogout }: AdminDashboardProps) {
                           )}
                         </TableCell>
                         <TableCell>
-                          <div className="flex gap-2">
+                          <div className="flex gap-1 sm:gap-2 flex-wrap">
                             {!provider.is_verified && (
                               <Button
                                 size="sm"
@@ -655,6 +660,7 @@ export function AdminDashboard({ user, onLogout }: AdminDashboardProps) {
                     ))}
                   </TableBody>
                 </Table>
+                </div>
               )}
             </Card>
           </TabsContent>
@@ -662,8 +668,8 @@ export function AdminDashboard({ user, onLogout }: AdminDashboardProps) {
           {/* Email Logs Tab */}
           <TabsContent value="emails">
             <Card>
-              <div className="p-6 border-b">
-                <div className="flex items-center justify-between">
+              <div className="p-4 sm:p-6 border-b">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                   <div>
                     <h3 className="text-foreground flex items-center gap-2">
                       <Mail className="h-5 w-5 text-blue-600" />
@@ -673,7 +679,7 @@ export function AdminDashboard({ user, onLogout }: AdminDashboardProps) {
                       {emailLogs.length} total emails sent
                     </p>
                   </div>
-                  <div className="flex items-center gap-3">
+                  <div className="flex items-center gap-3 flex-wrap">
                     <Select value={emailFilter} onValueChange={setEmailFilter}>
                       <SelectTrigger className="w-[160px]">
                         <SelectValue placeholder="Filter by type" />
@@ -701,14 +707,15 @@ export function AdminDashboard({ user, onLogout }: AdminDashboardProps) {
                   <p className="text-xs mt-1">Emails are sent for critical alerts, digests, and goal completions.</p>
                 </div>
               ) : (
+                <div className="overflow-x-auto">
                 <Table>
                   <TableHeader>
                     <TableRow>
                       <TableHead>Recipient</TableHead>
                       <TableHead>Type</TableHead>
-                      <TableHead>Subject</TableHead>
+                      <TableHead className="hidden md:table-cell">Subject</TableHead>
                       <TableHead>Status</TableHead>
-                      <TableHead>Sent At</TableHead>
+                      <TableHead className="hidden sm:table-cell">Sent At</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -731,7 +738,7 @@ export function AdminDashboard({ user, onLogout }: AdminDashboardProps) {
                               {log.type.replace(/_/g, ' ')}
                             </Badge>
                           </TableCell>
-                          <TableCell className="max-w-xs truncate">{log.subject}</TableCell>
+                          <TableCell className="hidden md:table-cell max-w-xs truncate">{log.subject}</TableCell>
                           <TableCell>
                             <Badge variant={
                               log.status === 'delivered' ? 'default' :
@@ -744,13 +751,13 @@ export function AdminDashboard({ user, onLogout }: AdminDashboardProps) {
                               {log.status}
                             </Badge>
                           </TableCell>
-                          <TableCell className="text-sm">
-                            {new Date(log.sentAt).toLocaleString()}
+                          <TableCell className="hidden sm:table-cell text-sm">
                           </TableCell>
                         </TableRow>
                       ))}
                   </TableBody>
                 </Table>
+                </div>
               )}
             </Card>
           </TabsContent>
@@ -779,7 +786,7 @@ export function AdminDashboard({ user, onLogout }: AdminDashboardProps) {
                         <label className="text-sm text-gray-600 mb-1 block">Type</label>
                         <Select
                           value={newAnnouncement.type}
-                          onValueChange={(v) => setNewAnnouncement((p) => ({ ...p, type: v }))}
+                          onValueChange={(v: Announcement['type']) => setNewAnnouncement((p) => ({ ...p, type: v }))}
                         >
                           <SelectTrigger>
                             <SelectValue />
@@ -796,7 +803,7 @@ export function AdminDashboard({ user, onLogout }: AdminDashboardProps) {
                         <label className="text-sm text-gray-600 mb-1 block">Expires in</label>
                         <Select
                           value={newAnnouncement.expires_days}
-                          onValueChange={(v) => setNewAnnouncement((p) => ({ ...p, expires_days: v }))}
+                          onValueChange={(v: string) => setNewAnnouncement((p) => ({ ...p, expires_days: v }))}
                         >
                           <SelectTrigger>
                             <SelectValue placeholder="Never" />
@@ -838,6 +845,7 @@ export function AdminDashboard({ user, onLogout }: AdminDashboardProps) {
                     <p>No announcements yet. Create one above to broadcast to all users.</p>
                   </div>
                 ) : (
+                  <div className="overflow-x-auto">
                   <Table>
                     <TableHeader>
                       <TableRow>
@@ -891,7 +899,8 @@ export function AdminDashboard({ user, onLogout }: AdminDashboardProps) {
                         </TableRow>
                       ))}
                     </TableBody>
-                  </Table>
+                    </Table>
+                  </div>
                 )}
               </Card>
             </div>

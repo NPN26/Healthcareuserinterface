@@ -19,6 +19,24 @@ interface BiomarkerChartProps {
 
 type TimeRange = 'daily' | 'weekly' | 'monthly';
 
+interface ChartPoint {
+  time: string;
+  timestamp: string;
+  value: number;
+  minValue?: number;
+  maxValue?: number;
+  systolic?: number;
+  diastolic?: number;
+  minSystolic?: number;
+  maxSystolic?: number;
+  minDiastolic?: number;
+  maxDiastolic?: number;
+  isFaulty?: boolean;
+  deviceName: string;
+  notes?: string;
+  isGap?: boolean;
+}
+
 export function BiomarkerChart({ biomarkers, type, showDetails, devices = [], goals = [] }: BiomarkerChartProps) {
   const [timeRange, setTimeRange] = useState<TimeRange>('daily');
   const [offset, setOffset] = useState(0); // 0 = current period, 1 = previous period, etc.
@@ -293,7 +311,7 @@ export function BiomarkerChart({ biomarkers, type, showDetails, devices = [], go
     sortedData = aggregateDataByHour(sortedData);
   }
 
-  const chartData = sortedData.map(b => {
+  const chartData: ChartPoint[] = sortedData.map(b => {
     const date = new Date(b.timestamp);
     let timeLabel = '';
     
@@ -312,6 +330,7 @@ export function BiomarkerChart({ biomarkers, type, showDetails, devices = [], go
     
     return {
       time: timeLabel,
+      timestamp: b.timestamp,
       value: b.type === 'steps' ? Math.round(b.value) : b.value,
       minValue: bWithRange.minValue,
       maxValue: bWithRange.maxValue,
@@ -514,22 +533,55 @@ export function BiomarkerChart({ biomarkers, type, showDetails, devices = [], go
 
   // ── FR3.2.3 Data Gap Visualization ──
   // Insert null values for time gaps (connectNulls: false will break the line)
-  const insertDataGaps = (data: typeof chartData) => {
+  const insertDataGaps = (data: ChartPoint[]) => {
     if (data.length < 2) return data;
-    const result: typeof chartData = [];
+
+    const expectedIntervalMs =
+      timeRange === 'daily'
+        ? 60 * 60 * 1000
+        : 24 * 60 * 60 * 1000;
+
+    const formatGapLabel = (timestamp: number) => {
+      const date = new Date(timestamp);
+      if (timeRange === 'monthly') {
+        return date.toLocaleString(undefined, { month: 'short', day: 'numeric' });
+      }
+      if (timeRange === 'weekly') {
+        return date.toLocaleString(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
+      }
+      return date.toLocaleTimeString(undefined, { hour: 'numeric', hour12: true }).replace(' ', '');
+    };
+
+    const result: ChartPoint[] = [];
     for (let i = 0; i < data.length; i++) {
-      result.push(data[i]);
+      const current = data[i];
+      result.push(current);
+
       if (i < data.length - 1) {
-        // Check for time gap: if the gap between consecutive points is > 2x the median interval, insert null
-        // For simplicity we compare adjacent labels - they'll be different-enough for visible gaps
-        // A more robust approach: compare timestamps
-        const gap = i < data.length - 1;
-        // We'll add a null gap marker between distinct time jumps
-        // (handled by the chart config connectNulls: false)
+        const currentTime = new Date(current.timestamp).getTime();
+        const nextTime = new Date(data[i + 1].timestamp).getTime();
+        const gapMs = nextTime - currentTime;
+        const missingSlots = Math.floor(gapMs / expectedIntervalMs) - 1;
+
+        if (missingSlots > 0) {
+          for (let slot = 1; slot <= missingSlots; slot++) {
+            const gapTimestamp = currentTime + (expectedIntervalMs * slot);
+            result.push({
+              time: formatGapLabel(gapTimestamp),
+              timestamp: new Date(gapTimestamp).toISOString(),
+              value: Number.NaN,
+              deviceName: 'No data',
+              notes: 'No data recorded',
+              isGap: true,
+            });
+          }
+        }
       }
     }
     return result;
   };
+
+  const displayChartData = useMemo(() => insertDataGaps(chartData), [chartData, timeRange]);
 
   // ── Anomaly count for review badge ──
   const abnormalCount = useMemo(() => {
@@ -580,9 +632,9 @@ export function BiomarkerChart({ biomarkers, type, showDetails, devices = [], go
   };
 
   return (
-    <Card className="p-6">
+    <Card className="p-4 sm:p-6">
       <div className="space-y-4">
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
           <div>
             <h3 className="text-foreground">{getBiomarkerLabel(type)}</h3>
             <p className="text-sm text-muted-foreground">{getTimeRangeLabel()}</p>
@@ -726,7 +778,7 @@ export function BiomarkerChart({ biomarkers, type, showDetails, devices = [], go
                     },
                     colors: ['#8b5cf6', '#c084fc'],
                     xaxis: {
-                      categories: chartData.map(d => d.time),
+                      categories: displayChartData.map(d => d.time),
                       labels: {
                         style: {
                           colors: '#9ca3af',
@@ -751,7 +803,15 @@ export function BiomarkerChart({ biomarkers, type, showDetails, devices = [], go
                     },
                     tooltip: {
                       custom: ({ series, seriesIndex, dataPointIndex, w }) => {
-                        const data = chartData[dataPointIndex];
+                        const data = displayChartData[dataPointIndex];
+                        if (!data || data.isGap) {
+                          return `
+                            <div class="bg-white p-3 rounded-lg">
+                              <p class="text-sm font-medium text-gray-900 dark:text-gray-600 mb-1">No data</p>
+                              <p class="text-xs text-gray-500">No blood pressure reading was recorded for this time slot.</p>
+                            </div>
+                          `;
+                        }
                         const showRange = data.notes && data.notes.includes('readings');
                         const systolicRange = data.minSystolic !== undefined && data.maxSystolic !== undefined && data.minSystolic !== data.maxSystolic
                           ? `Range: ${Math.round(data.minSystolic)} - ${Math.round(data.maxSystolic)} ${getBiomarkerUnit(type)}`
@@ -787,9 +847,9 @@ export function BiomarkerChart({ biomarkers, type, showDetails, devices = [], go
                   series={[
                     {
                       name: 'Blood Pressure',
-                      data: chartData.map(d => ({
+                      data: displayChartData.map(d => ({
                         x: d.time,
-                        y: [d.diastolic || 0, d.systolic || 0]
+                        y: d.isGap ? null : [d.diastolic || 0, d.systolic || 0]
                       }))
                     }
                   ]}
@@ -838,7 +898,7 @@ export function BiomarkerChart({ biomarkers, type, showDetails, devices = [], go
                     },
                     colors: [getBiomarkerColor(type)],
                     xaxis: {
-                      categories: chartData.map(d => d.time),
+                      categories: displayChartData.map(d => d.time),
                       labels: {
                         style: {
                           colors: '#9ca3af',
@@ -863,7 +923,15 @@ export function BiomarkerChart({ biomarkers, type, showDetails, devices = [], go
                     },
                     tooltip: {
                       custom: ({ series, seriesIndex, dataPointIndex, w }) => {
-                        const data = chartData[dataPointIndex];
+                        const data = displayChartData[dataPointIndex];
+                        if (!data || data.isGap) {
+                          return `
+                            <div class="bg-white p-3 rounded-lg">
+                              <p class="text-sm font-medium text-gray-900 dark:text-gray-600 mb-1">No data</p>
+                              <p class="text-xs text-gray-500">No ${getBiomarkerLabel(type).toLowerCase()} reading was recorded for this time slot.</p>
+                            </div>
+                          `;
+                        }
                         const displayValue = type === 'steps' ? Math.round(data.value) : data.value.toFixed(1);
                         const hasRange = data.minValue !== undefined && data.maxValue !== undefined && data.minValue !== data.maxValue;
                         const rangeText = hasRange 
@@ -893,13 +961,15 @@ export function BiomarkerChart({ biomarkers, type, showDetails, devices = [], go
                     {
                       name: getBiomarkerLabel(type),
                       data: type === 'steps'
-                        ? chartData.map(d => ({
+                        ? displayChartData.map(d => ({
                             x: d.time,
-                            y: d.value
+                            y: d.isGap ? null : d.value
                           }))
-                        : chartData.map(d => ({
+                        : displayChartData.map(d => ({
                             x: d.time,
-                            y: d.minValue !== undefined && d.maxValue !== undefined && d.minValue !== d.maxValue
+                            y: d.isGap
+                              ? null
+                              : d.minValue !== undefined && d.maxValue !== undefined && d.minValue !== d.maxValue
                               ? [d.minValue, d.maxValue]
                               : [d.value, d.value]
                           }))

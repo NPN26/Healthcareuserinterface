@@ -55,6 +55,37 @@
     build: {
       target: 'esnext',
       outDir: 'build',
+      rollupOptions: {
+        output: {
+          manualChunks(id) {
+            if (!id.includes('node_modules')) {
+              return undefined;
+            }
+
+            if (id.includes('@supabase')) {
+              return 'supabase';
+            }
+
+            if (id.includes('apexcharts') || id.includes('react-apexcharts')) {
+              return 'apexcharts';
+            }
+
+            if (id.includes('chart.js')) {
+              return 'chartjs';
+            }
+
+            if (id.includes('jspdf') || id.includes('jspdf-autotable')) {
+              return 'pdf-export';
+            }
+
+            if (id.includes('html2canvas')) {
+              return 'html-capture';
+            }
+
+            return 'vendor';
+          },
+        },
+      },
     },
     server: {
       port: 3000,
