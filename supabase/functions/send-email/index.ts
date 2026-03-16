@@ -14,16 +14,39 @@ import { serve } from 'https://deno.land/std@0.177.0/http/server.ts'
 const RESEND_API_KEY = Deno.env.get('RESEND_API_KEY')
 const FROM_EMAIL = Deno.env.get('FROM_EMAIL') || 'HealthApp <no-reply@healthapp.dev>'
 
+const ALLOWED_ORIGINS = (Deno.env.get('ALLOWED_ORIGINS') || '').split(',').filter(Boolean)
+
+function getCorsOrigin(req: Request): string {
+  const origin = req.headers.get('origin') || ''
+  if (ALLOWED_ORIGINS.length === 0) return origin // dev fallback
+  return ALLOWED_ORIGINS.includes(origin) ? origin : ALLOWED_ORIGINS[0]
+}
+
+const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+const rateLimitMap = new Map<string, number[]>()
+const RATE_LIMIT_WINDOW_MS = 60_000
+const RATE_LIMIT_MAX = 5
+
+function isRateLimited(key: string): boolean {
+  const now = Date.now()
+  const timestamps = (rateLimitMap.get(key) || []).filter(t => now - t < RATE_LIMIT_WINDOW_MS)
+  if (timestamps.length >= RATE_LIMIT_MAX) return true
+  timestamps.push(now)
+  rateLimitMap.set(key, timestamps)
+  return false
+}
+
 serve(async (req: Request) => {
+  const corsOrigin = getCorsOrigin(req)
+  const corsHeaders = {
+    'Access-Control-Allow-Origin': corsOrigin,
+    'Access-Control-Allow-Methods': 'POST',
+    'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  }
+
   // CORS
   if (req.method === 'OPTIONS') {
-    return new Response('ok', {
-      headers: {
-        'Access-Control-Allow-Origin': '*',
-        'Access-Control-Allow-Methods': 'POST',
-        'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-      },
-    })
+    return new Response('ok', { headers: corsHeaders })
   }
 
   try {
@@ -32,15 +55,28 @@ serve(async (req: Request) => {
     if (!to || !subject || !html) {
       return new Response(JSON.stringify({ error: 'Missing required fields' }), {
         status: 400,
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...corsHeaders },
+      })
+    }
+
+    if (!EMAIL_REGEX.test(to)) {
+      return new Response(JSON.stringify({ error: 'Invalid email address' }), {
+        status: 400,
+        headers: { 'Content-Type': 'application/json', ...corsHeaders },
+      })
+    }
+
+    if (isRateLimited(to)) {
+      return new Response(JSON.stringify({ error: 'Too many requests, please try again later' }), {
+        status: 429,
+        headers: { 'Content-Type': 'application/json', ...corsHeaders },
       })
     }
 
     if (!RESEND_API_KEY) {
-      console.warn('RESEND_API_KEY not set - skipping actual send')
       return new Response(
         JSON.stringify({ status: 'skipped', message: 'No API key configured' }),
-        { status: 200, headers: { 'Content-Type': 'application/json' } }
+        { status: 200, headers: { 'Content-Type': 'application/json', ...corsHeaders } }
       )
     }
 
@@ -62,21 +98,19 @@ serve(async (req: Request) => {
     const data = await res.json()
 
     if (!res.ok) {
-      console.error('Resend error:', data)
       return new Response(
-        JSON.stringify({ status: 'failed', error: data }),
-        { status: 500, headers: { 'Content-Type': 'application/json' } }
+        JSON.stringify({ status: 'failed', error: 'Email delivery failed' }),
+        { status: 500, headers: { 'Content-Type': 'application/json', ...corsHeaders } }
       )
     }
 
     return new Response(
       JSON.stringify({ status: 'delivered', id: data.id }),
-      { status: 200, headers: { 'Content-Type': 'application/json' } }
+      { status: 200, headers: { 'Content-Type': 'application/json', ...corsHeaders } }
     )
-  } catch (err) {
-    console.error('send-email error:', err)
+  } catch (_err) {
     return new Response(
-      JSON.stringify({ status: 'failed', error: String(err) }),
+      JSON.stringify({ status: 'failed', error: 'Internal server error' }),
       { status: 500, headers: { 'Content-Type': 'application/json' } }
     )
   }

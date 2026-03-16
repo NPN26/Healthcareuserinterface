@@ -60,7 +60,6 @@ export function SharingSettingsPage({ userId, onBack }: SharingSettingsPageProps
       setActiveConsents(active);
       setHistoricalConsents(historical);
     } catch (error) {
-      console.error('Error loading access data:', error);
       toast.error('Failed to load sharing settings');
     } finally {
       setIsLoading(false);
@@ -78,7 +77,6 @@ export function SharingSettingsPage({ userId, onBack }: SharingSettingsPageProps
         toast.error(result.message);
       }
     } catch (error) {
-      console.error('Error approving request:', error);
       toast.error('Failed to approve access request');
     } finally {
       setActionInProgress(null);
@@ -96,7 +94,6 @@ export function SharingSettingsPage({ userId, onBack }: SharingSettingsPageProps
         toast.error(result.message);
       }
     } catch (error) {
-      console.error('Error denying request:', error);
       toast.error('Failed to deny access request');
     } finally {
       setActionInProgress(null);
@@ -116,7 +113,6 @@ export function SharingSettingsPage({ userId, onBack }: SharingSettingsPageProps
         toast.error(result.message);
       }
     } catch (error) {
-      console.error('Error revoking access:', error);
       toast.error('Failed to revoke access');
     } finally {
       setActionInProgress(null);

@@ -32,8 +32,8 @@ export function SystemHealth({ biomarkers, devices, users }: SystemHealthProps) 
       ]);
       setSystemMetrics(metrics);
       setThroughputData(throughput);
-    } catch (error) {
-      console.error('Error loading system data:', error);
+    } catch {
+      // Error handled silently
     } finally {
       setIsLoading(false);
     }

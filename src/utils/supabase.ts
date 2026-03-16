@@ -1,5 +1,6 @@
 import { createClient } from '@supabase/supabase-js'
 import { Biomarker, Device, Alert } from './mockData'
+import { secureGetItem, secureSetItem } from './secureStorage'
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY
@@ -11,14 +12,42 @@ if (!supabaseUrl || !supabaseAnonKey) {
 export const supabase = createClient(supabaseUrl, supabaseAnonKey)
 
 /**
+ * Verify the current authenticated user has ADMIN role.
+ * Checks the server-side session and fetches the role from the database
+ * to prevent client-side role spoofing.
+ */
+async function requireAdmin(): Promise<{ authorized: boolean; userId: string; error?: string }> {
+  const { data: { user: authUser }, error: authError } = await supabase.auth.getUser()
+  if (authError || !authUser) {
+    return { authorized: false, userId: '', error: 'Not authenticated' }
+  }
+
+  const { data: userData, error: userError } = await supabase
+    .from('users')
+    .select('role')
+    .eq('user_id', authUser.id)
+    .single()
+
+  if (userError || !userData || userData.role !== 'ADMIN') {
+    return { authorized: false, userId: authUser.id, error: 'Unauthorized: admin role required' }
+  }
+
+  return { authorized: true, userId: authUser.id }
+}
+
+/**
  * Generate a UUID v4
  */
 export function generateUUID(): string {
-  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
-    const r = Math.random() * 16 | 0;
-    const v = c === 'x' ? r : (r & 0x3 | 0x8);
-    return v.toString(16);
-  });
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID();
+  }
+  const bytes = new Uint8Array(16);
+  crypto.getRandomValues(bytes);
+  bytes[6] = (bytes[6] & 0x0f) | 0x40;
+  bytes[8] = (bytes[8] & 0x3f) | 0x80;
+  const hex = Array.from(bytes, b => b.toString(16).padStart(2, '0')).join('');
+  return `${hex.slice(0,8)}-${hex.slice(8,12)}-${hex.slice(12,16)}-${hex.slice(16,20)}-${hex.slice(20,32)}`;
 }
 
 /**
@@ -45,7 +74,6 @@ export async function fetchBiomarkers(userId: string): Promise<Biomarker[]> {
       .limit(1000)
 
     if (error) {
-      console.error('Error fetching biomarkers:', error)
       return []
     }
 
@@ -97,7 +125,6 @@ export async function fetchBiomarkers(userId: string): Promise<Biomarker[]> {
         return biomarker;
       })
   } catch (error) {
-    console.error('Error in fetchBiomarkers:', error)
     return []
   }
 }
@@ -109,12 +136,11 @@ export async function fetchDevices(userId: string): Promise<Device[]> {
   try {
     const { data, error } = await supabase
       .from('data_sources')
-      .select('*')
+      .select('source_id, user_id, name, status, last_sync, priority, metadata')
       .eq('user_id', userId)
       .order('created_at', { ascending: false })
 
     if (error) {
-      console.error('Error fetching devices:', error)
       return []
     }
 
@@ -137,7 +163,6 @@ export async function fetchDevices(userId: string): Promise<Device[]> {
       } as Device
     })
   } catch (error) {
-    console.error('Error in fetchDevices:', error)
     return []
   }
 }
@@ -150,14 +175,13 @@ export async function fetchAlerts(userId: string): Promise<Alert[]> {
   try {
     const { data, error } = await supabase
       .from('notifications')
-      .select('*')
+      .select('notification_id, user_id, type, content, timestamp, is_read')
       .eq('user_id', userId)
       .eq('is_read', false)
       .order('timestamp', { ascending: false })
       .limit(100)
 
     if (error) {
-      console.error('Error fetching alerts:', error)
       return []
     }
 
@@ -176,7 +200,6 @@ export async function fetchAlerts(userId: string): Promise<Alert[]> {
       } as Alert
     })
   } catch (error) {
-    console.error('Error in fetchAlerts:', error)
     return []
   }
 }
@@ -201,18 +224,16 @@ export async function fetchNotifications(userId: string): Promise<NotificationDa
   try {
     const { data, error } = await supabase
       .from('notifications')
-      .select('*')
+      .select('notification_id, user_id, type, content, timestamp, is_read, read_at')
       .eq('user_id', userId)
       .order('timestamp', { ascending: false })
 
     if (error) {
-      console.error('Error fetching notifications:', error)
       return []
     }
 
     return data || []
   } catch (error) {
-    console.error('Error in fetchNotifications:', error)
     return []
   }
 }
@@ -229,13 +250,11 @@ export async function fetchUnreadNotificationsCount(userId: string): Promise<num
       .eq('is_read', false)
 
     if (error) {
-      console.error('Error fetching unread count:', error)
       return 0
     }
 
     return count || 0
   } catch (error) {
-    console.error('Error in fetchUnreadNotificationsCount:', error)
     return 0
   }
 }
@@ -254,13 +273,11 @@ export async function markNotificationAsRead(notificationId: string): Promise<bo
       .eq('notification_id', notificationId)
 
     if (error) {
-      console.error('Error marking notification as read:', error)
       return false
     }
 
     return true
   } catch (error) {
-    console.error('Error in markNotificationAsRead:', error)
     return false
   }
 }
@@ -280,13 +297,11 @@ export async function markAllNotificationsAsRead(userId: string): Promise<boolea
       .eq('is_read', false)
 
     if (error) {
-      console.error('Error marking all notifications as read:', error)
       return false
     }
 
     return true
   } catch (error) {
-    console.error('Error in markAllNotificationsAsRead:', error)
     return false
   }
 }
@@ -302,13 +317,11 @@ export async function deleteNotification(notificationId: string): Promise<boolea
       .eq('notification_id', notificationId)
 
     if (error) {
-      console.error('Error deleting notification:', error)
       return false
     }
 
     return true
   } catch (error) {
-    console.error('Error in deleteNotification:', error)
     return false
   }
 }
@@ -324,13 +337,11 @@ export async function deleteAllNotifications(userId: string): Promise<boolean> {
       .eq('user_id', userId)
 
     if (error) {
-      console.error('Error deleting all notifications:', error)
       return false
     }
 
     return true
   } catch (error) {
-    console.error('Error in deleteAllNotifications:', error)
     return false
   }
 }
@@ -353,17 +364,12 @@ export async function cleanupExpiredNotifications(): Promise<number> {
       .select('notification_id')
 
     if (error) {
-      console.error('Error cleaning up expired notifications:', error)
       return 0
     }
 
     const count = data?.length || 0
-    if (count > 0) {
-      console.log(`Cleaned up ${count} expired notifications`)
-    }
     return count
   } catch (error) {
-    console.error('Error in cleanupExpiredNotifications:', error)
     return 0
   }
 }
@@ -394,13 +400,11 @@ export async function createNotification(
       .single()
 
     if (error) {
-      console.error('Error creating notification:', error)
       return null
     }
 
     return data
   } catch (error) {
-    console.error('Error in createNotification:', error)
     return null
   }
 }
@@ -455,20 +459,19 @@ export async function fetchGoals(userId: string): Promise<HealthGoal[]> {
   try {
     const { data, error } = await supabase
       .from('goals')
-      .select('*')
+      .select('goal_id, user_id, category, start_date, end_date, progress, target_value, created_at, updated_at')
       .eq('user_id', userId)
       .order('created_at', { ascending: false })
 
     if (error) {
-      console.warn('Error fetching goals from database, using localStorage fallback:', error)
       // Fallback to localStorage
-      const storedGoals = JSON.parse(localStorage.getItem('healthApp_goals') || '[]');
+      const storedGoals = JSON.parse(await secureGetItem('healthApp_goals') || '[]');
       return storedGoals.filter((g: HealthGoal) => g.userId === userId);
     }
 
     if (!data) {
       // Fallback to localStorage if no data
-      const storedGoals = JSON.parse(localStorage.getItem('healthApp_goals') || '[]');
+      const storedGoals = JSON.parse(await secureGetItem('healthApp_goals') || '[]');
       return storedGoals.filter((g: HealthGoal) => g.userId === userId);
     }
 
@@ -510,15 +513,14 @@ export async function fetchGoals(userId: string): Promise<HealthGoal[]> {
     });
 
     // Sync to localStorage for offline access
-    const allStoredGoals = JSON.parse(localStorage.getItem('healthApp_goals') || '[]');
+    const allStoredGoals = JSON.parse(await secureGetItem('healthApp_goals') || '[]');
     const otherUsersGoals = allStoredGoals.filter((g: HealthGoal) => g.userId !== userId);
-    localStorage.setItem('healthApp_goals', JSON.stringify([...otherUsersGoals, ...goals]));
+    await secureSetItem('healthApp_goals', JSON.stringify([...otherUsersGoals, ...goals]));
 
     return goals;
   } catch (error) {
-    console.warn('Error in fetchGoals, using localStorage fallback:', error)
     // Fallback to localStorage
-    const storedGoals = JSON.parse(localStorage.getItem('healthApp_goals') || '[]');
+    const storedGoals = JSON.parse(await secureGetItem('healthApp_goals') || '[]');
     return storedGoals.filter((g: HealthGoal) => g.userId === userId);
   }
 }
@@ -531,7 +533,6 @@ export async function createGoal(goal: Omit<HealthGoal, 'id' | 'createdAt'>): Pr
     // Only allow goal types that exist in database enum
     const allowedTypes = ['steps', 'sleep', 'weight'];
     if (!allowedTypes.includes(goal.type)) {
-      console.warn(`Goal type '${goal.type}' is not supported in database. Only steps, sleep, and weight are currently supported.`);
       return null;
     }
 
@@ -566,7 +567,6 @@ export async function createGoal(goal: Omit<HealthGoal, 'id' | 'createdAt'>): Pr
       .single()
 
     if (error) {
-      console.error('Error creating goal:', error)
       return null
     }
 
@@ -583,13 +583,12 @@ export async function createGoal(goal: Omit<HealthGoal, 'id' | 'createdAt'>): Pr
     } as HealthGoal;
 
     // Sync to localStorage
-    const allGoals = JSON.parse(localStorage.getItem('healthApp_goals') || '[]');
+    const allGoals = JSON.parse(await secureGetItem('healthApp_goals') || '[]');
     allGoals.push(createdGoal);
-    localStorage.setItem('healthApp_goals', JSON.stringify(allGoals));
+    await secureSetItem('healthApp_goals', JSON.stringify(allGoals));
 
     return createdGoal;
   } catch (error) {
-    console.error('Error in createGoal:', error)
     return null
   }
 }
@@ -641,23 +640,21 @@ export async function updateGoal(goalId: string, updates: Partial<HealthGoal>): 
       .eq('goal_id', goalId)
 
     if (error) {
-      console.error('Error updating goal:', error)
       return false
     }
 
     // Sync to localStorage
-    const allGoals = JSON.parse(localStorage.getItem('healthApp_goals') || '[]');
+    const allGoals = JSON.parse(await secureGetItem('healthApp_goals') || '[]');
     const updatedGoals = allGoals.map((g: HealthGoal) => {
       if (g.id === goalId) {
         return { ...g, ...updates };
       }
       return g;
     });
-    localStorage.setItem('healthApp_goals', JSON.stringify(updatedGoals));
+    await secureSetItem('healthApp_goals', JSON.stringify(updatedGoals));
 
     return true
   } catch (error) {
-    console.error('Error in updateGoal:', error)
     return false
   }
 }
@@ -673,18 +670,16 @@ export async function deleteGoal(goalId: string): Promise<boolean> {
       .eq('goal_id', goalId)
 
     if (error) {
-      console.error('Error deleting goal:', error)
       return false
     }
 
     // Sync to localStorage
-    const allGoals = JSON.parse(localStorage.getItem('healthApp_goals') || '[]');
+    const allGoals = JSON.parse(await secureGetItem('healthApp_goals') || '[]');
     const updatedGoals = allGoals.filter((g: HealthGoal) => g.id !== goalId);
-    localStorage.setItem('healthApp_goals', JSON.stringify(updatedGoals));
+    await secureSetItem('healthApp_goals', JSON.stringify(updatedGoals));
 
     return true
   } catch (error) {
-    console.error('Error in deleteGoal:', error)
     return false
   }
 }
@@ -718,12 +713,10 @@ export async function fetchPatients(providerId: string): Promise<Patient[]> {
       .is('revoked_at', null)
 
     if (consentError) {
-      console.error('Error fetching consents:', consentError)
       return []
     }
 
     if (!consents || consents.length === 0) {
-      console.log('No patients have granted consent to this provider')
       return []
     }
 
@@ -733,13 +726,12 @@ export async function fetchPatients(providerId: string): Promise<Patient[]> {
     // Fetch user details for consented patients
     const { data, error } = await supabase
       .from('users')
-      .select('*')
+      .select('user_id, email, name, role, created_at, last_login')
       .eq('role', 'END_USER')
       .in('user_id', patientIds)
       .order('name', { ascending: true })
 
     if (error) {
-      console.error('Error fetching patients:', error)
       return []
     }
 
@@ -755,7 +747,6 @@ export async function fetchPatients(providerId: string): Promise<Patient[]> {
       last_login: user.last_login
     }))
   } catch (error) {
-    console.error('Error in fetchPatients:', error)
     return []
   }
 }
@@ -776,12 +767,10 @@ export async function fetchAllPatientsBiomarkers(providerId: string): Promise<Bi
       .is('revoked_at', null)
 
     if (consentError) {
-      console.error('Error fetching consents:', consentError)
       return []
     }
 
     if (!consents || consents.length === 0) {
-      console.log('No patients have granted consent to this provider')
       return []
     }
 
@@ -808,7 +797,6 @@ export async function fetchAllPatientsBiomarkers(providerId: string): Promise<Bi
       .limit(5000) // Limit to recent data
 
     if (error) {
-      console.error('Error fetching all patients biomarkers:', error)
       return []
     }
 
@@ -856,7 +844,6 @@ export async function fetchAllPatientsBiomarkers(providerId: string): Promise<Bi
         return biomarker;
       })
   } catch (error) {
-    console.error('Error in fetchAllPatientsBiomarkers:', error)
     return []
   }
 }
@@ -877,12 +864,10 @@ export async function fetchAllPatientsAlerts(providerId: string): Promise<Alert[
       .is('revoked_at', null)
 
     if (consentError) {
-      console.error('Error fetching consents:', consentError)
       return []
     }
 
     if (!consents || consents.length === 0) {
-      console.log('No patients have granted consent to this provider')
       return []
     }
 
@@ -891,14 +876,13 @@ export async function fetchAllPatientsAlerts(providerId: string): Promise<Alert[
 
     const { data, error } = await supabase
       .from('notifications')
-      .select('*')
+      .select('notification_id, user_id, type, content, timestamp, is_read')
       .eq('type', 'ALERT')
       .in('user_id', patientIds)
       .order('timestamp', { ascending: false })
       .limit(1000)
 
     if (error) {
-      console.error('Error fetching all patients alerts:', error)
       return []
     }
 
@@ -917,7 +901,6 @@ export async function fetchAllPatientsAlerts(providerId: string): Promise<Alert[
       } as Alert
     })
   } catch (error) {
-    console.error('Error in fetchAllPatientsAlerts:', error)
     return []
   }
 }
@@ -996,7 +979,6 @@ export async function createAccessRequest(providerId: string, patientEmail: stri
       })
 
     if (insertError) {
-      console.error('Error creating access request:', insertError)
       return { success: false, message: 'Failed to create access request' }
     }
 
@@ -1012,7 +994,6 @@ export async function createAccessRequest(providerId: string, patientEmail: stri
 
     return { success: true, message: `Access request sent to ${patientData.name}` }
   } catch (error) {
-    console.error('Error in createAccessRequest:', error)
     return { success: false, message: 'An error occurred while creating the access request' }
   }
 }
@@ -1040,7 +1021,6 @@ export async function fetchPendingAccessRequests(patientId: string): Promise<Acc
       .order('requested_at', { ascending: false })
 
     if (error) {
-      console.error('Error fetching pending requests:', error)
       return []
     }
 
@@ -1058,7 +1038,6 @@ export async function fetchPendingAccessRequests(patientId: string): Promise<Acc
       requested_at: item.requested_at
     }))
   } catch (error) {
-    console.error('Error in fetchPendingAccessRequests:', error)
     return []
   }
 }
@@ -1085,7 +1064,6 @@ export async function fetchAllAccessConsents(patientId: string): Promise<AccessR
       .order('requested_at', { ascending: false })
 
     if (error) {
-      console.error('Error fetching access consents:', error)
       return []
     }
 
@@ -1103,7 +1081,6 @@ export async function fetchAllAccessConsents(patientId: string): Promise<AccessR
       requested_at: item.requested_at
     }))
   } catch (error) {
-    console.error('Error in fetchAllAccessConsents:', error)
     return []
   }
 }
@@ -1125,7 +1102,6 @@ export async function approveAccessRequest(consentId: string, providerId: string
       .eq('status', 'PENDING')
 
     if (error) {
-      console.error('Error approving access request:', error)
       return { success: false, message: 'Failed to approve access request' }
     }
 
@@ -1150,7 +1126,6 @@ export async function approveAccessRequest(consentId: string, providerId: string
 
     return { success: true, message: 'Access request approved' }
   } catch (error) {
-    console.error('Error in approveAccessRequest:', error)
     return { success: false, message: 'An error occurred while approving the request' }
   }
 }
@@ -1171,13 +1146,11 @@ export async function denyAccessRequest(consentId: string): Promise<{ success: b
       .eq('status', 'PENDING')
 
     if (error) {
-      console.error('Error denying access request:', error)
       return { success: false, message: 'Failed to deny access request' }
     }
 
     return { success: true, message: 'Access request denied' }
   } catch (error) {
-    console.error('Error in denyAccessRequest:', error)
     return { success: false, message: 'An error occurred while denying the request' }
   }
 }
@@ -1198,13 +1171,11 @@ export async function revokeAccessConsent(consentId: string): Promise<{ success:
       .eq('status', 'ACTIVE')
 
     if (error) {
-      console.error('Error revoking access:', error)
       return { success: false, message: 'Failed to revoke access' }
     }
 
     return { success: true, message: 'Access revoked successfully' }
   } catch (error) {
-    console.error('Error in revokeAccessConsent:', error)
     return { success: false, message: 'An error occurred while revoking access' }
   }
 }
@@ -1232,29 +1203,23 @@ export interface AdminUser {
  */
 export async function fetchAllUsers(): Promise<AdminUser[]> {
   try {
+    const auth = await requireAdmin()
+    if (!auth.authorized) return []
+
     const { data, error } = await supabase
       .from('users')
-      .select('*')
+      .select('user_id, email, name, role, age, created_at, last_login, is_active, is_verified')
       .order('created_at', { ascending: false })
 
     if (error) {
-      console.error('Error fetching all users:', error)
       return []
     }
 
     if (!data) return []
 
-    // Merge localStorage fallbacks for is_active / is_verified when DB columns don't exist
-    const disabledUsers: string[] = JSON.parse(localStorage.getItem('healthApp_disabledUsers') || '[]')
-    const verifiedProviders: string[] = JSON.parse(localStorage.getItem('healthApp_verifiedProviders') || '[]')
-
     return data.map((user: any) => {
-      // DB column takes precedence; if missing (undefined) check localStorage
-      const dbActive = user.is_active
-      const isActive = dbActive !== undefined ? dbActive !== false : !disabledUsers.includes(user.user_id)
-
-      const dbVerified = user.is_verified
-      const isVerified = dbVerified !== undefined ? !!dbVerified : verifiedProviders.includes(user.user_id)
+      const isActive = user.is_active !== false
+      const isVerified = !!user.is_verified
 
       return {
         id: user.user_id,
@@ -1272,7 +1237,6 @@ export async function fetchAllUsers(): Promise<AdminUser[]> {
       }
     })
   } catch (error) {
-    console.error('Error in fetchAllUsers:', error)
     return []
   }
 }
@@ -1283,13 +1247,15 @@ export async function fetchAllUsers(): Promise<AdminUser[]> {
  */
 export async function fetchAllDevices(): Promise<Device[]> {
   try {
+    const auth = await requireAdmin()
+    if (!auth.authorized) return []
+
     const { data, error } = await supabase
       .from('data_sources')
-      .select('*')
+      .select('source_id, user_id, name, status, last_sync, metadata')
       .order('created_at', { ascending: false })
 
     if (error) {
-      console.error('Error fetching all devices:', error)
       return []
     }
 
@@ -1310,7 +1276,6 @@ export async function fetchAllDevices(): Promise<Device[]> {
       } as Device
     })
   } catch (error) {
-    console.error('Error in fetchAllDevices:', error)
     return []
   }
 }
@@ -1321,6 +1286,9 @@ export async function fetchAllDevices(): Promise<Device[]> {
  */
 export async function fetchAllBiomarkers(): Promise<Biomarker[]> {
   try {
+    const auth = await requireAdmin()
+    if (!auth.authorized) return []
+
     const { data, error } = await supabase
       .from('data_points')
       .select(`
@@ -1340,7 +1308,6 @@ export async function fetchAllBiomarkers(): Promise<Biomarker[]> {
       .limit(5000)
 
     if (error) {
-      console.error('Error fetching all biomarkers:', error)
       return []
     }
 
@@ -1388,7 +1355,6 @@ export async function fetchAllBiomarkers(): Promise<Biomarker[]> {
         return biomarker;
       })
   } catch (error) {
-    console.error('Error in fetchAllBiomarkers:', error)
     return []
   }
 }
@@ -1399,14 +1365,16 @@ export async function fetchAllBiomarkers(): Promise<Biomarker[]> {
  */
 export async function fetchAllAlerts(): Promise<Alert[]> {
   try {
+    const auth = await requireAdmin()
+    if (!auth.authorized) return []
+
     const { data, error } = await supabase
       .from('notifications')
-      .select('*')
+      .select('notification_id, user_id, type, content, timestamp, is_read')
       .order('timestamp', { ascending: false })
       .limit(1000)
 
     if (error) {
-      console.error('Error fetching all alerts:', error)
       return []
     }
 
@@ -1422,7 +1390,6 @@ export async function fetchAllAlerts(): Promise<Alert[]> {
       read: notification.is_read
     }))
   } catch (error) {
-    console.error('Error in fetchAllAlerts:', error)
     return []
   }
 }
@@ -1435,19 +1402,20 @@ export async function fetchAllAlerts(): Promise<Alert[]> {
  */
 export async function updateUserRole(userId: string, newRole: 'END_USER' | 'PROVIDER' | 'ADMIN'): Promise<{ success: boolean; message: string }> {
   try {
+    const auth = await requireAdmin()
+    if (!auth.authorized) return { success: false, message: auth.error! }
+
     const { error } = await supabase
       .from('users')
       .update({ role: newRole })
       .eq('user_id', userId)
 
     if (error) {
-      console.error('Error updating user role:', error)
       return { success: false, message: 'Failed to update user role' }
     }
 
     return { success: true, message: 'User role updated successfully' }
   } catch (error) {
-    console.error('Error in updateUserRole:', error)
     return { success: false, message: 'An error occurred while updating user role' }
   }
 }
@@ -1460,6 +1428,9 @@ export async function updateUserRole(userId: string, newRole: 'END_USER' | 'PROV
  */
 export async function deleteUserAndData(userId: string): Promise<{ success: boolean; message: string }> {
   try {
+    const auth = await requireAdmin()
+    if (!auth.authorized) return { success: false, message: auth.error! }
+
     // Note: Cascade delete should handle related data through foreign key constraints
     // This includes: data_points, data_sources, notifications, goals, etc.
     const { error } = await supabase
@@ -1468,13 +1439,11 @@ export async function deleteUserAndData(userId: string): Promise<{ success: bool
       .eq('user_id', userId)
 
     if (error) {
-      console.error('Error deleting user:', error)
       return { success: false, message: 'Failed to delete user' }
     }
 
     return { success: true, message: 'User and associated data deleted successfully' }
   } catch (error) {
-    console.error('Error in deleteUserAndData:', error)
     return { success: false, message: 'An error occurred while deleting user' }
   }
 }
@@ -1486,28 +1455,20 @@ export async function deleteUserAndData(userId: string): Promise<{ success: bool
  */
 export async function updateUserActiveStatus(userId: string, isActive: boolean): Promise<{ success: boolean; message: string }> {
   try {
+    const auth = await requireAdmin()
+    if (!auth.authorized) return { success: false, message: auth.error! }
+
     const { error } = await supabase
       .from('users')
       .update({ is_active: isActive } as any)
       .eq('user_id', userId)
 
     if (error) {
-      // Column may not exist yet - fall back to localStorage tracking
-      console.warn('is_active column may not exist, using localStorage fallback:', error.message)
-      const key = 'healthApp_disabledUsers'
-      const disabled: string[] = JSON.parse(localStorage.getItem(key) || '[]')
-      if (isActive) {
-        localStorage.setItem(key, JSON.stringify(disabled.filter(id => id !== userId)))
-      } else {
-        if (!disabled.includes(userId)) disabled.push(userId)
-        localStorage.setItem(key, JSON.stringify(disabled))
-      }
-      return { success: true, message: isActive ? 'User account enabled (local)' : 'User account disabled (local)' }
+      return { success: false, message: 'Failed to update user active status' }
     }
 
     return { success: true, message: isActive ? 'User account enabled' : 'User account disabled' }
   } catch (error) {
-    console.error('Error in updateUserActiveStatus:', error)
     return { success: false, message: 'An error occurred while updating user status' }
   }
 }
@@ -1519,29 +1480,20 @@ export async function updateUserActiveStatus(userId: string, isActive: boolean):
  */
 export async function updateProviderVerification(userId: string, verified: boolean): Promise<{ success: boolean; message: string }> {
   try {
+    const auth = await requireAdmin()
+    if (!auth.authorized) return { success: false, message: auth.error! }
+
     const { error } = await supabase
       .from('users')
       .update({ is_verified: verified } as any)
       .eq('user_id', userId)
 
     if (error) {
-      // Column may not exist yet - fall back to localStorage tracking
-      console.warn('is_verified column may not exist, using localStorage fallback:', error.message)
-      const key = 'healthApp_verifiedProviders'
-      const verified_list: string[] = JSON.parse(localStorage.getItem(key) || '[]')
-      if (verified) {
-        if (!verified_list.includes(userId)) verified_list.push(userId)
-      } else {
-        const idx = verified_list.indexOf(userId)
-        if (idx >= 0) verified_list.splice(idx, 1)
-      }
-      localStorage.setItem(key, JSON.stringify(verified_list))
-      return { success: true, message: verified ? 'Provider verified (local)' : 'Provider verification revoked (local)' }
+      return { success: false, message: 'Failed to update provider verification' }
     }
 
     return { success: true, message: verified ? 'Provider verified successfully' : 'Provider verification revoked' }
   } catch (error) {
-    console.error('Error in updateProviderVerification:', error)
     return { success: false, message: 'An error occurred while updating verification' }
   }
 }
@@ -1552,22 +1504,17 @@ export async function updateProviderVerification(userId: string, verified: boole
  */
 export async function checkUserIsActive(userId: string): Promise<boolean> {
   try {
-    // Check localStorage fallback first (always available)
-    const disabledUsers: string[] = JSON.parse(localStorage.getItem('healthApp_disabledUsers') || '[]')
-    if (disabledUsers.includes(userId)) return false
-
     const { data, error } = await supabase
       .from('users')
-      .select('*')
+      .select('user_id, is_active')
       .eq('user_id', userId)
       .single()
 
-    if (error || !data) return true // default to active if query fails
-    // If is_active column exists and is explicitly false, block
+    if (error || !data) return false // fail closed: deny access if query fails
     if ((data as any).is_active === false) return false
     return true
   } catch {
-    return true
+    return false // fail closed on network/DB errors
   }
 }
 
@@ -1579,6 +1526,9 @@ export async function checkUserIsActive(userId: string): Promise<boolean> {
  */
 export async function updateDeviceStatus(deviceId: string, status: 'active' | 'inactive' | 'faulty'): Promise<{ success: boolean; message: string }> {
   try {
+    const auth = await requireAdmin()
+    if (!auth.authorized) return { success: false, message: auth.error! }
+
     // Get current metadata
     const { data: currentData } = await supabase
       .from('data_sources')
@@ -1602,13 +1552,11 @@ export async function updateDeviceStatus(deviceId: string, status: 'active' | 'i
       .eq('source_id', deviceId)
 
     if (error) {
-      console.error('Error updating device status:', error)
       return { success: false, message: 'Failed to update device status' }
     }
 
     return { success: true, message: 'Device status updated successfully' }
   } catch (error) {
-    console.error('Error in updateDeviceStatus:', error)
     return { success: false, message: 'An error occurred while updating device status' }
   }
 }
@@ -1620,13 +1568,15 @@ export async function updateDeviceStatus(deviceId: string, status: 'active' | 'i
  */
 export async function updateAllDevicesStatus(status: 'active' | 'inactive' | 'faulty'): Promise<{ success: boolean; message: string; count: number }> {
   try {
+    const auth = await requireAdmin()
+    if (!auth.authorized) return { success: false, message: auth.error!, count: 0 }
+
     // First, fetch all devices to get their current metadata
     const { data: devices, error: fetchError } = await supabase
       .from('data_sources')
       .select('source_id, metadata')
 
     if (fetchError) {
-      console.error('Error fetching devices:', fetchError)
       return { success: false, message: 'Failed to fetch devices', count: 0 }
     }
 
@@ -1658,7 +1608,6 @@ export async function updateAllDevicesStatus(status: 'active' | 'inactive' | 'fa
 
     return { success: true, message: `Updated ${successCount} devices`, count: successCount }
   } catch (error) {
-    console.error('Error in updateAllDevicesStatus:', error)
     return { success: false, message: 'An error occurred while updating devices', count: 0 }
   }
 }
@@ -1670,6 +1619,9 @@ export async function updateAllDevicesStatus(status: 'active' | 'inactive' | 'fa
  */
 export async function clearAllAlertsForAllUsers(): Promise<{ success: boolean; message: string }> {
   try {
+    const auth = await requireAdmin()
+    if (!auth.authorized) return { success: false, message: auth.error! }
+
     const { error } = await supabase
       .from('notifications')
       .update({
@@ -1679,13 +1631,11 @@ export async function clearAllAlertsForAllUsers(): Promise<{ success: boolean; m
       .eq('is_read', false)
 
     if (error) {
-      console.error('Error clearing all alerts:', error)
       return { success: false, message: 'Failed to clear alerts' }
     }
 
     return { success: true, message: 'All alerts cleared successfully' }
   } catch (error) {
-    console.error('Error in clearAllAlertsForAllUsers:', error)
     return { success: false, message: 'An error occurred while clearing alerts' }
   }
 }
@@ -1704,6 +1654,9 @@ export async function createNewUser(userData: {
   age?: number;
 }): Promise<{ success: boolean; message: string; userId?: string }> {
   try {
+    const auth = await requireAdmin()
+    if (!auth.authorized) return { success: false, message: auth.error! }
+
     const userId = generateUUID()
     
     const { error } = await supabase
@@ -1718,13 +1671,11 @@ export async function createNewUser(userData: {
       })
 
     if (error) {
-      console.error('Error creating user:', error)
       return { success: false, message: 'Failed to create user. Email may already exist.' }
     }
 
     return { success: true, message: 'User created successfully', userId }
   } catch (error) {
-    console.error('Error in createNewUser:', error)
     return { success: false, message: 'An error occurred while creating user' }
   }
 }
@@ -1741,19 +1692,20 @@ export async function updateUserDetails(userId: string, updates: {
   age?: number;
 }): Promise<{ success: boolean; message: string }> {
   try {
+    const auth = await requireAdmin()
+    if (!auth.authorized) return { success: false, message: auth.error! }
+
     const { error } = await supabase
       .from('users')
       .update(updates)
       .eq('user_id', userId)
 
     if (error) {
-      console.error('Error updating user:', error)
       return { success: false, message: 'Failed to update user' }
     }
 
     return { success: true, message: 'User updated successfully' }
   } catch (error) {
-    console.error('Error in updateUserDetails:', error)
     return { success: false, message: 'An error occurred while updating user' }
   }
 }
@@ -1806,13 +1758,11 @@ export async function logAuditEvent(
       })
 
     if (error) {
-      console.error('Error logging audit event:', error)
       return { success: false, message: 'Failed to log audit event' }
     }
 
     return { success: true, message: 'Audit event logged' }
   } catch (error) {
-    console.error('Error in logAuditEvent:', error)
     return { success: false, message: 'An error occurred while logging audit event' }
   }
 }
@@ -1841,7 +1791,6 @@ export async function fetchAuditLogs(limit: number = 100): Promise<AuditLog[]> {
       .limit(limit)
 
     if (error) {
-      console.error('Error fetching audit logs:', error)
       return []
     }
 
@@ -1859,7 +1808,6 @@ export async function fetchAuditLogs(limit: number = 100): Promise<AuditLog[]> {
       details: log.details
     }))
   } catch (error) {
-    console.error('Error in fetchAuditLogs:', error)
     return []
   }
 }
@@ -1874,13 +1822,12 @@ export async function fetchAuditLogsByAdmin(adminId: string, limit: number = 100
   try {
     const { data, error } = await supabase
       .from('audit_logs')
-      .select('*')
+      .select('log_id, admin_id, action, target_entity_id, target_entity_type, timestamp, ip_address, details')
       .eq('admin_id', adminId)
       .order('timestamp', { ascending: false })
       .limit(limit)
 
     if (error) {
-      console.error('Error fetching audit logs:', error)
       return []
     }
 
@@ -1897,7 +1844,6 @@ export async function fetchAuditLogsByAdmin(adminId: string, limit: number = 100
       details: log.details
     }))
   } catch (error) {
-    console.error('Error in fetchAuditLogsByAdmin:', error)
     return []
   }
 }
@@ -1943,7 +1889,6 @@ export async function fetchSecurityEvents(limit: number = 50): Promise<AuditLog[
       .limit(limit)
 
     if (error) {
-      console.error('Error fetching security events:', error)
       return []
     }
 
@@ -1961,7 +1906,6 @@ export async function fetchSecurityEvents(limit: number = 50): Promise<AuditLog[
       details: log.details
     }))
   } catch (error) {
-    console.error('Error in fetchSecurityEvents:', error)
     return []
   }
 }
@@ -2036,7 +1980,6 @@ export async function fetchSystemMetrics(): Promise<SystemMetrics> {
       storageUsedMB: Math.round(storageUsedMB * 100) / 100
     };
   } catch (error) {
-    console.error('Error fetching system metrics:', error)
     return {
       totalUsers: 0,
       activeUsers: 0,
@@ -2080,7 +2023,6 @@ export async function fetchDataThroughput(): Promise<{ hour: string; count: numb
 
     return results;
   } catch (error) {
-    console.error('Error fetching data throughput:', error)
     return [];
   }
 }
@@ -2119,18 +2061,16 @@ export async function fetchEmergencyContacts(userId: string): Promise<EmergencyC
   try {
     const { data, error } = await supabase
       .from('emergency_contacts')
-      .select('*')
+      .select('contact_id, user_id, name, phone, email, relationship, is_primary, created_at, updated_at')
       .eq('user_id', userId)
       .order('is_primary', { ascending: false })
       .order('created_at', { ascending: true })
 
     if (error) {
-      console.error('Error fetching emergency contacts:', error)
       return []
     }
     return data || []
   } catch (error) {
-    console.error('Error in fetchEmergencyContacts:', error)
     return []
   }
 }
@@ -2157,12 +2097,10 @@ export async function addEmergencyContact(
       .single()
 
     if (error) {
-      console.error('Error adding emergency contact:', error)
       return null
     }
     return data
   } catch (error) {
-    console.error('Error in addEmergencyContact:', error)
     return null
   }
 }
@@ -2181,12 +2119,10 @@ export async function updateEmergencyContact(
       .eq('contact_id', contactId)
 
     if (error) {
-      console.error('Error updating emergency contact:', error)
       return false
     }
     return true
   } catch (error) {
-    console.error('Error in updateEmergencyContact:', error)
     return false
   }
 }
@@ -2202,12 +2138,10 @@ export async function deleteEmergencyContact(contactId: string): Promise<boolean
       .eq('contact_id', contactId)
 
     if (error) {
-      console.error('Error deleting emergency contact:', error)
       return false
     }
     return true
   } catch (error) {
-    console.error('Error in deleteEmergencyContact:', error)
     return false
   }
 }
@@ -2219,18 +2153,16 @@ export async function fetchEmergencyAlertHistory(userId: string): Promise<Emerge
   try {
     const { data, error } = await supabase
       .from('emergency_alert_history')
-      .select('*')
+      .select('alert_id, user_id, contact_id, alert_type, trigger_reading, status, sent_at, created_at')
       .eq('user_id', userId)
       .order('created_at', { ascending: false })
       .limit(50)
 
     if (error) {
-      console.error('Error fetching emergency alert history:', error)
       return []
     }
     return data || []
   } catch (error) {
-    console.error('Error in fetchEmergencyAlertHistory:', error)
     return []
   }
 }
@@ -2258,7 +2190,6 @@ export async function sendEmergencyAlerts(
         // STUB: In production, send actual SMS/email here
         // e.g. await twilioClient.messages.create({ to: contact.phone, ... })
         // e.g. await sendgridClient.send({ to: contact.email, ... })
-        console.log(`[STUB] Emergency alert sent to ${contact.name} (${alertType}):`, triggerReading)
 
         await supabase
           .from('emergency_alert_history')
@@ -2273,7 +2204,6 @@ export async function sendEmergencyAlerts(
 
         sent++
       } catch (err) {
-        console.error(`Failed to send alert to ${contact.name}:`, err)
 
         await supabase
           .from('emergency_alert_history')
@@ -2291,7 +2221,6 @@ export async function sendEmergencyAlerts(
 
     return { sent, failed }
   } catch (error) {
-    console.error('Error in sendEmergencyAlerts:', error)
     return { sent: 0, failed: 0 }
   }
 }
@@ -2319,18 +2248,16 @@ export async function fetchActiveAnnouncements(): Promise<Announcement[]> {
   try {
     const { data, error } = await supabase
       .from('announcements')
-      .select('*')
+      .select('announcement_id, title, message, type, is_active, created_by, created_at, updated_at, expires_at')
       .eq('is_active', true)
       .or(`expires_at.is.null,expires_at.gt.${new Date().toISOString()}`)
       .order('created_at', { ascending: false })
 
     if (error) {
-      console.error('Error fetching announcements:', error)
       return []
     }
     return data || []
   } catch (error) {
-    console.error('Error in fetchActiveAnnouncements:', error)
     return []
   }
 }
@@ -2342,16 +2269,14 @@ export async function fetchAllAnnouncements(): Promise<Announcement[]> {
   try {
     const { data, error } = await supabase
       .from('announcements')
-      .select('*')
+      .select('announcement_id, title, message, type, is_active, created_by, created_at, updated_at, expires_at')
       .order('created_at', { ascending: false })
 
     if (error) {
-      console.error('Error fetching all announcements:', error)
       return []
     }
     return data || []
   } catch (error) {
-    console.error('Error in fetchAllAnnouncements:', error)
     return []
   }
 }
@@ -2377,12 +2302,10 @@ export async function createAnnouncement(
       .single()
 
     if (error) {
-      console.error('Error creating announcement:', error)
       return null
     }
     return data
   } catch (error) {
-    console.error('Error in createAnnouncement:', error)
     return null
   }
 }
@@ -2401,12 +2324,10 @@ export async function updateAnnouncement(
       .eq('announcement_id', announcementId)
 
     if (error) {
-      console.error('Error updating announcement:', error)
       return false
     }
     return true
   } catch (error) {
-    console.error('Error in updateAnnouncement:', error)
     return false
   }
 }

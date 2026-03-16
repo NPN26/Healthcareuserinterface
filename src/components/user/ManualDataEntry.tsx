@@ -7,6 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { Plus, Heart, Activity, Droplet, Wind, Footprints, Moon, Scale } from 'lucide-react';
 import { toast } from 'sonner';
 import { Biomarker } from '../../utils/mockData';
+import { secureGetItem, secureSetItem } from '../../utils/secureStorage';
 
 interface ManualDataEntryProps {
   isOpen: boolean;
@@ -25,24 +26,40 @@ export function ManualDataEntry({ isOpen, onClose, userId, deviceId, onDataAdded
   const [notes, setNotes] = useState('');
 
   const biomarkerTypes = [
-    { value: 'heartRate', label: 'Heart Rate', icon: Heart, unit: 'bpm', placeholder: '75' },
-    { value: 'bloodPressure', label: 'Blood Pressure', icon: Activity, unit: 'mmHg', placeholder: 'Systolic/Diastolic' },
-    { value: 'glucose', label: 'Blood Glucose', icon: Droplet, unit: 'mg/dL', placeholder: '100' },
-    { value: 'oxygen', label: 'Blood Oxygen', icon: Wind, unit: '%', placeholder: '98' },
-    { value: 'steps', label: 'Steps', icon: Footprints, unit: 'steps', placeholder: '8000' },
-    { value: 'sleep', label: 'Sleep', icon: Moon, unit: 'hours', placeholder: '7.5' },
-    { value: 'weight', label: 'Weight', icon: Scale, unit: 'kg', placeholder: '70' },
+    { value: 'heartRate', label: 'Heart Rate', icon: Heart, unit: 'bpm', placeholder: '75', min: 20, max: 300 },
+    { value: 'bloodPressure', label: 'Blood Pressure', icon: Activity, unit: 'mmHg', placeholder: 'Systolic/Diastolic', min: 40, max: 300 },
+    { value: 'glucose', label: 'Blood Glucose', icon: Droplet, unit: 'mg/dL', placeholder: '100', min: 20, max: 600 },
+    { value: 'oxygen', label: 'Blood Oxygen', icon: Wind, unit: '%', placeholder: '98', min: 50, max: 100 },
+    { value: 'steps', label: 'Steps', icon: Footprints, unit: 'steps', placeholder: '8000', min: 0, max: 200000 },
+    { value: 'sleep', label: 'Sleep', icon: Moon, unit: 'hours', placeholder: '7.5', min: 0, max: 24 },
+    { value: 'weight', label: 'Weight', icon: Scale, unit: 'kg', placeholder: '70', min: 1, max: 500 },
   ];
 
   const handleSubmit = async () => {
+    const typeConfig = biomarkerTypes.find(t => t.value === dataType);
     if (dataType === 'bloodPressure') {
       if (!systolic || !diastolic) {
         toast.error('Please enter both systolic and diastolic values');
         return;
       }
+      const sysVal = parseInt(systolic);
+      const diaVal = parseInt(diastolic);
+      if (isNaN(sysVal) || isNaN(diaVal) || sysVal < 40 || sysVal > 300 || diaVal < 20 || diaVal > 200) {
+        toast.error('Blood pressure values out of valid range (systolic: 40-300, diastolic: 20-200)');
+        return;
+      }
+      if (diaVal >= sysVal) {
+        toast.error('Diastolic must be lower than systolic');
+        return;
+      }
     } else {
       if (!value) {
         toast.error('Please enter a value');
+        return;
+      }
+      const numVal = parseFloat(value);
+      if (typeConfig && (isNaN(numVal) || numVal < typeConfig.min || numVal > typeConfig.max)) {
+        toast.error(`${typeConfig.label} must be between ${typeConfig.min} and ${typeConfig.max} ${typeConfig.unit}`);
         return;
       }
     }
@@ -100,7 +117,6 @@ export function ManualDataEntry({ isOpen, onClose, userId, deviceId, onDataAdded
         .single();
 
       if (dataPointError) {
-        console.error('Error inserting data point:', dataPointError);
       } else if (dataPoint) {
         // Create both biomarker_data and manual_entries records
         const { error: biomarkerError } = await supabase
@@ -114,7 +130,6 @@ export function ManualDataEntry({ isOpen, onClose, userId, deviceId, onDataAdded
           });
 
         if (biomarkerError) {
-          console.error('Error inserting biomarker:', biomarkerError);
         }
 
         // Also insert into manual_entries
@@ -133,17 +148,15 @@ export function ManualDataEntry({ isOpen, onClose, userId, deviceId, onDataAdded
           });
 
         if (manualError) {
-          console.error('Error inserting manual entry:', manualError);
         }
       }
     } catch (error) {
-      console.error('Database error:', error);
       // Continue with localStorage as fallback
     }
 
-    const allBiomarkers = JSON.parse(localStorage.getItem('healthApp_biomarkers') || '[]');
+    const allBiomarkers = JSON.parse(await secureGetItem('healthApp_biomarkers') || '[]');
     const updatedBiomarkers = [...allBiomarkers, newReading];
-    localStorage.setItem('healthApp_biomarkers', JSON.stringify(updatedBiomarkers));
+    await secureSetItem('healthApp_biomarkers', JSON.stringify(updatedBiomarkers));
 
     toast.success('Data logged successfully!');
     onDataAdded();
@@ -200,11 +213,13 @@ export function ManualDataEntry({ isOpen, onClose, userId, deviceId, onDataAdded
                   id="systolic"
                   type="number"
                   placeholder="120"
+                  min={40}
+                  max={300}
                   value={systolic}
                   onChange={(e) => setSystolic(e.target.value)}
                   className="mt-1"
                 />
-                <p className="text-xs text-muted-foreground mt-1">mmHg</p>
+                <p className="text-xs text-muted-foreground mt-1">mmHg (40-300)</p>
               </div>
               <div>
                 <Label htmlFor="diastolic">Diastolic</Label>
@@ -212,11 +227,13 @@ export function ManualDataEntry({ isOpen, onClose, userId, deviceId, onDataAdded
                   id="diastolic"
                   type="number"
                   placeholder="80"
+                  min={20}
+                  max={200}
                   value={diastolic}
                   onChange={(e) => setDiastolic(e.target.value)}
                   className="mt-1"
                 />
-                <p className="text-xs text-muted-foreground mt-1">mmHg</p>
+                <p className="text-xs text-muted-foreground mt-1">mmHg (20-200)</p>
               </div>
             </div>
           ) : (
@@ -226,12 +243,14 @@ export function ManualDataEntry({ isOpen, onClose, userId, deviceId, onDataAdded
                 id="value"
                 type="number"
                 step={dataType === 'sleep' ? '0.1' : '1'}
+                min={currentType?.min}
+                max={currentType?.max}
                 placeholder={currentType?.placeholder}
                 value={value}
                 onChange={(e) => setValue(e.target.value)}
                 className="mt-1"
               />
-              <p className="text-xs text-muted-foreground mt-1">{currentType?.unit}</p>
+              <p className="text-xs text-muted-foreground mt-1">{currentType?.unit} ({currentType?.min}-{currentType?.max})</p>
             </div>
           )}
 

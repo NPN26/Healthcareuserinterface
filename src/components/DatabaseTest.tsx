@@ -31,7 +31,6 @@ export function DatabaseTest() {
 
     try {
       // Test 1: Basic connection
-      console.log('🔍 Testing database connection...');
       const { connected, error: connError } = await testConnection();
 
       if (!connected) {
@@ -39,7 +38,6 @@ export function DatabaseTest() {
       }
 
       // Test 2: Fetch users
-      console.log('👥 Fetching users...');
       const { users: fetchedUsers, error: usersError } = await getAllUsers();
 
       if (usersError) {
@@ -48,9 +46,7 @@ export function DatabaseTest() {
 
       setUsers(fetchedUsers || []);
       setConnectionStatus('success');
-      console.log('✅ All tests passed!');
     } catch (error: any) {
-      console.error('❌ Test failed:', error);
       setConnectionStatus('error');
       setErrorMessage(error.message);
     } finally {

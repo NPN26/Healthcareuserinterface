@@ -47,12 +47,10 @@ export function AuthScreen({ onLogin }: AuthScreenProps) {
         return;
       }
 
-      // Convert to User format expected by app
       const appUser: User = {
         id: user.user_id,
         name: user.name,
         email: user.email,
-        password: '',
         role: user.role,
         age: user.age,
         gender: user.gender,
@@ -61,7 +59,6 @@ export function AuthScreen({ onLogin }: AuthScreenProps) {
       onLogin(appUser);
       toast.success(`Welcome back, ${user.name}!`);
     } catch (error: any) {
-      console.error('Login error:', error);
       toast.error(error.message || 'Failed to sign in');
     } finally {
       setIsLoading(false);
@@ -79,8 +76,28 @@ export function AuthScreen({ onLogin }: AuthScreenProps) {
       return;
     }
 
-    if (signupPassword.length < 6) {
-      toast.error('Password must be at least 6 characters');
+    if (signupPassword.length < 8) {
+      toast.error('Password must be at least 8 characters');
+      return;
+    }
+
+    if (!/[A-Z]/.test(signupPassword)) {
+      toast.error('Password must contain at least one uppercase letter');
+      return;
+    }
+
+    if (!/[a-z]/.test(signupPassword)) {
+      toast.error('Password must contain at least one lowercase letter');
+      return;
+    }
+
+    if (!/[0-9]/.test(signupPassword)) {
+      toast.error('Password must contain at least one number');
+      return;
+    }
+
+    if (!/[^A-Za-z0-9]/.test(signupPassword)) {
+      toast.error('Password must contain at least one special character');
       return;
     }
 
@@ -103,14 +120,12 @@ export function AuthScreen({ onLogin }: AuthScreenProps) {
         id: user.user_id,
         name: user.name,
         email: user.email,
-        password: '',
         role: user.role,
       };
 
       onLogin(appUser);
       toast.success('Account created successfully!');
     } catch (error: any) {
-      console.error('Signup error:', error);
       toast.error(error.message || 'Failed to create account');
     } finally {
       setIsLoading(false);
@@ -118,6 +133,7 @@ export function AuthScreen({ onLogin }: AuthScreenProps) {
   };
 
   const quickLogin = async (userEmail: string, password: string = 'password123') => {
+    if (!import.meta.env.DEV) return;
     setLoginEmail(userEmail);
     setLoginPassword(password);
     
@@ -139,7 +155,6 @@ export function AuthScreen({ onLogin }: AuthScreenProps) {
         id: user.user_id,
         name: user.name,
         email: user.email,
-        password: '',
         role: user.role,
         age: user.age,
         gender: user.gender,
@@ -148,7 +163,6 @@ export function AuthScreen({ onLogin }: AuthScreenProps) {
       onLogin(appUser);
       toast.success(`Welcome back, ${user.name}!`);
     } catch (error: any) {
-      console.error('Quick login error:', error);
       toast.error('Quick login failed. Please sign in manually or create an account.');
     } finally {
       setIsLoading(false);
@@ -215,10 +229,12 @@ export function AuthScreen({ onLogin }: AuthScreenProps) {
               </Button>
 
               <div className="pt-4 border-t">
+                {import.meta.env.DEV && (
+                <>
                 <p className="text-sm text-muted-foreground mb-3">Quick Login (Demo)</p>
                 <div className="space-y-2">
-                  <Button 
-                    variant="outline" 
+                  <Button
+                    variant="outline"
                     className="w-full justify-start"
                     onClick={() => quickLogin('john@example.com')}
                     disabled={isLoading}
@@ -234,8 +250,8 @@ export function AuthScreen({ onLogin }: AuthScreenProps) {
                     </div>
                   </Button>
 
-                  <Button 
-                    variant="outline" 
+                  <Button
+                    variant="outline"
                     className="w-full justify-start"
                     onClick={() => quickLogin('emily@healthcare.com')}
                     disabled={isLoading}
@@ -251,8 +267,8 @@ export function AuthScreen({ onLogin }: AuthScreenProps) {
                     </div>
                   </Button>
 
-                  <Button 
-                    variant="outline" 
+                  <Button
+                    variant="outline"
                     className="w-full justify-start"
                     onClick={() => quickLogin('admin@system.com')}
                     disabled={isLoading}
@@ -273,6 +289,8 @@ export function AuthScreen({ onLogin }: AuthScreenProps) {
                   <FlaskConical className="w-3 h-3" />
                   Test accounts use mock auth - no Supabase required
                 </p>
+                </>
+                )}
               </div>
             </div>
           </TabsContent>
@@ -309,7 +327,7 @@ export function AuthScreen({ onLogin }: AuthScreenProps) {
                   <Input
                     id="signup-password"
                     type={showSignupPassword ? 'text' : 'password'}
-                    placeholder="Create a password (min. 6 characters)"
+                    placeholder="Min. 8 chars, upper, lower, number, special"
                     value={signupPassword}
                     onChange={(e) => setSignupPassword(e.target.value)}
                   />

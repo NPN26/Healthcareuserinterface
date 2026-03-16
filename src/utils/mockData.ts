@@ -1,10 +1,10 @@
 // Mock data generation utilities for the healthcare system
+import { secureGetItem, secureSetItem } from './secureStorage';
 
 export interface User {
   id: string;
   name: string;
   email: string;
-  password?: string;
   role: 'END_USER' | 'PROVIDER' | 'ADMIN';
   age?: number;
   avatar?: string;
@@ -167,7 +167,6 @@ export const mockUsers: User[] = [
     id: 'user-1',
     name: 'John Doe',
     email: 'john@example.com',
-    password: 'password123',
     role: 'END_USER',
     age: 45,
     dateOfBirth: '1978-05-15',
@@ -182,7 +181,6 @@ export const mockUsers: User[] = [
     id: 'user-2',
     name: 'Sarah Smith',
     email: 'sarah@example.com',
-    password: 'password123',
     role: 'END_USER',
     age: 32,
     dateOfBirth: '1991-08-22',
@@ -197,7 +195,6 @@ export const mockUsers: User[] = [
     id: 'provider-1',
     name: 'Dr. Emily Brown',
     email: 'emily@healthcare.com',
-    password: 'password123',
     role: 'PROVIDER',
     age: 38,
     dateOfBirth: '1985-03-10',
@@ -212,7 +209,6 @@ export const mockUsers: User[] = [
     id: 'admin-1',
     name: 'Admin User',
     email: 'admin@system.com',
-    password: 'password123',
     role: 'ADMIN',
     age: 40,
     dateOfBirth: '1983-11-05',
@@ -262,18 +258,20 @@ export const mockDevices: Device[] = [
   },
 ];
 
-// Initialize local storage with mock data
-export function initializeMockData() {
-  if (!localStorage.getItem('healthApp_users')) {
-    localStorage.setItem('healthApp_users', JSON.stringify(mockUsers));
+// Initialize local storage with mock data (dev only)
+export async function initializeMockData() {
+  if (!import.meta.env.DEV) return;
+
+  if (!await secureGetItem('healthApp_users')) {
+    await secureSetItem('healthApp_users', JSON.stringify(mockUsers));
   }
 
-  if (!localStorage.getItem('healthApp_devices')) {
-    localStorage.setItem('healthApp_devices', JSON.stringify(mockDevices));
+  if (!await secureGetItem('healthApp_devices')) {
+    await secureSetItem('healthApp_devices', JSON.stringify(mockDevices));
   }
 
   // Generate initial biomarker data
-  if (!localStorage.getItem('healthApp_biomarkers')) {
+  if (!await secureGetItem('healthApp_biomarkers')) {
     const biomarkers: Biomarker[] = [];
     const types: Biomarker['type'][] = ['heartRate', 'bloodPressure', 'glucose', 'oxygen', 'steps', 'sleep'];
 
@@ -281,11 +279,11 @@ export function initializeMockData() {
       biomarkers.push(...generateHistoricalData('user-1', 'device-1', type, 30));
     });
 
-    localStorage.setItem('healthApp_biomarkers', JSON.stringify(biomarkers));
+    await secureSetItem('healthApp_biomarkers', JSON.stringify(biomarkers));
   }
 
-  if (!localStorage.getItem('healthApp_alerts')) {
-    localStorage.setItem('healthApp_alerts', JSON.stringify([]));
+  if (!await secureGetItem('healthApp_alerts')) {
+    await secureSetItem('healthApp_alerts', JSON.stringify([]));
   }
 }
 

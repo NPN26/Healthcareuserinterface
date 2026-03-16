@@ -19,8 +19,8 @@ export interface User {
   last_login?: string
 }
 
-// Mock accounts that bypass authentication
-const MOCK_ACCOUNTS = {
+// Mock accounts for development only - stripped from production builds
+const MOCK_ACCOUNTS = import.meta.env.DEV ? {
   'john@example.com': {
     user_id: '550e8400-e29b-41d4-a716-446655440001',
     email: 'john@example.com',
@@ -57,29 +57,33 @@ const MOCK_ACCOUNTS = {
     gender: 'male',
     password: 'password123'
   }
-}
+} as Record<string, { user_id: string; email: string; name: string; role: 'END_USER' | 'PROVIDER' | 'ADMIN'; age: number; gender: string; password: string }> : {} as Record<string, { user_id: string; email: string; name: string; role: 'END_USER' | 'PROVIDER' | 'ADMIN'; age: number; gender: string; password: string }>
 
 /**
- * Check if an email is a mock account
+ * Check if an email is a mock account (dev only)
  */
 function isMockAccount(email: string): boolean {
+  if (!import.meta.env.DEV) return false
   return email in MOCK_ACCOUNTS
 }
 
 /**
- * Authenticate mock account (bypass Supabase)
+ * Authenticate mock account (dev only, bypasses Supabase)
  */
 function authenticateMockAccount(email: string, password: string): { user: User | null, error: string | null } {
-  const mockAccount = MOCK_ACCOUNTS[email as keyof typeof MOCK_ACCOUNTS]
-  
+  if (!import.meta.env.DEV) {
+    return { user: null, error: 'Mock auth is not available in production' }
+  }
+  const mockAccount = MOCK_ACCOUNTS[email]
+
   if (!mockAccount) {
     return { user: null, error: 'Mock account not found' }
   }
-  
+
   if (mockAccount.password !== password) {
     return { user: null, error: 'Invalid password' }
   }
-  
+
   // Return mock user without password
   const { password: _, ...userWithoutPassword } = mockAccount
   return { user: userWithoutPassword, error: null }
@@ -120,7 +124,6 @@ export async function signUp(email: string, password: string, name: string) {
 
     return { user: userData, error: null }
   } catch (error: any) {
-    console.error('Signup error:', error)
     return { user: null, error: error.message }
   }
 }
@@ -132,7 +135,6 @@ export async function signIn(email: string, password: string) {
   try {
     // Check if this is a mock account first
     if (isMockAccount(email)) {
-      console.log('🧪 Using mock authentication for:', email)
       const result = authenticateMockAccount(email, password)
 
       // Check if mock user is disabled via Supabase
@@ -147,7 +149,6 @@ export async function signIn(email: string, password: string) {
     }
 
     // Otherwise, use real Supabase Auth for new accounts
-    console.log('🔐 Using Supabase authentication for:', email)
     const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
       email,
       password,
@@ -181,15 +182,15 @@ export async function signIn(email: string, password: string) {
 
     return { user: userData, error: null }
   } catch (error: any) {
-    console.error('Signin error:', error)
     return { user: null, error: error.message }
   }
 }
 
 /**
- * Get list of mock accounts for testing (for quick login UI)
+ * Get list of mock accounts for testing (dev only, for quick login UI)
  */
 export function getMockAccounts() {
+  if (!import.meta.env.DEV) return []
   return Object.values(MOCK_ACCOUNTS).map(({ password, ...account }) => ({
     ...account,
     isMock: true
@@ -205,7 +206,6 @@ export async function signOut() {
     if (error) throw error
     return { error: null }
   } catch (error: any) {
-    console.error('Signout error:', error)
     return { error: error.message }
   }
 }
@@ -219,7 +219,6 @@ export async function getCurrentSession() {
     if (error) throw error
     return { session, error: null }
   } catch (error: any) {
-    console.error('Get session error:', error)
     return { session: null, error: error.message }
   }
 }
@@ -244,7 +243,6 @@ export async function getCurrentUser() {
 
     return { user: userData, error: null }
   } catch (error: any) {
-    console.error('Get current user error:', error)
     return { user: null, error: error.message }
   }
 }
@@ -262,10 +260,8 @@ export async function testConnection() {
 
     if (error) throw error
 
-    console.log('✅ Database connection successful!')
     return { connected: true, error: null }
   } catch (error: any) {
-    console.error('❌ Database connection failed:', error)
     return { connected: false, error: error.message }
   }
 }
@@ -284,7 +280,6 @@ export async function getAllUsers() {
 
     return { users: data, error: null }
   } catch (error: any) {
-    console.error('Get all users error:', error)
     return { users: null, error: error.message }
   }
 }

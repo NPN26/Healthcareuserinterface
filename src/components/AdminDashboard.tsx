@@ -69,8 +69,6 @@ export function AdminDashboard({ user, onLogout }: AdminDashboardProps) {
   const loadData = async () => {
     setIsLoading(true);
     try {
-      console.log('Loading admin data from Supabase database');
-      
       const [supabaseUsers, supabaseDevices, supabaseBiomarkers, supabaseAlerts, supabaseAnnouncements] = await Promise.all([
         fetchAllUsers(),
         fetchAllDevices(),
@@ -79,7 +77,6 @@ export function AdminDashboard({ user, onLogout }: AdminDashboardProps) {
         fetchAllAnnouncements()
       ]);
 
-      console.log(`Loaded from DB: ${supabaseUsers.length} users, ${supabaseDevices.length} devices, ${supabaseBiomarkers.length} biomarkers, ${supabaseAlerts.length} alerts`);
 
       setUsers(supabaseUsers);
       setDevices(supabaseDevices);
@@ -97,7 +94,6 @@ export function AdminDashboard({ user, onLogout }: AdminDashboardProps) {
         dataPoints: supabaseBiomarkers.length,
       }));
     } catch (error) {
-      console.error('Error loading admin data from Supabase:', error);
       toast.error('Failed to load data from database');
     } finally {
       setIsLoading(false);
@@ -133,7 +129,6 @@ export function AdminDashboard({ user, onLogout }: AdminDashboardProps) {
         toast.error(result.message);
       }
     } catch (error) {
-      console.error('Error simulating faults:', error);
       toast.error('Failed to simulate device faults');
     }
   };
@@ -160,7 +155,6 @@ export function AdminDashboard({ user, onLogout }: AdminDashboardProps) {
         toast.error(result.message);
       }
     } catch (error) {
-      console.error('Error resetting devices:', error);
       toast.error('Failed to reset devices');
     }
   };
@@ -184,7 +178,6 @@ export function AdminDashboard({ user, onLogout }: AdminDashboardProps) {
         toast.error(result.message);
       }
     } catch (error) {
-      console.error('Error clearing alerts:', error);
       toast.error('Failed to clear alerts');
     }
   };
@@ -215,7 +208,6 @@ export function AdminDashboard({ user, onLogout }: AdminDashboardProps) {
         toast.error(result.message);
       }
     } catch (error) {
-      console.error('Error deleting user:', error);
       toast.error('Failed to delete user');
     }
   };
@@ -246,7 +238,6 @@ export function AdminDashboard({ user, onLogout }: AdminDashboardProps) {
         toast.error(result.message);
       }
     } catch (error) {
-      console.error('Error updating user role:', error);
       toast.error('Failed to update user role');
     }
   };
@@ -272,7 +263,6 @@ export function AdminDashboard({ user, onLogout }: AdminDashboardProps) {
         toast.error(result.message);
       }
     } catch (error) {
-      console.error('Error toggling user active status:', error);
       toast.error('Failed to update user status');
     }
   };
@@ -298,7 +288,6 @@ export function AdminDashboard({ user, onLogout }: AdminDashboardProps) {
         toast.error(result.message);
       }
     } catch (error) {
-      console.error('Error updating provider verification:', error);
       toast.error('Failed to update verification status');
     }
   };

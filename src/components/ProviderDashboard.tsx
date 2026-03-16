@@ -34,7 +34,6 @@ export function ProviderDashboard({ user, onLogout }: ProviderDashboardProps) {
     setIsLoading(true);
     try {
       // Load data from Supabase
-      console.log('Loading provider data from Supabase database');
       const { fetchPatients, fetchAllPatientsBiomarkers, fetchAllPatientsAlerts } = await import('../utils/supabase');
       
       // Use the provider's user_id or id
@@ -46,7 +45,6 @@ export function ProviderDashboard({ user, onLogout }: ProviderDashboardProps) {
         fetchAllPatientsAlerts(providerId)
       ]);
 
-      console.log(`Loaded from DB: ${supabasePatients.length} patients, ${supabaseBiomarkers.length} biomarkers, ${supabaseAlerts.length} alerts`);
 
       // Map Patient type to User type
       const mappedPatients: User[] = supabasePatients.map(patient => ({
@@ -64,7 +62,6 @@ export function ProviderDashboard({ user, onLogout }: ProviderDashboardProps) {
         toast.info('No patients have granted you access yet');
       }
     } catch (error) {
-      console.error('Error loading data from Supabase:', error);
       toast.error('Failed to load data from database');
       // Don't fall back to localStorage - show empty data for provider
       setPatients([]);

@@ -45,7 +45,6 @@ export function AccessRequestDialog({ isOpen, onClose, providerId }: AccessReque
         toast.error(result.message);
       }
     } catch (error) {
-      console.error('Error requesting access:', error);
       toast.error('Failed to send access request');
     } finally {
       setIsLoading(false);

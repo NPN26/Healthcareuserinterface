@@ -3,6 +3,7 @@ import { Button } from '../ui/button';
 import { Badge } from '../ui/badge';
 import { Alert, AlertCircle, CheckCircle, Info, X } from 'lucide-react';
 import { Alert as AlertType } from '../../utils/mockData';
+import { secureGetItem, secureSetItem } from '../../utils/secureStorage';
 import { toast } from 'sonner';
 
 interface AlertsPanelProps {
@@ -11,20 +12,20 @@ interface AlertsPanelProps {
 }
 
 export function AlertsPanel({ alerts, onUpdate }: AlertsPanelProps) {
-  const markAsRead = (alertId: string) => {
-    const allAlerts = JSON.parse(localStorage.getItem('healthApp_alerts') || '[]');
-    const updated = allAlerts.map((a: AlertType) => 
+  const markAsRead = async (alertId: string) => {
+    const allAlerts = JSON.parse(await secureGetItem('healthApp_alerts') || '[]');
+    const updated = allAlerts.map((a: AlertType) =>
       a.id === alertId ? { ...a, read: true } : a
     );
-    localStorage.setItem('healthApp_alerts', JSON.stringify(updated));
+    await secureSetItem('healthApp_alerts', JSON.stringify(updated));
     onUpdate();
     toast.success('Alert marked as read');
   };
 
-  const clearAll = () => {
-    const allAlerts = JSON.parse(localStorage.getItem('healthApp_alerts') || '[]');
+  const clearAll = async () => {
+    const allAlerts = JSON.parse(await secureGetItem('healthApp_alerts') || '[]');
     const updated = allAlerts.map((a: AlertType) => ({ ...a, read: true }));
-    localStorage.setItem('healthApp_alerts', JSON.stringify(updated));
+    await secureSetItem('healthApp_alerts', JSON.stringify(updated));
     onUpdate();
     toast.success('All alerts cleared');
   };

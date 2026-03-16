@@ -1,5 +1,5 @@
 {
-      "name": "Healthcare User Interface (Copy)",
+      "name": "Healthcare User Interface",
       "version": "0.1.0",
       "private": true,
       "dependencies": {
@@ -37,7 +37,7 @@
             "canvas-confetti": "^1.9.4",
             "chart.js": "^4.5.1",
             "class-variance-authority": "^0.7.1",
-            "clsx": "*",
+            "clsx": "^2.1.1",
             "cmdk": "^1.1.1",
             "date-fns": "^3.0.0",
             "embla-carousel-react": "^8.6.0",
@@ -55,7 +55,7 @@
             "react-hook-form": "^7.55.0",
             "react-resizable-panels": "^2.1.7",
             "sonner": "^2.0.3",
-            "tailwind-merge": "*",
+            "tailwind-merge": "^2.6.0",
             "vaul": "^1.1.2"
       },
       "devDependencies": {

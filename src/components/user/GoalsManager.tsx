@@ -75,7 +75,7 @@ export function GoalsManager({ isOpen, onClose, userId, biomarkers }: GoalsManag
           userId,
           'GOAL',
           `🎯 Goal Completed: ${label} - You reached your target of ${getGoalTargetText(goal)}!`
-        ).catch(console.error);
+        ).catch(() => {});
         toast.success(`🎯 Goal completed: ${label}!`);
         setCelebratingGoalLabel(label);
         setNotifiedGoals(prev => new Set(prev).add(goal.id));
@@ -89,7 +89,6 @@ export function GoalsManager({ isOpen, onClose, userId, biomarkers }: GoalsManag
       const fetchedGoals = await fetchGoals(userId);
       setGoals(fetchedGoals);
     } catch (error) {
-      console.error('Error loading goals:', error);
       toast.error('Failed to load goals');
     } finally {
       setLoading(false);
@@ -136,7 +135,6 @@ export function GoalsManager({ isOpen, onClose, userId, biomarkers }: GoalsManag
         toast.error('Failed to create goal. Only steps, sleep, and weight goals are currently supported.');
       }
     } catch (error) {
-      console.error('Error creating goal:', error);
       toast.error('Failed to create goal');
     } finally {
       setLoading(false);
@@ -162,7 +160,6 @@ export function GoalsManager({ isOpen, onClose, userId, biomarkers }: GoalsManag
         toast.error('Failed to update goal');
       }
     } catch (error) {
-      console.error('Error updating goal:', error);
       toast.error('Failed to update goal');
     } finally {
       setLoading(false);
@@ -181,7 +178,6 @@ export function GoalsManager({ isOpen, onClose, userId, biomarkers }: GoalsManag
         toast.error('Failed to delete goal');
       }
     } catch (error) {
-      console.error('Error deleting goal:', error);
       toast.error('Failed to delete goal');
     } finally {
       setLoading(false);

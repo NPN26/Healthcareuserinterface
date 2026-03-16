@@ -114,7 +114,6 @@ export function UserDashboard({ user, onLogout }: UserDashboardProps) {
   useEffect(() => {
     const handleVisibilityChange = () => {
       if (document.visibilityState === 'visible') {
-        console.log('Page became visible, syncing devices...');
         loadData();
       }
     };
@@ -123,7 +122,6 @@ export function UserDashboard({ user, onLogout }: UserDashboardProps) {
     
     // Also sync on window focus
     const handleFocus = () => {
-      console.log('Window focused, syncing devices...');
       loadData();
     };
     
@@ -141,8 +139,6 @@ export function UserDashboard({ user, onLogout }: UserDashboardProps) {
       return; // Don't set up interval if no devices yet
     }
 
-    console.log('Setting up interval for', devices.length, 'devices');
-    
     // Simulate real-time updates
     const interval = setInterval(() => {
       simulateNewReading();
@@ -167,7 +163,6 @@ export function UserDashboard({ user, onLogout }: UserDashboardProps) {
 
     try {
       // Always try to load from Supabase first
-      console.log('Loading data from Supabase database');
       const { fetchBiomarkers, fetchDevices, fetchAlerts, fetchNotifications } = await import('../utils/supabase');
       
       [supabaseBiomarkers, supabaseDevices, supabaseAlerts, supabaseNotifications] = await Promise.all([
@@ -177,10 +172,8 @@ export function UserDashboard({ user, onLogout }: UserDashboardProps) {
         fetchNotifications(user.user_id || user.id)
       ]);
 
-      console.log(`Loaded from DB: ${supabaseBiomarkers.length} biomarkers, ${supabaseDevices.length} devices, ${supabaseNotifications.length} notifications`);
       dbLoadSuccess = true;
     } catch (error) {
-      console.error('Error loading from Supabase, will try localStorage:', error);
     }
 
     // If database load was successful, use that data
@@ -192,10 +185,14 @@ export function UserDashboard({ user, onLogout }: UserDashboardProps) {
       setUnreadNotificationsCount(supabaseNotifications.filter(n => !n.is_read).length);
     } else {
       // Fallback to localStorage only if database fails completely
-      console.log('Loading data from localStorage as fallback');
-      const storedBiomarkers = JSON.parse(localStorage.getItem('healthApp_biomarkers') || '[]');
-      const storedDevices = JSON.parse(localStorage.getItem('healthApp_devices') || '[]');
-      const storedAlerts = JSON.parse(localStorage.getItem('healthApp_alerts') || '[]');
+      const { secureGetItem } = await import('../utils/secureStorage');
+      const rawBiomarkers = await secureGetItem('healthApp_biomarkers');
+      const rawDevices = await secureGetItem('healthApp_devices');
+      const rawAlerts = await secureGetItem('healthApp_alerts');
+
+      const storedBiomarkers = JSON.parse(rawBiomarkers || '[]');
+      const storedDevices = JSON.parse(rawDevices || '[]');
+      const storedAlerts = JSON.parse(rawAlerts || '[]');
 
       setBiomarkers(storedBiomarkers.filter((b: Biomarker) => b.userId === user.id));
       setDevices(storedDevices.filter((d: Device) => d.userId === user.id));
@@ -248,7 +245,6 @@ export function UserDashboard({ user, onLogout }: UserDashboardProps) {
       
       toast.success(`Successfully synced ${activeDevices.length} device(s)`);
     } catch (error) {
-      console.error('Error syncing devices:', error);
       toast.error('Failed to sync devices');
     }
   };
@@ -325,18 +321,13 @@ export function UserDashboard({ user, onLogout }: UserDashboardProps) {
   };
 
   const simulateNewReading = async () => {
-    console.log('simulateNewReading called - devices:', devices.length);
-    
     if (devices.length === 0) {
-      console.log('No devices found, skipping reading generation');
       return;
     }
 
     const activeDevices = devices.filter(d => d.status === 'active');
-    console.log('Active devices:', activeDevices.length);
-    
+
     if (activeDevices.length === 0) {
-      console.log('No active devices found, skipping reading generation');
       return;
     }
 
@@ -344,8 +335,6 @@ export function UserDashboard({ user, onLogout }: UserDashboardProps) {
     const device = activeDevices[Math.floor(Math.random() * activeDevices.length)];
     // Use device's supported biomarkers or fallback to default types
     const types: Biomarker['type'][] = device.supportedBiomarkers || ['heartRate', 'oxygen'];
-    
-    console.log(`Device "${device.name}" supported biomarkers:`, types);
     
     // Filter types based on frequency rules
     const now = Date.now();
@@ -366,11 +355,8 @@ export function UserDashboard({ user, onLogout }: UserDashboardProps) {
       // Other types can be generated on the normal interval
       return true;
     });
-    
-    console.log('Available types after frequency filter:', availableTypes);
-    
+
     if (availableTypes.length === 0) {
-      console.log('No biomarkers ready for generation based on frequency rules');
       return;
     }
     
@@ -380,11 +366,6 @@ export function UserDashboard({ user, onLogout }: UserDashboardProps) {
     
     // Update last generated time for this type
     lastGeneratedTimeRef.current = { ...lastGeneratedTimeRef.current, [type]: now };
-    console.log(`Generated new reading: ${type} for device "${device.name}":`, 
-      type === 'bloodPressure' 
-        ? `${newReading.systolic}/${newReading.diastolic} mmHg` 
-        : `${newReading.value} ${getBiomarkerUnit(type)}`
-    );
 
     // Dual-write: Save to Supabase database
     try {
@@ -415,9 +396,7 @@ export function UserDashboard({ user, onLogout }: UserDashboardProps) {
         .single();
 
       if (dataPointError) {
-        console.error('Error inserting data point:', dataPointError);
       } else if (dataPoint) {
-        console.log('Data point created:', dataPoint.data_point_id);
         // Then, create biomarker_data
         // For blood pressure, use systolic as primary value and diastolic as secondary
         const { error: biomarkerError } = await supabase
@@ -431,13 +410,10 @@ export function UserDashboard({ user, onLogout }: UserDashboardProps) {
           });
 
         if (biomarkerError) {
-          console.error('Error inserting biomarker:', biomarkerError);
         } else {
-          console.log('Biomarker data created successfully');
         }
       }
     } catch (error) {
-      console.error('Database error:', error);
       // Continue with localStorage as fallback
     }
 
@@ -473,14 +449,16 @@ export function UserDashboard({ user, onLogout }: UserDashboardProps) {
             timestamp: newAlert.timestamp
           });
       } catch (error) {
-        console.error('Error saving alert to database:', error);
       }
 
-      // Dual-write: Also save to localStorage for safety
+      // Dual-write: Also save to encrypted localStorage for safety
       setAlerts(prev => [...prev, newAlert]);
 
-      const allAlerts = JSON.parse(localStorage.getItem('healthApp_alerts') || '[]');
-      localStorage.setItem('healthApp_alerts', JSON.stringify([...allAlerts, newAlert]));
+      import('../utils/secureStorage').then(async ({ secureGetItem, secureSetItem }) => {
+        const raw = await secureGetItem('healthApp_alerts');
+        const allAlerts = JSON.parse(raw || '[]');
+        await secureSetItem('healthApp_alerts', JSON.stringify([...allAlerts, newAlert]));
+      });
 
       // Check if this reading is critically dangerous → show full-screen modal
       const readingValue = type === 'bloodPressure' ? (newReading.systolic || newReading.value) : newReading.value;
@@ -504,7 +482,7 @@ export function UserDashboard({ user, onLogout }: UserDashboardProps) {
             severity: 'Critical',
             timestamp: newAlert.timestamp,
           }
-        ).catch(console.error);
+        ).catch(() => {});
 
         // Queue it – if a modal is already open, add to queue
         if (criticalAlert) {
@@ -526,8 +504,11 @@ export function UserDashboard({ user, onLogout }: UserDashboardProps) {
       return updated;
     });
 
-    const allBiomarkers = JSON.parse(localStorage.getItem('healthApp_biomarkers') || '[]');
-    localStorage.setItem('healthApp_biomarkers', JSON.stringify([...allBiomarkers, newReading]));
+    import('../utils/secureStorage').then(async ({ secureGetItem, secureSetItem }) => {
+      const raw = await secureGetItem('healthApp_biomarkers');
+      const allBiomarkers = JSON.parse(raw || '[]');
+      await secureSetItem('healthApp_biomarkers', JSON.stringify([...allBiomarkers, newReading]));
+    });
   };
 
   const getLatestBiomarker = (type: Biomarker['type']) => {
@@ -718,7 +699,6 @@ export function UserDashboard({ user, onLogout }: UserDashboardProps) {
       doc.save(`health-report-${new Date().toISOString().split('T')[0]}.pdf`);
       toast.success('Report downloaded successfully!');
     } catch (error) {
-      console.error('Error generating report:', error);
       toast.error('Failed to generate report');
     }
   };
@@ -803,7 +783,6 @@ export function UserDashboard({ user, onLogout }: UserDashboardProps) {
         toast.success('Notification marked as read');
       }
     } catch (error) {
-      console.error('Error marking notification as read:', error);
       toast.error('Failed to mark notification as read');
     }
   };
@@ -822,7 +801,6 @@ export function UserDashboard({ user, onLogout }: UserDashboardProps) {
         toast.success('All notifications marked as read');
       }
     } catch (error) {
-      console.error('Error marking all notifications as read:', error);
       toast.error('Failed to mark all notifications as read');
     }
   };
@@ -841,7 +819,6 @@ export function UserDashboard({ user, onLogout }: UserDashboardProps) {
         toast.success('Notification deleted');
       }
     } catch (error) {
-      console.error('Error deleting notification:', error);
       toast.error('Failed to delete notification');
     }
   };
@@ -857,7 +834,6 @@ export function UserDashboard({ user, onLogout }: UserDashboardProps) {
         toast.success('All notifications deleted');
       }
     } catch (error) {
-      console.error('Error deleting all notifications:', error);
       toast.error('Failed to delete all notifications');
     }
   };
@@ -870,7 +846,6 @@ export function UserDashboard({ user, onLogout }: UserDashboardProps) {
       setUnreadNotificationsCount(freshNotifications.filter(n => !n.is_read).length);
       toast.success('Notifications refreshed');
     } catch (error) {
-      console.error('Error refreshing notifications:', error);
       toast.error('Failed to refresh notifications');
     }
   };
@@ -916,16 +891,17 @@ export function UserDashboard({ user, onLogout }: UserDashboardProps) {
         .single();
 
       if (error) {
-        console.error('Error adding device to database:', error);
       }
     } catch (error) {
-      console.error('Database error:', error);
     }
 
-    // Dual-write: Also save to localStorage for safety
-    const allDevices = JSON.parse(localStorage.getItem('healthApp_devices') || '[]');
-    const updatedDevices = [...allDevices, newDevice];
-    localStorage.setItem('healthApp_devices', JSON.stringify(updatedDevices));
+    // Dual-write: Also save to encrypted localStorage for safety
+    import('../utils/secureStorage').then(async ({ secureGetItem, secureSetItem }) => {
+      const raw = await secureGetItem('healthApp_devices');
+      const allDevices = JSON.parse(raw || '[]');
+      const updatedDevices = [...allDevices, newDevice];
+      await secureSetItem('healthApp_devices', JSON.stringify(updatedDevices));
+    });
     
     loadData();
     setShowAddDevice(false);

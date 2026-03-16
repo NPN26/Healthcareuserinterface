@@ -50,6 +50,7 @@ import {
 } from '../ui/alert-dialog';
 import { toast } from 'sonner';
 import { Switch } from '../ui/switch';
+import { secureGetItem } from '../../utils/secureStorage';
 
 export type ProfileTab = 'personal' | 'achievements' | 'security' | 'notifications' | 'sharing' | 'emergency' | 'alertHistory';
 
@@ -137,17 +138,20 @@ export function ProfilePage({ user, onBack, onUpdate, initialTab = 'personal' }:
     }
   }, [activeTab]);
 
-  // Get assigned doctor info
-  const getAssignedDoctor = () => {
-    if (user.assignedDoctor) {
-      const users = JSON.parse(localStorage.getItem('healthApp_users') || '[]');
-      const doctor = users.find((u: any) => u.id === user.assignedDoctor);
-      return doctor;
-    }
-    return null;
-  };
+  // Assigned doctor state (loaded asynchronously from secure storage)
+  const [assignedDoctor, setAssignedDoctor] = useState<any>(null);
 
-  const assignedDoctor = getAssignedDoctor();
+  useEffect(() => {
+    const loadAssignedDoctor = async () => {
+      if (user.assignedDoctor) {
+        const rawUsers = await secureGetItem('healthApp_users');
+        const users = JSON.parse(rawUsers || '[]');
+        const doctor = users.find((u: any) => u.id === user.assignedDoctor);
+        setAssignedDoctor(doctor || null);
+      }
+    };
+    loadAssignedDoctor();
+  }, [user.assignedDoctor]);
 
   // --- Sharing data helpers ---
   const loadSharingData = async () => {
@@ -163,7 +167,6 @@ export function ProfilePage({ user, onBack, onUpdate, initialTab = 'personal' }:
       setActiveConsents(all.filter((c: any) => c.status === 'ACTIVE'));
       setHistoricalConsents(all.filter((c: any) => ['DENIED', 'REVOKED'].includes(c.status)));
     } catch (error) {
-      console.error('Error loading sharing data:', error);
       toast.error('Failed to load sharing settings');
     } finally {
       setIsSharingLoading(false);
@@ -239,7 +242,6 @@ export function ProfilePage({ user, onBack, onUpdate, initialTab = 'personal' }:
       setEmergencyContacts(contacts);
       setEmergencyAlertHistory(history);
     } catch (error) {
-      console.error('Error loading emergency data:', error);
       toast.error('Failed to load emergency contacts');
     } finally {
       setIsEmergencyLoading(false);
@@ -259,7 +261,6 @@ export function ProfilePage({ user, onBack, onUpdate, initialTab = 'personal' }:
       );
       setAlertHistory(sorted);
     } catch (error) {
-      console.error('Error loading alert history:', error);
       toast.error('Failed to load alert history');
     } finally {
       setIsAlertHistoryLoading(false);
@@ -357,20 +358,20 @@ export function ProfilePage({ user, onBack, onUpdate, initialTab = 'personal' }:
       });
 
       if (!result.success) {
-        console.warn('DB update failed, saving locally:', result.message);
       }
     } catch (error) {
-      console.warn('DB update error, saving locally:', error);
     }
 
     // Always update locally so the UI reflects changes
     onUpdate(updatedUser);
-    const users = JSON.parse(localStorage.getItem('healthApp_users') || '[]');
+    const { secureGetItem, secureSetItem } = await import('../../utils/secureStorage');
+    const rawUsers = await secureGetItem('healthApp_users');
+    const users = JSON.parse(rawUsers || '[]');
     const updatedUsers = users.map((u: any) =>
       (u.id === user.id || u.user_id === user.user_id) ? updatedUser : u
     );
-    localStorage.setItem('healthApp_users', JSON.stringify(updatedUsers));
-    localStorage.setItem('healthApp_currentUser', JSON.stringify(updatedUser));
+    await secureSetItem('healthApp_users', JSON.stringify(updatedUsers));
+    await secureSetItem('healthApp_currentUser', JSON.stringify(updatedUser));
 
     setIsSaving(false);
     toast.success('Profile updated successfully');
@@ -393,29 +394,47 @@ export function ProfilePage({ user, onBack, onUpdate, initialTab = 'personal' }:
     setIsSaving(true);
 
     try {
-      // Try updating via Supabase Auth
       const { supabase } = await import('../../utils/supabase');
+
+      // Verify current password by re-authenticating
+      const { error: signInError } = await supabase.auth.signInWithPassword({
+        email: user.email,
+        password: securityData.currentPassword,
+      });
+
+      if (signInError) {
+        setIsSaving(false);
+        toast.error('Current password is incorrect');
+        return;
+      }
+
+      // Now update the password
       const { error } = await supabase.auth.updateUser({
         password: securityData.newPassword,
       });
 
       if (error) {
-        console.warn('Supabase password update failed:', error.message);
-        // Fall back to local update for mock accounts
+        setIsSaving(false);
+        toast.error('Failed to update password: ' + error.message);
+        return;
       }
     } catch (error) {
-      console.warn('Password update via Supabase failed, saving locally:', error);
+      setIsSaving(false);
+      toast.error('Failed to update password');
+      return;
     }
 
-    // Update locally too
-    const updatedUser = { ...user, password: securityData.newPassword };
+    // Do NOT store password in localStorage - only update non-sensitive user data
+    const updatedUser = { ...user };
     onUpdate(updatedUser);
-    const users = JSON.parse(localStorage.getItem('healthApp_users') || '[]');
+    const { secureGetItem, secureSetItem } = await import('../../utils/secureStorage');
+    const rawUsers = await secureGetItem('healthApp_users');
+    const users = JSON.parse(rawUsers || '[]');
     const updatedUsers = users.map((u: any) =>
       (u.id === user.id || u.user_id === user.user_id) ? updatedUser : u
     );
-    localStorage.setItem('healthApp_users', JSON.stringify(updatedUsers));
-    localStorage.setItem('healthApp_currentUser', JSON.stringify(updatedUser));
+    await secureSetItem('healthApp_users', JSON.stringify(updatedUsers));
+    await secureSetItem('healthApp_currentUser', JSON.stringify(updatedUser));
 
     setSecurityData({ currentPassword: '', newPassword: '', confirmPassword: '' });
     setIsSaving(false);
@@ -454,15 +473,16 @@ export function ProfilePage({ user, onBack, onUpdate, initialTab = 'personal' }:
           );
       }
     } catch (error) {
-      console.warn('Failed to persist thresholds to DB:', error);
     }
 
-    const users = JSON.parse(localStorage.getItem('healthApp_users') || '[]');
+    const { secureGetItem, secureSetItem } = await import('../../utils/secureStorage');
+    const rawUsers = await secureGetItem('healthApp_users');
+    const users = JSON.parse(rawUsers || '[]');
     const updatedUsers = users.map((u: any) =>
       (u.id === user.id || u.user_id === user.user_id) ? updatedUser : u
     );
-    localStorage.setItem('healthApp_users', JSON.stringify(updatedUsers));
-    localStorage.setItem('healthApp_currentUser', JSON.stringify(updatedUser));
+    await secureSetItem('healthApp_users', JSON.stringify(updatedUsers));
+    await secureSetItem('healthApp_currentUser', JSON.stringify(updatedUser));
 
     toast.success('Notification preferences saved');
   };

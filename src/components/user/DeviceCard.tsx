@@ -31,6 +31,7 @@ import {
   AlertDialogTitle,
 } from '../ui/alert-dialog';
 import { Device } from '../../utils/mockData';
+import { secureGetItem, secureSetItem } from '../../utils/secureStorage';
 import { toast } from 'sonner';
 
 interface DeviceCardProps {
@@ -83,30 +84,28 @@ export function DeviceCard({ device, onUpdate }: DeviceCardProps) {
         .eq('source_id', device.id);
 
       if (error) {
-        console.error('Error updating device status:', error);
       }
     } catch (error) {
-      console.error('Database error:', error);
     }
 
-    const devices = JSON.parse(localStorage.getItem('healthApp_devices') || '[]');
-    const updated = devices.map((d: Device) => 
-      d.id === device.id 
+    const devices = JSON.parse(await secureGetItem('healthApp_devices') || '[]');
+    const updated = devices.map((d: Device) =>
+      d.id === device.id
         ? { ...d, status: newStatus }
         : d
     );
-    localStorage.setItem('healthApp_devices', JSON.stringify(updated));
+    await secureSetItem('healthApp_devices', JSON.stringify(updated));
     onUpdate();
     toast.success(`${device.name} ${device.status === 'active' ? 'deactivated' : 'activated'}`);
   };
 
   const toggleAutoMode = async () => {
     const newAutoMode = !device.autoMode;
-    
+
     // Update database metadata
     try {
       const { supabase } = await import('../../utils/supabase');
-      
+
       // Get current metadata
       const { data: currentData } = await supabase
         .from('data_sources')
@@ -115,7 +114,7 @@ export function DeviceCard({ device, onUpdate }: DeviceCardProps) {
         .single();
 
       const currentMetadata = currentData?.metadata || {};
-      
+
       const { error } = await supabase
         .from('data_sources')
         .update({
@@ -127,19 +126,17 @@ export function DeviceCard({ device, onUpdate }: DeviceCardProps) {
         .eq('source_id', device.id);
 
       if (error) {
-        console.error('Error updating auto mode:', error);
       }
     } catch (error) {
-      console.error('Database error:', error);
     }
-    
-    const devices = JSON.parse(localStorage.getItem('healthApp_devices') || '[]');
-    const updated = devices.map((d: Device) => 
-      d.id === device.id 
+
+    const devices = JSON.parse(await secureGetItem('healthApp_devices') || '[]');
+    const updated = devices.map((d: Device) =>
+      d.id === device.id
         ? { ...d, autoMode: newAutoMode }
         : d
     );
-    localStorage.setItem('healthApp_devices', JSON.stringify(updated));
+    await secureSetItem('healthApp_devices', JSON.stringify(updated));
     onUpdate();
     toast.success(`Auto mode ${newAutoMode ? 'enabled' : 'disabled'}`);
   };
@@ -155,7 +152,7 @@ export function DeviceCard({ device, onUpdate }: DeviceCardProps) {
         const { supabase } = await import('../../utils/supabase');
         
         // Get current user
-        const storedUsers = JSON.parse(localStorage.getItem('healthApp_users') || '[]');
+        const storedUsers = JSON.parse(await secureGetItem('healthApp_users') || '[]');
         const currentUser = storedUsers.find((u: any) => u.id === device.userId);
         
         if (currentUser) {
@@ -188,7 +185,6 @@ export function DeviceCard({ device, onUpdate }: DeviceCardProps) {
               .single();
 
             if (dataPointError) {
-              console.error('Error inserting data point:', dataPointError);
               continue;
             }
 
@@ -212,20 +208,17 @@ export function DeviceCard({ device, onUpdate }: DeviceCardProps) {
                 });
 
               if (biomarkerError) {
-                console.error('Error inserting biomarker data:', biomarkerError);
               }
             }
             
-            // Also save to localStorage
-            const allBiomarkers = JSON.parse(localStorage.getItem('healthApp_biomarkers') || '[]');
+            const allBiomarkers = JSON.parse(await secureGetItem('healthApp_biomarkers') || '[]');
             allBiomarkers.push(newReading);
-            localStorage.setItem('healthApp_biomarkers', JSON.stringify(allBiomarkers));
+            await secureSetItem('healthApp_biomarkers', JSON.stringify(allBiomarkers));
           }
           
           toast.success(`Synced ${device.supportedBiomarkers.length} biomarker reading(s)`);
         }
       } catch (error) {
-        console.error('Error generating biomarker data:', error);
         toast.error('Failed to sync device data');
         setIsSyncing(false);
       }
@@ -243,19 +236,17 @@ export function DeviceCard({ device, onUpdate }: DeviceCardProps) {
         .eq('source_id', device.id);
 
       if (error) {
-        console.error('Error syncing device:', error);
       }
     } catch (error) {
-      console.error('Database error:', error);
     }
 
-    const devices = JSON.parse(localStorage.getItem('healthApp_devices') || '[]');
-    const updated = devices.map((d: Device) => 
-      d.id === device.id 
+    const devices = JSON.parse(await secureGetItem('healthApp_devices') || '[]');
+    const updated = devices.map((d: Device) =>
+      d.id === device.id
         ? { ...d, lastSync: syncTime }
         : d
     );
-    localStorage.setItem('healthApp_devices', JSON.stringify(updated));
+    await secureSetItem('healthApp_devices', JSON.stringify(updated));
     setIsSyncing(false);
     onUpdate();
   };
@@ -286,19 +277,17 @@ export function DeviceCard({ device, onUpdate }: DeviceCardProps) {
         .eq('source_id', device.id);
 
       if (error) {
-        console.error('Error simulating fault:', error);
       }
     } catch (error) {
-      console.error('Database error:', error);
     }
 
-    const devices = JSON.parse(localStorage.getItem('healthApp_devices') || '[]');
-    const updated = devices.map((d: Device) => 
-      d.id === device.id 
+    const devices = JSON.parse(await secureGetItem('healthApp_devices') || '[]');
+    const updated = devices.map((d: Device) =>
+      d.id === device.id
         ? { ...d, status: 'faulty' }
         : d
     );
-    localStorage.setItem('healthApp_devices', JSON.stringify(updated));
+    await secureSetItem('healthApp_devices', JSON.stringify(updated));
     onUpdate();
     toast.error('Device fault detected!');
   };
@@ -317,22 +306,18 @@ export function DeviceCard({ device, onUpdate }: DeviceCardProps) {
         .eq('source_id', device.id);
 
       if (error) {
-        console.error('Error deleting device from database:', error);
         toast.error('Failed to delete device from database');
         return;
       }
-      
-      console.log('Device deleted from database. Historical data preserved.');
     } catch (error) {
-      console.error('Database error:', error);
       toast.error('Database error while deleting device');
       return;
     }
 
     // Delete from localStorage
-    const devices = JSON.parse(localStorage.getItem('healthApp_devices') || '[]');
+    const devices = JSON.parse(await secureGetItem('healthApp_devices') || '[]');
     const updated = devices.filter((d: Device) => d.id !== device.id);
-    localStorage.setItem('healthApp_devices', JSON.stringify(updated));
+    await secureSetItem('healthApp_devices', JSON.stringify(updated));
     
     setShowDeleteDialog(false);
     onUpdate();
@@ -457,13 +442,12 @@ export function DeviceCard({ device, onUpdate }: DeviceCardProps) {
                   .update({ priority: newPriority })
                   .eq('source_id', device.id);
               } catch (error) {
-                console.error('Error updating priority:', error);
               }
-              const devices = JSON.parse(localStorage.getItem('healthApp_devices') || '[]');
+              const devices = JSON.parse(await secureGetItem('healthApp_devices') || '[]');
               const updated = devices.map((d: Device) =>
                 d.id === device.id ? { ...d, priority: newPriority } : d
               );
-              localStorage.setItem('healthApp_devices', JSON.stringify(updated));
+              await secureSetItem('healthApp_devices', JSON.stringify(updated));
               onUpdate();
             }}
           >
@@ -485,13 +469,12 @@ export function DeviceCard({ device, onUpdate }: DeviceCardProps) {
                   .update({ priority: newPriority })
                   .eq('source_id', device.id);
               } catch (error) {
-                console.error('Error updating priority:', error);
               }
-              const devices = JSON.parse(localStorage.getItem('healthApp_devices') || '[]');
+              const devices = JSON.parse(await secureGetItem('healthApp_devices') || '[]');
               const updated = devices.map((d: Device) =>
                 d.id === device.id ? { ...d, priority: newPriority } : d
               );
-              localStorage.setItem('healthApp_devices', JSON.stringify(updated));
+              await secureSetItem('healthApp_devices', JSON.stringify(updated));
               onUpdate();
             }}
           >

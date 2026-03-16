@@ -1,6 +1,7 @@
 /**
  * Offline data queue using IndexedDB (via idb-keyval).
  * Queues biomarker entries made while offline and syncs on reconnect.
+ * PHI (biomarker data) is encrypted at rest using AES-256-GCM via secureStorage.
  */
 import { get, set, del, keys } from 'idb-keyval';
 import type { Biomarker } from './mockData';
@@ -9,18 +10,64 @@ const QUEUE_PREFIX = 'offline_entry_';
 
 export interface OfflineEntry {
   id: string;
-  biomarker: Biomarker;
+  /** Encrypted JSON string of Biomarker in production, plaintext in dev */
+  biomarker: Biomarker | string;
   createdAt: string;
   synced: boolean;
+  encrypted?: boolean;
+}
+
+/** Encrypt a biomarker for at-rest storage (production only) */
+async function encryptBiomarker(biomarker: Biomarker): Promise<{ data: Biomarker | string; encrypted: boolean }> {
+  if (import.meta.env.DEV) {
+    return { data: biomarker, encrypted: false };
+  }
+  try {
+    const { secureSetItem, secureGetItem } = await import('./secureStorage');
+    // Use secureSetItem to encrypt, then read back the encrypted value
+    const tempKey = `_offline_encrypt_tmp_${Date.now()}`;
+    await secureSetItem(tempKey, JSON.stringify(biomarker));
+    const encrypted = localStorage.getItem(tempKey);
+    localStorage.removeItem(tempKey);
+    if (encrypted) {
+      return { data: encrypted, encrypted: true };
+    }
+  } catch {
+    // Fall through to plaintext if encryption unavailable (no session)
+  }
+  return { data: biomarker, encrypted: false };
+}
+
+/** Decrypt a biomarker from at-rest storage */
+async function decryptBiomarker(entry: OfflineEntry): Promise<Biomarker> {
+  if (!entry.encrypted || typeof entry.biomarker !== 'string') {
+    return entry.biomarker as Biomarker;
+  }
+  try {
+    const { secureGetItem } = await import('./secureStorage');
+    // Temporarily put the encrypted data in localStorage for secureGetItem to decrypt
+    const tempKey = `_offline_decrypt_tmp_${Date.now()}`;
+    localStorage.setItem(tempKey, entry.biomarker);
+    const decrypted = await secureGetItem(tempKey);
+    localStorage.removeItem(tempKey);
+    if (decrypted) {
+      return JSON.parse(decrypted);
+    }
+  } catch {
+    // If decryption fails (session changed), return null-ish so caller can skip
+  }
+  throw new Error('Failed to decrypt offline entry');
 }
 
 /** Queue a new biomarker entry for later sync */
 export async function queueOfflineEntry(biomarker: Biomarker): Promise<void> {
+  const { data, encrypted } = await encryptBiomarker(biomarker);
   const entry: OfflineEntry = {
     id: `${QUEUE_PREFIX}${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
-    biomarker,
+    biomarker: data,
     createdAt: new Date().toISOString(),
     synced: false,
+    encrypted,
   };
   await set(entry.id, entry);
 }
@@ -68,7 +115,13 @@ export async function syncOfflineEntries(): Promise<number> {
     const { supabase, generateUUID } = await import('./supabase');
 
     for (const entry of pending) {
-      const { biomarker } = entry;
+      let biomarker: Biomarker;
+      try {
+        biomarker = await decryptBiomarker(entry);
+      } catch {
+        // Cannot decrypt (session changed) — skip, will retry next session
+        continue;
+      }
 
       // Map frontend type to DB enum
       const typeMap: Record<string, string> = {
@@ -91,7 +144,7 @@ export async function syncOfflineEntries(): Promise<number> {
         data_type: 'BIOMARKER',
         timestamp: biomarker.timestamp,
       });
-      if (dpError) { console.error('Sync data_points error:', dpError); continue; }
+      if (dpError) { continue; }
 
       const { error: bmError } = await supabase.from('biomarker_data').insert({
         data_point_id: dataPointId,
@@ -100,13 +153,12 @@ export async function syncOfflineEntries(): Promise<number> {
         secondary_value: biomarker.type === 'bloodPressure' ? biomarker.diastolic : null,
         unit: '',
       });
-      if (bmError) { console.error('Sync biomarker_data error:', bmError); continue; }
+      if (bmError) { continue; }
 
       await markEntrySynced(entry.id);
       synced++;
     }
   } catch (err) {
-    console.warn('Offline sync failed (likely still offline):', err);
   }
   return synced;
 }
@@ -123,7 +175,6 @@ export function registerServiceWorker(): void {
   window.addEventListener('load', async () => {
     try {
       const reg = await navigator.serviceWorker.register('/sw.js');
-      console.log('✅ Service Worker registered:', reg.scope);
 
       // Listen for SW messages (e.g. background sync trigger)
       navigator.serviceWorker.addEventListener('message', (event) => {
@@ -132,13 +183,11 @@ export function registerServiceWorker(): void {
         }
       });
     } catch (err) {
-      console.warn('Service Worker registration failed:', err);
     }
   });
 
   // When connection restores, attempt to sync queued entries
   window.addEventListener('online', async () => {
-    console.log('🌐 Back online - syncing queued entries…');
     const count = await syncOfflineEntries();
     if (count > 0) {
       // Dynamic import to avoid circular dep

@@ -24,8 +24,8 @@ export function SecurityMonitor({ users, alerts }: SecurityMonitorProps) {
     try {
       const events = await fetchSecurityEvents(50);
       setSecurityEvents(events);
-    } catch (error) {
-      console.error('Error loading security events:', error);
+    } catch {
+      // Error handled silently
     } finally {
       setIsLoading(false);
     }

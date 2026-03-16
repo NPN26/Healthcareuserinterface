@@ -13,6 +13,15 @@
 
 import { supabase, generateUUID } from './supabase';
 
+function escapeHtml(str: string): string {
+  return str
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
 // ── Types ──
 export type EmailType = 'critical_alert' | 'daily_digest' | 'weekly_digest' | 'goal_completed' | 'streak_milestone' | 'system';
 
@@ -89,7 +98,6 @@ async function invokeEmailFunction(payload: {
     return { success: true };
   } catch (err: any) {
     // Edge function not deployed - log as mock-sent for demo
-    console.warn('Email edge function not available, logging locally:', err?.message);
     logEntry.status = 'sent'; // mark as "sent" for demo purposes
     logEntry.error = 'Edge function not deployed - logged locally';
     appendEmailLog(logEntry);
@@ -107,7 +115,7 @@ export async function sendCriticalAlertEmail(
 ): Promise<boolean> {
   const { success } = await invokeEmailFunction({
     to: recipientEmail,
-    subject: `⚠️ Critical Health Alert: ${alertDetails.biomarker}`,
+    subject: `⚠️ Critical Health Alert: ${escapeHtml(alertDetails.biomarker)}`,
     html: `
       <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto;">
         <div style="background: linear-gradient(135deg, #ef4444, #dc2626); padding: 24px; border-radius: 12px 12px 0 0;">
@@ -116,10 +124,10 @@ export async function sendCriticalAlertEmail(
         <div style="padding: 24px; border: 1px solid #e5e7eb; border-top: none; border-radius: 0 0 12px 12px;">
           <p style="color: #374151; font-size: 16px;">A critical reading has been detected:</p>
           <table style="width: 100%; border-collapse: collapse; margin: 16px 0;">
-            <tr><td style="padding: 8px; color: #6b7280;">Biomarker</td><td style="padding: 8px; font-weight: bold;">${alertDetails.biomarker}</td></tr>
-            <tr><td style="padding: 8px; color: #6b7280;">Value</td><td style="padding: 8px; font-weight: bold; color: #ef4444;">${alertDetails.value}</td></tr>
-            <tr><td style="padding: 8px; color: #6b7280;">Severity</td><td style="padding: 8px;">${alertDetails.severity}</td></tr>
-            <tr><td style="padding: 8px; color: #6b7280;">Time</td><td style="padding: 8px;">${new Date(alertDetails.timestamp).toLocaleString()}</td></tr>
+            <tr><td style="padding: 8px; color: #6b7280;">Biomarker</td><td style="padding: 8px; font-weight: bold;">${escapeHtml(alertDetails.biomarker)}</td></tr>
+            <tr><td style="padding: 8px; color: #6b7280;">Value</td><td style="padding: 8px; font-weight: bold; color: #ef4444;">${escapeHtml(alertDetails.value)}</td></tr>
+            <tr><td style="padding: 8px; color: #6b7280;">Severity</td><td style="padding: 8px;">${escapeHtml(alertDetails.severity)}</td></tr>
+            <tr><td style="padding: 8px; color: #6b7280;">Time</td><td style="padding: 8px;">${escapeHtml(new Date(alertDetails.timestamp).toLocaleString())}</td></tr>
           </table>
           <p style="color: #6b7280; font-size: 14px;">Please review this alert in your healthcare dashboard.</p>
         </div>
@@ -188,7 +196,7 @@ export async function sendGoalCompletedEmail(
 ): Promise<boolean> {
   const { success } = await invokeEmailFunction({
     to: recipientEmail,
-    subject: `🎯 Goal Completed: ${goalLabel}`,
+    subject: `🎯 Goal Completed: ${escapeHtml(goalLabel)}`,
     html: `
       <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto;">
         <div style="background: linear-gradient(135deg, #10b981, #059669); padding: 24px; border-radius: 12px 12px 0 0;">
@@ -196,7 +204,7 @@ export async function sendGoalCompletedEmail(
         </div>
         <div style="padding: 24px; border: 1px solid #e5e7eb; border-top: none; border-radius: 0 0 12px 12px; text-align: center;">
           <p style="font-size: 48px; margin: 16px 0;">🎉</p>
-          <h2 style="color: #065f46; margin: 0;">${goalLabel}</h2>
+          <h2 style="color: #065f46; margin: 0;">${escapeHtml(goalLabel)}</h2>
           <p style="color: #6b7280; margin-top: 8px;">Congratulations! You've achieved your health goal. Keep up the amazing work!</p>
         </div>
       </div>
