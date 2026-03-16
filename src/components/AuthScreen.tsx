@@ -5,7 +5,7 @@ import { Input } from './ui/input';
 import { Label } from './ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
 import { Activity, Eye, EyeOff, FlaskConical } from 'lucide-react';
-import { toast } from 'sonner@2.0.3';
+import { toast } from 'sonner';
 import { User } from '../utils/mockData';
 import { signIn, signUp, getMockAccounts } from '../utils/auth';
 

@@ -62,7 +62,7 @@ export default function App() {
             .from('users')
             .select('user_id, email, name, role, age, gender')
             .eq('user_id', session.user.id)
-            .single();
+            .maybeSingle();
 
           if (userData) {
             const validatedUser: User = {

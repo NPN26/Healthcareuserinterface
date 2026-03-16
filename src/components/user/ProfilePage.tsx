@@ -529,15 +529,15 @@ export function ProfilePage({ user, onBack, onUpdate, initialTab = 'personal' }:
       {/* Content - Overlapping Cards */}
       <div className="w-full max-w-4xl mx-auto px-4 pb-8">
         {/* Tabs */}
-        <div className="bg-white/95 dark:bg-gray-800/95 backdrop-blur-lg rounded-2xl shadow-2xl mb-6 p-2 flex overflow-x-auto gap-2">
+        <div className="bg-white/95 dark:bg-gray-800/95 backdrop-blur-lg rounded-2xl shadow-2xl mb-6 p-2 flex flex-wrap gap-2">
           {tabs.map((tab) => (
             <button
               key={tab.id}
               onClick={() => setActiveTab(tab.id)}
-              className={`flex items-center justify-center gap-2 p-3 rounded-xl transition-all shrink-0 ${
+              className={`flex items-center justify-center gap-2 p-3 rounded-xl transition-all ${
                 activeTab === tab.id
                   ? 'bg-gradient-to-r from-blue-500 to-purple-500 text-white shadow-md'
-                  : 'hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300'
+                  : 'hover:bg-gray-300 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300'
               }`}
             >
               <tab.icon className="w-4 h-4" />

@@ -170,9 +170,30 @@ export async function signIn(email: string, password: string) {
       .from('users')
       .select('*')
       .eq('user_id', authData.user.id)
-      .single()
+      .maybeSingle()
 
     if (userError) throw userError
+
+    // If authenticated but no profile row exists, create one automatically.
+    // This handles cases where signup partially succeeded or the table was reset.
+    if (!userData) {
+      const newProfile = {
+        user_id: authData.user.id,
+        email: authData.user.email || email,
+        name: authData.user.user_metadata?.name || email.split('@')[0],
+        role: 'END_USER' as const,
+      }
+
+      const { error: insertError } = await supabase
+        .from('users')
+        .insert(newProfile)
+
+      if (insertError) {
+        console.error('Profile insert error:', insertError)
+        throw new Error(`Failed to create user profile: ${insertError.message}`)
+      }
+      return { user: newProfile, error: null }
+    }
 
     // Update last login
     await supabase
@@ -237,7 +258,7 @@ export async function getCurrentUser() {
       .from('users')
       .select('*')
       .eq('user_id', authUser.id)
-      .single()
+      .maybeSingle()
 
     if (userError) throw userError
 

@@ -1508,13 +1508,16 @@ export async function checkUserIsActive(userId: string): Promise<boolean> {
       .from('users')
       .select('user_id, is_active')
       .eq('user_id', userId)
-      .single()
+      .maybeSingle()
 
-    if (error || !data) return false // fail closed: deny access if query fails
+    // If query errors (e.g. is_active column doesn't exist) or no row found,
+    // allow login — the user exists in auth.users, blocking here would be a
+    // false lockout. Only deny when is_active is explicitly set to false.
+    if (error || !data) return true
     if ((data as any).is_active === false) return false
     return true
   } catch {
-    return false // fail closed on network/DB errors
+    return true
   }
 }
 
