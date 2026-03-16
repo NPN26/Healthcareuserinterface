@@ -26,7 +26,7 @@ export function QuickActionsGrid({ onLogReading, onSetGoals, onReport, onAIAssis
           className="h-auto flex-col gap-2 p-4"
         >
           <action.icon className="w-5 h-5" />
-          <span className="text-xs">{action.label}</span>
+          <span className="text-md">{action.label}</span>
         </Button>
       ))}
     </div>

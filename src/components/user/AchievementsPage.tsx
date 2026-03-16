@@ -372,8 +372,8 @@ export function AchievementsPage({ userId }: AchievementsPageProps) {
                   <Badge
                     className={`${
                       achievement.unlocked
-                        ? `bg-gradient-to-r ${getRarityColor(achievement.rarity)} text-white border-0`
-                        : 'bg-gray-200 dark:bg-gray-700'
+                        ? `bg-gradient-to-r ${getRarityColor(achievement.rarity)} text-white dark:text-black border-0`
+                        : 'bg-gray-200 dark:bg-gray-700 dark:text-white'
                     }`}
                   >
                     {achievement.rarity}

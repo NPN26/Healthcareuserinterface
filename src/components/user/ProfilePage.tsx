@@ -497,6 +497,9 @@ export function ProfilePage({ user, onBack, onUpdate, initialTab = 'personal' }:
     { id: 'achievements' as const, label: 'Achievements', icon: Trophy },
   ];
 
+  const topRowTabs = tabs.slice(0, 4);
+  const bottomRowTabs = tabs.slice(4);
+
   return (
     <div className="min-h-screen w-full bg-gradient-to-br from-blue-500 via-purple-500 to-pink-500 dark:from-custom-blue dark:via-custom-purple dark:to-custom-pink overflow-x-hidden">
       {/* Header Section */}
@@ -529,21 +532,40 @@ export function ProfilePage({ user, onBack, onUpdate, initialTab = 'personal' }:
       {/* Content - Overlapping Cards */}
       <div className="w-full max-w-4xl mx-auto px-4 pb-8">
         {/* Tabs */}
-        <div className="bg-white/95 dark:bg-gray-800/95 backdrop-blur-lg rounded-2xl shadow-2xl mb-6 p-2 flex flex-wrap gap-2">
-          {tabs.map((tab) => (
-            <button
-              key={tab.id}
-              onClick={() => setActiveTab(tab.id)}
-              className={`flex items-center justify-center gap-2 p-3 rounded-xl transition-all ${
-                activeTab === tab.id
-                  ? 'bg-gradient-to-r from-blue-500 to-purple-500 text-white shadow-md'
-                  : 'hover:bg-gray-300 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300'
-              }`}
-            >
-              <tab.icon className="w-4 h-4" />
-              <span className="text-sm hidden sm:inline">{tab.label}</span>
-            </button>
-          ))}
+        <div className="bg-white/95 dark:bg-gray-800/95 backdrop-blur-lg rounded-2xl shadow-2xl mb-6 p-2 space-y-2">
+          <div className="grid grid-cols-4 gap-2">
+            {topRowTabs.map((tab) => (
+              <button
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id)}
+                className={`flex items-center justify-center gap-2 p-3 rounded-xl transition-all ${
+                  activeTab === tab.id
+                    ? 'bg-gradient-to-r from-blue-500 to-purple-500 text-white shadow-md'
+                    : 'hover:bg-gray-300 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300'
+                }`}
+              >
+                <tab.icon className="w-4 h-4" />
+                <span className="text-sm hidden sm:inline">{tab.label}</span>
+              </button>
+            ))}
+          </div>
+
+          <div className="grid grid-cols-3 gap-2 max-w-3xl mx-auto">
+            {bottomRowTabs.map((tab) => (
+              <button
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id)}
+                className={`flex items-center justify-center gap-2 p-3 rounded-xl transition-all ${
+                  activeTab === tab.id
+                    ? 'bg-gradient-to-r from-blue-500 to-purple-500 text-white shadow-md'
+                    : 'hover:bg-gray-300 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300'
+                }`}
+              >
+                <tab.icon className="w-4 h-4" />
+                <span className="text-sm hidden sm:inline">{tab.label}</span>
+              </button>
+            ))}
+          </div>
         </div>
 
         {/* ========== Personal Info Tab ========== */}
@@ -639,7 +661,7 @@ export function ProfilePage({ user, onBack, onUpdate, initialTab = 'personal' }:
               )}
 
               <div className="flex justify-end mt-6">
-                <Button onClick={handleSavePersonalInfo} disabled={isSaving} className="bg-gradient-to-r from-blue-500 to-purple-600 dark:from-custom-blue dark:to-custom-purple">
+                <Button onClick={handleSavePersonalInfo} disabled={isSaving} className="bg-gradient-to-r from-blue-500 to-purple-600 dark:from-custom-blue dark:to-custom-purple dark:text-white">
                   {isSaving ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Save className="w-4 h-4 mr-2" />}
                   Save Changes
                 </Button>
@@ -764,7 +786,7 @@ export function ProfilePage({ user, onBack, onUpdate, initialTab = 'personal' }:
                   <Button
                     onClick={handleSaveSecurity}
                     disabled={isSaving || !securityData.currentPassword || !securityData.newPassword || !securityData.confirmPassword}
-                    className="bg-gradient-to-r from-red-500 to-orange-600"
+                    className="bg-gradient-to-r from-red-500 to-orange-600 dark:text-white"
                   >
                     {isSaving ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Save className="w-4 h-4 mr-2" />}
                     Update Password
@@ -1337,7 +1359,7 @@ export function ProfilePage({ user, onBack, onUpdate, initialTab = 'personal' }:
         {/* ========== Alert History Tab (FR8.2.4) ========== */}
         {activeTab === 'alertHistory' && (
           <div className="space-y-4">
-            <Card className="shadow-xl bg-white/90 dark:bg-gray-800/90 backdrop-blur-sm">
+            <Card className="shadow-xl backdrop-blur-sm">
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
                   <History className="w-5 h-5 text-amber-500" />

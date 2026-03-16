@@ -2438,6 +2438,10 @@
     color: var(--color-white);
   }
 
+  .dark\:text-black:is(.dark *) {
+    color: var(--color-black);
+  }
+
   .dark\:text-custom-white:is(.dark *) {
     color: var(--icon-color);
   }
@@ -3141,6 +3145,12 @@
   @media (hover: hover) {
     .hover\:bg-gray-100:hover {
       background-color: var(--color-gray-100);
+    }
+  }
+
+  @media (hover: hover) {
+    .hover\:bg-gray-300:hover {
+      background-color: var(--color-gray-300);
     }
   }
 

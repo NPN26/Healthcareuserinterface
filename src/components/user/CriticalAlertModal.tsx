@@ -85,12 +85,12 @@ export function CriticalAlertModal({ alert, onAcknowledge, onCallEmergency }: Cr
   return (
     <Dialog open={!!alert} onOpenChange={() => { /* prevent closing by clicking outside */ }}>
       <DialogContent
-        className="sm:max-w-lg border-0 p-0 overflow-hidden [&>button]:hidden"
-        onPointerDownOutside={(e) => e.preventDefault()}
-        onEscapeKeyDown={(e) => e.preventDefault()}
+        className="w-[92vw] max-w-md sm:max-w-lg border-0 p-0 overflow-hidden max-h-[85vh] [&>button]:hidden"
+        onPointerDownOutside={(e: Event) => e.preventDefault()}
+        onEscapeKeyDown={(e: Event) => e.preventDefault()}
       >
         {/* Pulsing header bar */}
-        <div className={`relative ${severityBg} text-white p-8 text-center`}>
+        <div className={`relative ${severityBg} text-white p-6 sm:p-8 text-center`}>
           {pulseAnim && (
             <div className="absolute inset-0 animate-ping opacity-20 bg-white rounded-lg" />
           )}
@@ -104,7 +104,7 @@ export function CriticalAlertModal({ alert, onAcknowledge, onCallEmergency }: Cr
           </div>
         </div>
 
-        <div className="p-6 space-y-6">
+        <div className="p-5 sm:p-6 space-y-6 overflow-y-auto max-h-[calc(85vh-160px)]">
           <DialogHeader className="space-y-3">
             <DialogTitle className="text-2xl text-center text-red-600 dark:text-red-400 flex items-center justify-center gap-2">
               <Icon className="w-7 h-7" />
