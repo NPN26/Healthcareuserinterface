@@ -13,6 +13,14 @@ import { toast } from 'sonner';
 import { Biomarker } from '../../utils/mockData';
 import { HealthGoal, fetchGoals, createGoal, updateGoal, deleteGoal, createNotification } from '../../utils/supabase';
 import { GoalCelebration } from './GoalCelebration';
+import {
+  validateNumber,
+  validateText,
+  validateDate,
+  validateEnum,
+  sanitizeText,
+  containsDangerousPatterns,
+} from '../../utils/inputValidation';
 
 // Re-export HealthGoal for backward compatibility
 export type { HealthGoal } from '../../utils/supabase';
@@ -96,6 +104,101 @@ export function GoalsManager({ isOpen, onClose, userId, biomarkers }: GoalsManag
   };
 
   const handleAddGoal = async () => {
+    // Validate goal type
+    const validGoalTypes = ['steps', 'sleep', 'weight', 'heartRate', 'bloodPressure', 'glucose', 'oxygen'] as const;
+    const typeValidation = validateEnum(newGoal.type, validGoalTypes);
+    if (!typeValidation.isValid) {
+      toast.error('Please select a valid goal type');
+      return;
+    }
+
+    // Validate period
+    const validPeriods = ['daily', 'weekly', 'monthly'] as const;
+    const periodValidation = validateEnum(newGoal.period, validPeriods);
+    if (!periodValidation.isValid) {
+      toast.error('Please select a valid period');
+      return;
+    }
+
+    // Validate target values based on goal type
+    if (newGoal.type === 'bloodPressure') {
+      const sysValidation = validateNumber(newGoal.targetSystolic, { min: 60, max: 200, allowDecimal: false });
+      const diaValidation = validateNumber(newGoal.targetDiastolic, { min: 40, max: 130, allowDecimal: false });
+
+      if (!sysValidation.isValid) {
+        toast.error('Systolic target must be between 60 and 200');
+        return;
+      }
+      if (!diaValidation.isValid) {
+        toast.error('Diastolic target must be between 40 and 130');
+        return;
+      }
+      if (newGoal.targetDiastolic >= newGoal.targetSystolic) {
+        toast.error('Diastolic must be less than systolic');
+        return;
+      }
+    } else {
+      // Define min/max for different goal types
+      const targetRanges: Record<string, { min: number; max: number }> = {
+        steps: { min: 100, max: 100000 },
+        sleep: { min: 1, max: 24 },
+        weight: { min: 1, max: 500 },
+        heartRate: { min: 40, max: 200 },
+        glucose: { min: 50, max: 400 },
+        oxygen: { min: 80, max: 100 },
+      };
+
+      const range = targetRanges[newGoal.type] || { min: 0, max: 999999 };
+      const allowDecimal = newGoal.type === 'sleep' || newGoal.type === 'weight';
+      const targetValidation = validateNumber(newGoal.target, { min: range.min, max: range.max, allowDecimal });
+
+      if (!targetValidation.isValid) {
+        toast.error(`Target must be between ${range.min} and ${range.max}`);
+        return;
+      }
+    }
+
+    // Validate deadline if provided
+    if (newGoal.deadline) {
+      const deadlineValidation = validateDate(newGoal.deadline, {
+        minDate: new Date(),
+        maxDate: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000), // Max 1 year
+      });
+      if (!deadlineValidation.isValid) {
+        toast.error(deadlineValidation.error || 'Please enter a valid deadline');
+        return;
+      }
+    }
+
+    // Validate and sanitize SMART fields
+    const smartFields = [
+      { field: 'smartSpecific', value: newGoal.smartSpecific },
+      { field: 'smartMeasurable', value: newGoal.smartMeasurable },
+      { field: 'smartAchievable', value: newGoal.smartAchievable },
+      { field: 'smartRelevant', value: newGoal.smartRelevant },
+    ];
+
+    for (const { field, value } of smartFields) {
+      if (value && value.trim()) {
+        const dangerCheck = containsDangerousPatterns(value);
+        if (dangerCheck.dangerous) {
+          toast.error(`${field.replace('smart', '')} contains invalid content`);
+          return;
+        }
+        const textValidation = validateText(value, { maxLength: 500, allowNewlines: true });
+        if (!textValidation.isValid) {
+          toast.error(textValidation.error || `${field.replace('smart', '')} is invalid`);
+          return;
+        }
+      }
+    }
+
+    // Sanitize SMART fields
+    const sanitizedSmartSpecific = newGoal.smartSpecific ? sanitizeText(newGoal.smartSpecific, { maxLength: 500, allowNewlines: true }) : undefined;
+    const sanitizedSmartMeasurable = newGoal.smartMeasurable ? sanitizeText(newGoal.smartMeasurable, { maxLength: 500, allowNewlines: true }) : undefined;
+    const sanitizedSmartAchievable = newGoal.smartAchievable ? sanitizeText(newGoal.smartAchievable, { maxLength: 500, allowNewlines: true }) : undefined;
+    const sanitizedSmartRelevant = newGoal.smartRelevant ? sanitizeText(newGoal.smartRelevant, { maxLength: 500, allowNewlines: true }) : undefined;
+
     setLoading(true);
     try {
       const goal: Omit<HealthGoal, 'id' | 'createdAt'> = {
@@ -106,14 +209,14 @@ export function GoalsManager({ isOpen, onClose, userId, biomarkers }: GoalsManag
         targetDiastolic: newGoal.type === 'bloodPressure' ? newGoal.targetDiastolic : undefined,
         period: newGoal.period,
         deadline: newGoal.deadline || undefined,
-        smartSpecific: newGoal.smartSpecific || undefined,
-        smartMeasurable: newGoal.smartMeasurable || undefined,
-        smartAchievable: newGoal.smartAchievable || undefined,
-        smartRelevant: newGoal.smartRelevant || undefined,
+        smartSpecific: sanitizedSmartSpecific,
+        smartMeasurable: sanitizedSmartMeasurable,
+        smartAchievable: sanitizedSmartAchievable,
+        smartRelevant: sanitizedSmartRelevant,
       };
 
       const createdGoal = await createGoal(goal);
-      
+
       if (createdGoal) {
         setGoals([createdGoal, ...goals]);
         setShowAddGoal(false);
@@ -143,6 +246,47 @@ export function GoalsManager({ isOpen, onClose, userId, biomarkers }: GoalsManag
 
   const handleUpdateGoal = async () => {
     if (!editingGoal) return;
+
+    // Validate period
+    const validPeriods = ['daily', 'weekly', 'monthly'] as const;
+    const periodValidation = validateEnum(editingGoal.period, validPeriods);
+    if (!periodValidation.isValid) {
+      toast.error('Please select a valid period');
+      return;
+    }
+
+    // Validate target
+    const targetRanges: Record<string, { min: number; max: number }> = {
+      steps: { min: 100, max: 100000 },
+      sleep: { min: 1, max: 24 },
+      weight: { min: 1, max: 500 },
+      heartRate: { min: 40, max: 200 },
+      glucose: { min: 50, max: 400 },
+      oxygen: { min: 80, max: 100 },
+      bloodPressure: { min: 0, max: 0 }, // Uses targetSystolic/targetDiastolic
+    };
+
+    const range = targetRanges[editingGoal.type] || { min: 0, max: 999999 };
+    if (editingGoal.type !== 'bloodPressure') {
+      const allowDecimal = editingGoal.type === 'sleep' || editingGoal.type === 'weight';
+      const targetValidation = validateNumber(editingGoal.target, { min: range.min, max: range.max, allowDecimal });
+      if (!targetValidation.isValid) {
+        toast.error(`Target must be between ${range.min} and ${range.max}`);
+        return;
+      }
+    }
+
+    // Validate deadline if provided
+    if (editingGoal.deadline) {
+      const deadlineValidation = validateDate(editingGoal.deadline, {
+        minDate: new Date(Date.now() - 24 * 60 * 60 * 1000), // Allow yesterday for existing goals
+        maxDate: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000),
+      });
+      if (!deadlineValidation.isValid) {
+        toast.error(deadlineValidation.error || 'Please enter a valid deadline');
+        return;
+      }
+    }
 
     setLoading(true);
     try {

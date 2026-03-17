@@ -7,6 +7,14 @@ import { Avatar, AvatarFallback, AvatarImage } from '../ui/avatar';
 import { Send, Bot } from 'lucide-react';
 import { Biomarker, Device, getBiomarkerLabel, getBiomarkerUnit } from '../../utils/mockData';
 import { ImageWithFallback } from '../figma/ImageWithFallback';
+import { checkRateLimit, peekRateLimit } from '../../utils/rateLimiter';
+import { toast } from 'sonner';
+import {
+  validateText,
+  sanitizeText,
+  containsDangerousPatterns,
+  stripHtml,
+} from '../../utils/inputValidation';
 
 interface Message {
   id: string;
@@ -24,6 +32,7 @@ interface VirtualCompanionProps {
 }
 
 export function VirtualCompanion({ isOpen, onClose, biomarkers, devices, user }: VirtualCompanionProps) {
+  const MAX_MESSAGES = 200; // Cap to prevent unbounded memory growth
   const [messages, setMessages] = useState<Message[]>([
     {
       id: '1',
@@ -166,27 +175,63 @@ export function VirtualCompanion({ isOpen, onClose, biomarkers, devices, user }:
   const handleSend = () => {
     if (!input.trim()) return;
 
+    // Validate message length and content
+    const messageValidation = validateText(input, {
+      minLength: 1,
+      maxLength: 500,
+      required: true,
+    });
+
+    if (!messageValidation.isValid) {
+      toast.error('Message is too long (max 500 characters)');
+      return;
+    }
+
+    // Check for dangerous patterns (XSS, script injection)
+    const dangerCheck = containsDangerousPatterns(input);
+    if (dangerCheck.dangerous) {
+      toast.error('Invalid message content');
+      return;
+    }
+
+    // Rate limit check
+    const rateCheck = checkRateLimit('chatMessage', user.id || 'anonymous');
+    if (!rateCheck.allowed) {
+      toast.error(rateCheck.message);
+      return;
+    }
+
+    // Sanitize and strip any HTML from user input
+    const sanitizedInput = stripHtml(sanitizeText(input, { maxLength: 500, escapeHtml: false }));
+
     const userMessage: Message = {
       id: Date.now().toString(),
-      text: input,
+      text: sanitizedInput,
       sender: 'user',
       timestamp: new Date(),
     };
 
-    setMessages(prev => [...prev, userMessage]);
+    setMessages(prev => {
+      const updated = [...prev, userMessage];
+      // Cap message history to prevent unbounded memory growth
+      return updated.length > MAX_MESSAGES ? updated.slice(-MAX_MESSAGES) : updated;
+    });
     setInput('');
     setIsTyping(true);
 
     // Simulate AI thinking time
     setTimeout(() => {
-      const response = generateResponse(input);
+      const response = generateResponse(sanitizedInput);
       const assistantMessage: Message = {
         id: (Date.now() + 1).toString(),
         text: response,
         sender: 'assistant',
         timestamp: new Date(),
       };
-      setMessages(prev => [...prev, assistantMessage]);
+      setMessages(prev => {
+        const updated = [...prev, assistantMessage];
+        return updated.length > MAX_MESSAGES ? updated.slice(-MAX_MESSAGES) : updated;
+      });
       setIsTyping(false);
     }, 1000 + Math.random() * 1000);
   };
@@ -267,8 +312,9 @@ export function VirtualCompanion({ isOpen, onClose, biomarkers, devices, user }:
               onKeyPress={(e) => e.key === 'Enter' && handleSend()}
               placeholder="Ask about your health data..."
               className="flex-1"
+              maxLength={500}
             />
-            <Button onClick={handleSend} disabled={!input.trim()}>
+            <Button onClick={handleSend} disabled={!input.trim() || !peekRateLimit('chatMessage', user.id || 'anonymous').allowed}>
               <Send className="w-4 h-4" />
             </Button>
           </div>

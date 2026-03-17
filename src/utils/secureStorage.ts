@@ -15,6 +15,7 @@ const PHI_KEYS = new Set([
   'healthApp_users',
   'healthApp_goals',
   'healthApp_currentUser',
+  'healthApp_emailLogs',
 ]);
 
 const ENCODER = new TextEncoder();
@@ -27,15 +28,17 @@ function isPHI(key: string): boolean {
 }
 
 /**
- * Derive an AES-256-GCM key from source material (e.g. session ID).
+ * Derive an AES-256-GCM key from a stable user identifier (e.g. user_id).
+ * Using user_id instead of access_token ensures the key does not rotate
+ * when the session refreshes, preventing data loss.
  * The key is cached in memory for the duration of the session.
  */
-async function deriveKey(sessionId: string): Promise<CryptoKey> {
+async function deriveKey(userId: string): Promise<CryptoKey> {
   if (cachedKey) return cachedKey;
 
   const keyMaterial = await crypto.subtle.importKey(
     'raw',
-    ENCODER.encode(sessionId),
+    ENCODER.encode(userId),
     'PBKDF2',
     false,
     ['deriveKey']

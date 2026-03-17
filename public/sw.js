@@ -31,6 +31,11 @@ self.addEventListener('fetch', (event) => {
   // Skip non-GET
   if (request.method !== 'GET') return;
 
+  // Skip Vite dev server requests (in dev mode)
+  if (url.pathname.startsWith('/@')) return;
+  if (url.pathname.endsWith('.tsx')) return;
+  if (url.pathname.endsWith('.ts')) return;
+
   // API calls (Supabase) - network only, don't cache
   if (url.hostname.includes('supabase')) return;
 

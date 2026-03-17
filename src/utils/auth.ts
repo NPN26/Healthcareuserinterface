@@ -1,5 +1,16 @@
 import { supabase } from './supabase'
 import { checkUserIsActive } from './supabase'
+import {
+  logAuthSuccess,
+  logAuthFailure,
+  logAuthLockout,
+  logSignup,
+  logSignupFailure,
+  logLogout,
+  logApiError,
+} from './securityLogger'
+import { checkRateLimit, peekRateLimit, resetRateLimit } from './rateLimiter'
+import { isLikelyBot } from './botDetection'
 
 export interface User {
   user_id: string
@@ -19,87 +30,24 @@ export interface User {
   last_login?: string
 }
 
-// Mock accounts for development only - stripped from production builds
-const MOCK_ACCOUNTS = import.meta.env.DEV ? {
-  'john@example.com': {
-    user_id: '550e8400-e29b-41d4-a716-446655440001',
-    email: 'john@example.com',
-    name: 'John Doe',
-    role: 'END_USER' as const,
-    age: 45,
-    gender: 'male',
-    password: 'password123'
-  },
-  'sarah@example.com': {
-    user_id: '550e8400-e29b-41d4-a716-446655440002',
-    email: 'sarah@example.com',
-    name: 'Sarah Smith',
-    role: 'END_USER' as const,
-    age: 32,
-    gender: 'female',
-    password: 'password123'
-  },
-  'emily@healthcare.com': {
-    user_id: '550e8400-e29b-41d4-a716-446655440003',
-    email: 'emily@healthcare.com',
-    name: 'Dr. Emily Brown',
-    role: 'PROVIDER' as const,
-    age: 38,
-    gender: 'female',
-    password: 'password123'
-  },
-  'admin@system.com': {
-    user_id: '550e8400-e29b-41d4-a716-446655440004',
-    email: 'admin@system.com',
-    name: 'Admin User',
-    role: 'ADMIN' as const,
-    age: 40,
-    gender: 'male',
-    password: 'password123'
-  }
-} as Record<string, { user_id: string; email: string; name: string; role: 'END_USER' | 'PROVIDER' | 'ADMIN'; age: number; gender: string; password: string }> : {} as Record<string, { user_id: string; email: string; name: string; role: 'END_USER' | 'PROVIDER' | 'ADMIN'; age: number; gender: string; password: string }>
-
-/**
- * Check if an email is a mock account (dev only)
- */
-function isMockAccount(email: string): boolean {
-  if (!import.meta.env.DEV) return false
-  return email in MOCK_ACCOUNTS
-}
-
-/**
- * Authenticate mock account (dev only, bypasses Supabase)
- */
-function authenticateMockAccount(email: string, password: string): { user: User | null, error: string | null } {
-  if (!import.meta.env.DEV) {
-    return { user: null, error: 'Mock auth is not available in production' }
-  }
-  const mockAccount = MOCK_ACCOUNTS[email]
-
-  if (!mockAccount) {
-    return { user: null, error: 'Mock account not found' }
-  }
-
-  if (mockAccount.password !== password) {
-    return { user: null, error: 'Invalid password' }
-  }
-
-  // Return mock user without password
-  const { password: _, ...userWithoutPassword } = mockAccount
-  return { user: userWithoutPassword, error: null }
-}
-
 /**
  * Sign up a new user
  */
 export async function signUp(email: string, password: string, name: string) {
   try {
-    // Prevent signup with mock account emails
-    if (isMockAccount(email)) {
-      throw new Error('This email is reserved for testing. Please use a different email or sign in with the test account.')
+    // Rate-limit signups
+    const rateCheck = checkRateLimit('signup', email.trim().toLowerCase())
+    if (!rateCheck.allowed) {
+      return { user: null, error: rateCheck.message }
     }
 
-    // First, create auth user in Supabase Auth
+    // Bot detection for account creation
+    if (isLikelyBot()) {
+      logSignupFailure(email, 'Bot-like behavior detected')
+      return { user: null, error: 'Unable to create account. Please try again later.' }
+    }
+
+    // Create auth user in Supabase Auth
     const { data: authData, error: authError } = await supabase.auth.signUp({
       email,
       password,
@@ -122,8 +70,10 @@ export async function signUp(email: string, password: string, name: string) {
 
     if (userError) throw userError
 
+    logSignup(authData.user.id, email)
     return { user: userData, error: null }
   } catch (error: any) {
+    logSignupFailure(email, error.message)
     return { user: null, error: error.message }
   }
 }
@@ -133,34 +83,49 @@ export async function signUp(email: string, password: string, name: string) {
  */
 export async function signIn(email: string, password: string) {
   try {
-    // Check if this is a mock account first
-    if (isMockAccount(email)) {
-      const result = authenticateMockAccount(email, password)
-
-      // Check if mock user is disabled via Supabase
-      if (result.user) {
-        const isActive = await checkUserIsActive(result.user.user_id)
-        if (!isActive) {
-          return { user: null, error: 'Your account has been disabled. Please contact an administrator.' }
-        }
+    // Rate limiting: check if this email is rate-limited
+    const rateCheck = checkRateLimit('login', email.trim().toLowerCase())
+    if (!rateCheck.allowed) {
+      logAuthLockout(email, rateCheck.retryAfterMs)
+      return {
+        user: null,
+        error: rateCheck.message
       }
-
-      return result
     }
 
-    // Otherwise, use real Supabase Auth for new accounts
+    // Use Supabase Auth
     const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
       email,
       password,
     })
 
-    if (authError) throw authError
-    if (!authData.user) throw new Error('No user returned from signin')
+    if (authError) {
+      logAuthFailure(email, authError.message)
+      // Check if we've now hit the limit
+      const postFailCheck = peekRateLimit('login', email.trim().toLowerCase())
+      if (!postFailCheck.allowed) {
+        logAuthLockout(email, postFailCheck.retryAfterMs)
+        return {
+          user: null,
+          error: postFailCheck.message
+        }
+      }
+      // Return generic error message to prevent user enumeration
+      return { user: null, error: 'Invalid email or password' }
+    }
+
+    if (!authData.user) {
+      logAuthFailure(email, 'No user returned')
+      return { user: null, error: 'Invalid email or password' }
+    }
+
+    // Successful login — clear rate limit record
+    resetRateLimit('login', email.trim().toLowerCase())
 
     // Check if user account is active
     const isActive = await checkUserIsActive(authData.user.id)
     if (!isActive) {
-      // Sign out the Supabase session since account is disabled
+      logAuthFailure(email, 'Account disabled')
       await supabase.auth.signOut()
       return { user: null, error: 'Your account has been disabled. Please contact an administrator.' }
     }
@@ -189,9 +154,10 @@ export async function signIn(email: string, password: string) {
         .insert(newProfile)
 
       if (insertError) {
-        console.error('Profile insert error:', insertError)
+        logApiError('signIn.insertProfile', insertError, authData.user.id)
         throw new Error(`Failed to create user profile: ${insertError.message}`)
       }
+      logAuthSuccess(authData.user.id, email)
       return { user: newProfile, error: null }
     }
 
@@ -201,21 +167,12 @@ export async function signIn(email: string, password: string) {
       .update({ last_login: new Date().toISOString() })
       .eq('user_id', authData.user.id)
 
+    logAuthSuccess(authData.user.id, email)
     return { user: userData, error: null }
   } catch (error: any) {
+    logApiError('signIn', error, undefined)
     return { user: null, error: error.message }
   }
-}
-
-/**
- * Get list of mock accounts for testing (dev only, for quick login UI)
- */
-export function getMockAccounts() {
-  if (!import.meta.env.DEV) return []
-  return Object.values(MOCK_ACCOUNTS).map(({ password, ...account }) => ({
-    ...account,
-    isMock: true
-  }))
 }
 
 /**
@@ -223,10 +180,14 @@ export function getMockAccounts() {
  */
 export async function signOut() {
   try {
+    // Capture user ID before sign out clears the session
+    const { data: { user } } = await supabase.auth.getUser()
     const { error } = await supabase.auth.signOut()
     if (error) throw error
+    if (user) logLogout(user.id)
     return { error: null }
   } catch (error: any) {
+    logApiError('signOut', error)
     return { error: error.message }
   }
 }
@@ -250,7 +211,7 @@ export async function getCurrentSession() {
 export async function getCurrentUser() {
   try {
     const { data: { user: authUser }, error: authError } = await supabase.auth.getUser()
-    
+
     if (authError) throw authError
     if (!authUser) return { user: null, error: null }
 
@@ -269,38 +230,39 @@ export async function getCurrentUser() {
 }
 
 /**
- * Test database connection
+ * Request password reset
  */
-export async function testConnection() {
+export async function resetPassword(email: string) {
   try {
-    // Try to query the users table
-    const { data, error } = await supabase
-      .from('users')
-      .select('user_id, email, name, role')
-      .limit(1)
+    const { error } = await supabase.auth.resetPasswordForEmail(email, {
+      redirectTo: window.location.origin,
+    })
 
     if (error) throw error
 
-    return { connected: true, error: null }
+    return { error: null }
   } catch (error: any) {
-    return { connected: false, error: error.message }
+    logApiError('resetPassword', error, undefined)
+    return { error: error.message }
   }
 }
 
 /**
- * Get all users (for testing/demo purposes)
+ * Update password (called after user clicks reset link)
  */
-export async function getAllUsers() {
+export async function updatePassword(newPassword: string) {
   try {
-    const { data, error } = await supabase
-      .from('users')
-      .select('user_id, email, name, role')
-      .order('created_at', { ascending: false })
+    const { error } = await supabase.auth.updateUser({
+      password: newPassword,
+    })
 
     if (error) throw error
 
-    return { users: data, error: null }
+    return { error: null }
   } catch (error: any) {
-    return { users: null, error: error.message }
+    logApiError('updatePassword', error, undefined)
+    return { error: error.message }
   }
 }
+
+

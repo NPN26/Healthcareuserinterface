@@ -12,6 +12,7 @@ import {
 } from '../ui/dropdown-menu';
 import { Avatar, AvatarFallback } from '../ui/avatar';
 import { NotificationsPopover, type Notification } from './NotificationsPopover';
+import { sanitizeText, containsDangerousPatterns } from '../../utils/inputValidation';
 
 interface DashboardHeaderProps {
   user: any;
@@ -60,6 +61,16 @@ export function DashboardHeader({
 }: DashboardHeaderProps) {
   const isToday = selectedDate.toDateString() === new Date().toDateString();
 
+  const handleSearchChange = (value: string) => {
+    // Reject dangerous patterns early
+    if (containsDangerousPatterns(value).dangerous) {
+      return;
+    }
+    // Sanitize before passing up
+    const sanitized = sanitizeText(value, { maxLength: 100, escapeHtml: false });
+    onSearchChange(sanitized);
+  };
+
   return (
     <header className="sticky top-0 z-10 flex h-14 sm:h-16 shrink-0 items-center gap-1 sm:gap-4 border-b bg-white/80 dark:bg-gray-900/80 backdrop-blur-xl px-2 sm:px-4">
       <SidebarTrigger className="-ml-1 shrink-0" />
@@ -104,8 +115,9 @@ export function DashboardHeader({
             type="search"
             placeholder="Search health metrics, devices..."
             value={searchQuery}
-            onChange={(e) => onSearchChange(e.target.value)}
+            onChange={(e) => handleSearchChange(e.target.value)}
             className="pl-9 h-9"
+            maxLength={100}
           />
         </div>
       </div>

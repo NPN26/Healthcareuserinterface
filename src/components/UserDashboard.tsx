@@ -5,11 +5,11 @@ import autoTable from 'jspdf-autotable';
 import { Chart } from 'chart.js/auto';
 import { Checkbox } from './ui/checkbox';
 import { Activity, Flame, Droplet, Settings, User, Heart, Wind, Footprints, Moon, Plus, Scale, Zap, Target, Trophy, Star, Crown, Sparkles, Award, RefreshCw } from 'lucide-react';
-import { 
-  BiomarkerChart, 
-  DeviceCard, 
-  VirtualCompanion, 
-  DailySummary, 
+import {
+  BiomarkerChart,
+  DeviceCard,
+  VirtualCompanion,
+  DailySummary,
   ProfilePage,
   GoalsManager,
   ManualDataEntry,
@@ -32,9 +32,9 @@ import {
 } from './user';
 import { StreakCelebration, calculateStreak, checkStreakMilestone, type StreakMilestone } from './user/StreakCelebration';
 import { sendCriticalAlertEmail } from '../utils/emailService';
-import { 
-  Biomarker, 
-  Device, 
+import {
+  Biomarker,
+  Device,
   Alert,
   generateBiomarkerData,
   isAbnormalReading,
@@ -42,6 +42,13 @@ import {
   getBiomarkerUnit
 } from '../utils/mockData';
 import { toast } from 'sonner';
+import { checkRateLimit } from '../utils/rateLimiter';
+import {
+  validateText,
+  validateEnum,
+  sanitizeText,
+  containsDangerousPatterns,
+} from '../utils/inputValidation';
 import {
   Sidebar,
   SidebarContent,
@@ -534,6 +541,13 @@ export function UserDashboard({ user, onLogout }: UserDashboardProps) {
 
   const generateReport = async () => {
     try {
+      // Rate-limit PDF generation
+      const rateCheck = checkRateLimit('pdfGeneration', currentUser?.id || 'anonymous');
+      if (!rateCheck.allowed) {
+        toast.error(rateCheck.message);
+        return;
+      }
+
       setShowReportDialog(false);
 
       // Filter biomarkers by duration
@@ -851,13 +865,52 @@ export function UserDashboard({ user, onLogout }: UserDashboardProps) {
   };
 
   const handleAddDevice = async (deviceData: { name: string; type: Device['type']; supportedBiomarkers: Biomarker['type'][] }) => {
+    // Validate device name
+    const nameValidation = validateText(deviceData.name, {
+      minLength: 2,
+      maxLength: 100,
+      required: true,
+    });
+    if (!nameValidation.isValid) {
+      toast.error(nameValidation.error || 'Please enter a valid device name');
+      return;
+    }
+
+    // Check for dangerous patterns in device name
+    const nameDangerCheck = containsDangerousPatterns(deviceData.name);
+    if (nameDangerCheck.dangerous) {
+      toast.error('Invalid device name');
+      return;
+    }
+
+    // Validate device type
+    const validDeviceTypes = ['smartwatch', 'glucometer', 'bloodPressureMonitor', 'scale', 'thermometer', 'sleepTracker'] as const;
+    const typeValidation = validateEnum(deviceData.type, validDeviceTypes);
+    if (!typeValidation.isValid) {
+      toast.error('Please select a valid device type');
+      return;
+    }
+
+    // Validate supported biomarkers
+    const validBiomarkers = ['heartRate', 'bloodPressure', 'glucose', 'oxygen', 'steps', 'sleep', 'temperature', 'weight'] as const;
+    for (const biomarker of deviceData.supportedBiomarkers) {
+      const biomarkerValidation = validateEnum(biomarker, validBiomarkers);
+      if (!biomarkerValidation.isValid) {
+        toast.error('Invalid biomarker selection');
+        return;
+      }
+    }
+
+    // Sanitize device name
+    const sanitizedName = sanitizeText(deviceData.name, { maxLength: 100 });
+
     // Import UUID generator
     const { generateUUID } = await import('../utils/supabase');
-    
+
     const newDevice: Device = {
       id: generateUUID(), // Generate proper UUID for database compatibility
       userId: user.id,
-      name: deviceData.name,
+      name: sanitizedName,
       type: deviceData.type,
       status: 'active',
       batteryLevel: 100,
@@ -1283,11 +1336,13 @@ export function UserDashboard({ user, onLogout }: UserDashboardProps) {
           }} className="space-y-4">
             <div className="space-y-2">
               <Label htmlFor="name">Device Name</Label>
-              <Input 
-                id="name" 
-                name="name" 
-                placeholder="Enter device name" 
-                required 
+              <Input
+                id="name"
+                name="name"
+                placeholder="Enter device name"
+                required
+                maxLength={100}
+                minLength={2}
               />
             </div>
             <div className="space-y-2">

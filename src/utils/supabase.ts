@@ -1,6 +1,8 @@
 import { createClient } from '@supabase/supabase-js'
 import { Biomarker, Device, Alert } from './mockData'
 import { secureGetItem, secureSetItem } from './secureStorage'
+import { logApiError, logAdminAction, trackApiRequest } from './securityLogger'
+import { checkRateLimit } from './rateLimiter'
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY
@@ -9,7 +11,35 @@ if (!supabaseUrl || !supabaseAnonKey) {
   throw new Error('Missing Supabase environment variables')
 }
 
-export const supabase = createClient(supabaseUrl, supabaseAnonKey)
+/**
+ * Supabase client — configured for secure deployment:
+ *
+ * 1. Uses the **anon (public) key** only. All data access is mediated by
+ *    Supabase Row-Level Security (RLS) policies — the client NEVER has
+ *    direct superuser / service-role access.
+ * 2. Database network access should be restricted in the Supabase dashboard:
+ *    - Enable "Enforce SSL" on the database connection.
+ *    - Use the Supabase API endpoint (behind their proxy) rather than
+ *      exposing the raw Postgres connection string publicly.
+ * 3. Auth tokens auto-refresh and sessions persist. PKCE flow is used
+ *    instead of implicit for stronger SPA security.
+ */
+export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+  auth: {
+    autoRefreshToken: true,
+    persistSession: true,
+    detectSessionInUrl: true,
+    flowType: 'pkce',
+  },
+  global: {
+    headers: {
+      'X-Client-Info': 'healthsync-web',
+    },
+  },
+  db: {
+    schema: 'public',
+  },
+})
 
 /**
  * Verify the current authenticated user has ADMIN role.
@@ -22,6 +52,13 @@ async function requireAdmin(): Promise<{ authorized: boolean; userId: string; er
     return { authorized: false, userId: '', error: 'Not authenticated' }
   }
 
+  // Rate-limit API calls for this user
+  const rateCheck = checkRateLimit('apiCall', authUser.id)
+  if (!rateCheck.allowed) {
+    return { authorized: false, userId: authUser.id, error: rateCheck.message }
+  }
+  trackApiRequest(authUser.id)
+
   const { data: userData, error: userError } = await supabase
     .from('users')
     .select('role')
@@ -33,6 +70,20 @@ async function requireAdmin(): Promise<{ authorized: boolean; userId: string; er
   }
 
   return { authorized: true, userId: authUser.id }
+}
+
+/**
+ * Verify the current authenticated user and return their ID.
+ * Used to enforce ownership checks on user-scoped data.
+ * Prevents IDOR by deriving userId from the server-verified session
+ * instead of trusting caller-supplied values.
+ */
+async function requireAuth(): Promise<{ authenticated: boolean; userId: string; error?: string }> {
+  const { data: { user: authUser }, error: authError } = await supabase.auth.getUser()
+  if (authError || !authUser) {
+    return { authenticated: false, userId: '', error: 'Not authenticated' }
+  }
+  return { authenticated: true, userId: authUser.id }
 }
 
 /**
@@ -55,6 +106,9 @@ export function generateUUID(): string {
  */
 export async function fetchBiomarkers(userId: string): Promise<Biomarker[]> {
   try {
+    const rateCheck = checkRateLimit('apiCall', userId)
+    if (!rateCheck.allowed) return []
+    trackApiRequest(userId)
     const { data, error } = await supabase
       .from('data_points')
       .select(`
@@ -74,6 +128,7 @@ export async function fetchBiomarkers(userId: string): Promise<Biomarker[]> {
       .limit(1000)
 
     if (error) {
+      logApiError('fetchBiomarkers', error, userId)
       return []
     }
 
@@ -125,6 +180,7 @@ export async function fetchBiomarkers(userId: string): Promise<Biomarker[]> {
         return biomarker;
       })
   } catch (error) {
+    logApiError('fetchBiomarkers', error, userId)
     return []
   }
 }
@@ -134,6 +190,9 @@ export async function fetchBiomarkers(userId: string): Promise<Biomarker[]> {
  */
 export async function fetchDevices(userId: string): Promise<Device[]> {
   try {
+    const rateCheck = checkRateLimit('apiCall', userId)
+    if (!rateCheck.allowed) return []
+    trackApiRequest(userId)
     const { data, error } = await supabase
       .from('data_sources')
       .select('source_id, user_id, name, status, last_sync, priority, metadata')
@@ -141,6 +200,7 @@ export async function fetchDevices(userId: string): Promise<Device[]> {
       .order('created_at', { ascending: false })
 
     if (error) {
+      logApiError('fetchDevices', error, userId)
       return []
     }
 
@@ -163,6 +223,7 @@ export async function fetchDevices(userId: string): Promise<Device[]> {
       } as Device
     })
   } catch (error) {
+    logApiError('fetchDevices', error, userId)
     return []
   }
 }
@@ -173,6 +234,9 @@ export async function fetchDevices(userId: string): Promise<Device[]> {
  */
 export async function fetchAlerts(userId: string): Promise<Alert[]> {
   try {
+    const rateCheck = checkRateLimit('apiCall', userId)
+    if (!rateCheck.allowed) return []
+    trackApiRequest(userId)
     const { data, error } = await supabase
       .from('notifications')
       .select('notification_id, user_id, type, content, timestamp, is_read')
@@ -182,6 +246,7 @@ export async function fetchAlerts(userId: string): Promise<Alert[]> {
       .limit(100)
 
     if (error) {
+      logApiError('fetchAlerts', error, userId)
       return []
     }
 
@@ -222,6 +287,8 @@ export interface NotificationData {
  */
 export async function fetchNotifications(userId: string): Promise<NotificationData[]> {
   try {
+    const rateCheck = checkRateLimit('apiCall', userId)
+    if (!rateCheck.allowed) return []
     const { data, error } = await supabase
       .from('notifications')
       .select('notification_id, user_id, type, content, timestamp, is_read, read_at')
@@ -261,9 +328,14 @@ export async function fetchUnreadNotificationsCount(userId: string): Promise<num
 
 /**
  * Mark a notification as read
+ * Verifies the authenticated user owns the notification before updating
  */
 export async function markNotificationAsRead(notificationId: string): Promise<boolean> {
   try {
+    // Verify authentication and get user ID to enforce ownership
+    const auth = await requireAuth()
+    if (!auth.authenticated) return false
+
     const { error } = await supabase
       .from('notifications')
       .update({
@@ -271,6 +343,7 @@ export async function markNotificationAsRead(notificationId: string): Promise<bo
         read_at: new Date().toISOString()
       })
       .eq('notification_id', notificationId)
+      .eq('user_id', auth.userId) // Ownership check: only update if user owns this notification
 
     if (error) {
       return false
@@ -308,13 +381,19 @@ export async function markAllNotificationsAsRead(userId: string): Promise<boolea
 
 /**
  * Delete a notification
+ * Verifies the authenticated user owns the notification before deleting
  */
 export async function deleteNotification(notificationId: string): Promise<boolean> {
   try {
+    // Verify authentication and get user ID to enforce ownership
+    const auth = await requireAuth()
+    if (!auth.authenticated) return false
+
     const { error } = await supabase
       .from('notifications')
       .delete()
       .eq('notification_id', notificationId)
+      .eq('user_id', auth.userId) // Ownership check: only delete if user owns this notification
 
     if (error) {
       return false
@@ -595,9 +674,14 @@ export async function createGoal(goal: Omit<HealthGoal, 'id' | 'createdAt'>): Pr
 
 /**
  * Update an existing goal in Supabase (with localStorage sync)
+ * Verifies the authenticated user owns the goal before updating
  */
 export async function updateGoal(goalId: string, updates: Partial<HealthGoal>): Promise<boolean> {
   try {
+    // Verify authentication and get user ID to enforce ownership
+    const auth = await requireAuth()
+    if (!auth.authenticated) return false
+
     const dbUpdates: any = {};
 
     if (updates.target !== undefined) {
@@ -610,16 +694,18 @@ export async function updateGoal(goalId: string, updates: Partial<HealthGoal>): 
 
     if (updates.period !== undefined) {
       // Recalculate end_date based on new period
+      // Also verify ownership when fetching
       const { data: existingGoal } = await supabase
         .from('goals')
         .select('start_date')
         .eq('goal_id', goalId)
+        .eq('user_id', auth.userId) // Ownership check
         .single();
 
       if (existingGoal) {
         const startDate = new Date(existingGoal.start_date);
         const endDate = new Date(startDate);
-        
+
         if (updates.period === 'daily') {
           endDate.setDate(endDate.getDate() + 1);
         } else if (updates.period === 'weekly') {
@@ -627,7 +713,7 @@ export async function updateGoal(goalId: string, updates: Partial<HealthGoal>): 
         } else if (updates.period === 'monthly') {
           endDate.setMonth(endDate.getMonth() + 1);
         }
-        
+
         dbUpdates.end_date = endDate.toISOString().split('T')[0];
       }
     }
@@ -638,6 +724,7 @@ export async function updateGoal(goalId: string, updates: Partial<HealthGoal>): 
       .from('goals')
       .update(dbUpdates)
       .eq('goal_id', goalId)
+      .eq('user_id', auth.userId) // Ownership check: only update if user owns this goal
 
     if (error) {
       return false
@@ -661,13 +748,19 @@ export async function updateGoal(goalId: string, updates: Partial<HealthGoal>): 
 
 /**
  * Delete a goal from Supabase (with localStorage sync)
+ * Verifies the authenticated user owns the goal before deleting
  */
 export async function deleteGoal(goalId: string): Promise<boolean> {
   try {
+    // Verify authentication and get user ID to enforce ownership
+    const auth = await requireAuth()
+    if (!auth.authenticated) return false
+
     const { error } = await supabase
       .from('goals')
       .delete()
       .eq('goal_id', goalId)
+      .eq('user_id', auth.userId) // Ownership check: only delete if user owns this goal
 
     if (error) {
       return false
@@ -1087,11 +1180,18 @@ export async function fetchAllAccessConsents(patientId: string): Promise<AccessR
 
 /**
  * Approve an access request
+ * Verifies the authenticated user is the patient who owns this consent
  * @param consentId - The consent ID to approve
  * @param providerId - The provider ID (for notification)
  */
 export async function approveAccessRequest(consentId: string, providerId: string): Promise<{ success: boolean; message: string }> {
   try {
+    // Verify authentication and get user ID to enforce ownership
+    const auth = await requireAuth()
+    if (!auth.authenticated) {
+      return { success: false, message: 'Not authenticated' }
+    }
+
     const { error } = await supabase
       .from('access_consents')
       .update({
@@ -1099,6 +1199,7 @@ export async function approveAccessRequest(consentId: string, providerId: string
         granted_at: new Date().toISOString()
       })
       .eq('consent_id', consentId)
+      .eq('patient_id', auth.userId) // Ownership check: only the patient can approve their consent
       .eq('status', 'PENDING')
 
     if (error) {
@@ -1132,10 +1233,17 @@ export async function approveAccessRequest(consentId: string, providerId: string
 
 /**
  * Deny an access request
+ * Verifies the authenticated user is the patient who owns this consent
  * @param consentId - The consent ID to deny
  */
 export async function denyAccessRequest(consentId: string): Promise<{ success: boolean; message: string }> {
   try {
+    // Verify authentication and get user ID to enforce ownership
+    const auth = await requireAuth()
+    if (!auth.authenticated) {
+      return { success: false, message: 'Not authenticated' }
+    }
+
     const { error } = await supabase
       .from('access_consents')
       .update({
@@ -1143,6 +1251,7 @@ export async function denyAccessRequest(consentId: string): Promise<{ success: b
         revoked_at: new Date().toISOString()
       })
       .eq('consent_id', consentId)
+      .eq('patient_id', auth.userId) // Ownership check: only the patient can deny their consent
       .eq('status', 'PENDING')
 
     if (error) {
@@ -1157,10 +1266,17 @@ export async function denyAccessRequest(consentId: string): Promise<{ success: b
 
 /**
  * Revoke an active access consent
+ * Verifies the authenticated user is the patient who owns this consent
  * @param consentId - The consent ID to revoke
  */
 export async function revokeAccessConsent(consentId: string): Promise<{ success: boolean; message: string }> {
   try {
+    // Verify authentication and get user ID to enforce ownership
+    const auth = await requireAuth()
+    if (!auth.authenticated) {
+      return { success: false, message: 'Not authenticated' }
+    }
+
     const { error } = await supabase
       .from('access_consents')
       .update({
@@ -1168,6 +1284,7 @@ export async function revokeAccessConsent(consentId: string): Promise<{ success:
         revoked_at: new Date().toISOString()
       })
       .eq('consent_id', consentId)
+      .eq('patient_id', auth.userId) // Ownership check: only the patient can revoke their consent
       .eq('status', 'ACTIVE')
 
     if (error) {
@@ -1411,11 +1528,14 @@ export async function updateUserRole(userId: string, newRole: 'END_USER' | 'PROV
       .eq('user_id', userId)
 
     if (error) {
+      logApiError('updateUserRole', error, auth.userId)
       return { success: false, message: 'Failed to update user role' }
     }
 
+    logAdminAction(auth.userId!, 'ROLE_CHANGED', userId, { newRole })
     return { success: true, message: 'User role updated successfully' }
   } catch (error) {
+    logApiError('updateUserRole', error)
     return { success: false, message: 'An error occurred while updating user role' }
   }
 }
@@ -1439,11 +1559,14 @@ export async function deleteUserAndData(userId: string): Promise<{ success: bool
       .eq('user_id', userId)
 
     if (error) {
+      logApiError('deleteUserAndData', error, auth.userId)
       return { success: false, message: 'Failed to delete user' }
     }
 
+    logAdminAction(auth.userId!, 'USER_DELETED', userId)
     return { success: true, message: 'User and associated data deleted successfully' }
   } catch (error) {
+    logApiError('deleteUserAndData', error)
     return { success: false, message: 'An error occurred while deleting user' }
   }
 }
@@ -1464,11 +1587,14 @@ export async function updateUserActiveStatus(userId: string, isActive: boolean):
       .eq('user_id', userId)
 
     if (error) {
+      logApiError('updateUserActiveStatus', error, auth.userId)
       return { success: false, message: 'Failed to update user active status' }
     }
 
+    logAdminAction(auth.userId!, 'USER_STATUS_CHANGED', userId, { isActive })
     return { success: true, message: isActive ? 'User account enabled' : 'User account disabled' }
   } catch (error) {
+    logApiError('updateUserActiveStatus', error)
     return { success: false, message: 'An error occurred while updating user status' }
   }
 }
@@ -1489,11 +1615,14 @@ export async function updateProviderVerification(userId: string, verified: boole
       .eq('user_id', userId)
 
     if (error) {
+      logApiError('updateProviderVerification', error, auth.userId)
       return { success: false, message: 'Failed to update provider verification' }
     }
 
+    logAdminAction(auth.userId!, 'PROVIDER_VERIFICATION', userId, { verified })
     return { success: true, message: verified ? 'Provider verified successfully' : 'Provider verification revoked' }
   } catch (error) {
+    logApiError('updateProviderVerification', error)
     return { success: false, message: 'An error occurred while updating verification' }
   }
 }
@@ -2110,16 +2239,22 @@ export async function addEmergencyContact(
 
 /**
  * Update an emergency contact
+ * Verifies the authenticated user owns the contact before updating
  */
 export async function updateEmergencyContact(
   contactId: string,
   updates: Partial<{ name: string; phone: string; email: string; relationship: string; is_primary: boolean }>
 ): Promise<boolean> {
   try {
+    // Verify authentication and get user ID to enforce ownership
+    const { data: { user: authUser } } = await supabase.auth.getUser()
+    if (!authUser) return false
+
     const { error } = await supabase
       .from('emergency_contacts')
       .update({ ...updates, updated_at: new Date().toISOString() })
       .eq('contact_id', contactId)
+      .eq('user_id', authUser.id) // Ownership check: only update if user owns this contact
 
     if (error) {
       return false
@@ -2135,10 +2270,15 @@ export async function updateEmergencyContact(
  */
 export async function deleteEmergencyContact(contactId: string): Promise<boolean> {
   try {
+    // Verify the authenticated user owns this contact before deleting
+    const { data: { user: authUser } } = await supabase.auth.getUser()
+    if (!authUser) return false
+
     const { error } = await supabase
       .from('emergency_contacts')
       .delete()
       .eq('contact_id', contactId)
+      .eq('user_id', authUser.id)
 
     if (error) {
       return false

@@ -58,20 +58,21 @@ export function DeviceCard({ device, onUpdate }: DeviceCardProps) {
 
   const toggleDeviceStatus = async () => {
     const newStatus = device.status === 'active' ? 'inactive' : 'active';
-    
-    // Update database
+
+    // Update database with ownership verification
     try {
       const { supabase } = await import('../../utils/supabase');
-      
-      // Get current metadata
+
+      // Get current metadata (with ownership check)
       const { data: currentData } = await supabase
         .from('data_sources')
         .select('metadata')
         .eq('source_id', device.id)
+        .eq('user_id', device.userId) // Ownership check
         .single();
 
       const currentMetadata = currentData?.metadata || {};
-      
+
       const { error } = await supabase
         .from('data_sources')
         .update({
@@ -81,7 +82,8 @@ export function DeviceCard({ device, onUpdate }: DeviceCardProps) {
             status: newStatus
           }
         })
-        .eq('source_id', device.id);
+        .eq('source_id', device.id)
+        .eq('user_id', device.userId); // Ownership check: only update if user owns this device
 
       if (error) {
       }
@@ -102,15 +104,16 @@ export function DeviceCard({ device, onUpdate }: DeviceCardProps) {
   const toggleAutoMode = async () => {
     const newAutoMode = !device.autoMode;
 
-    // Update database metadata
+    // Update database metadata with ownership verification
     try {
       const { supabase } = await import('../../utils/supabase');
 
-      // Get current metadata
+      // Get current metadata (with ownership check)
       const { data: currentData } = await supabase
         .from('data_sources')
         .select('metadata')
         .eq('source_id', device.id)
+        .eq('user_id', device.userId) // Ownership check
         .single();
 
       const currentMetadata = currentData?.metadata || {};
@@ -123,7 +126,8 @@ export function DeviceCard({ device, onUpdate }: DeviceCardProps) {
             auto_mode: newAutoMode
           }
         })
-        .eq('source_id', device.id);
+        .eq('source_id', device.id)
+        .eq('user_id', device.userId); // Ownership check: only update if user owns this device
 
       if (error) {
       }
@@ -224,16 +228,17 @@ export function DeviceCard({ device, onUpdate }: DeviceCardProps) {
       }
     }
     
-    // Update device sync time in database
+    // Update device sync time in database with ownership verification
     try {
       const { supabase } = await import('../../utils/supabase');
-      
+
       const { error } = await supabase
         .from('data_sources')
         .update({
           last_sync: syncTime
         })
-        .eq('source_id', device.id);
+        .eq('source_id', device.id)
+        .eq('user_id', device.userId); // Ownership check: only update if user owns this device
 
       if (error) {
       }
@@ -252,19 +257,20 @@ export function DeviceCard({ device, onUpdate }: DeviceCardProps) {
   };
 
   const simulateFault = async () => {
-    // Update database
+    // Update database with ownership verification
     try {
       const { supabase } = await import('../../utils/supabase');
-      
-      // Get current metadata
+
+      // Get current metadata (with ownership check)
       const { data: currentData } = await supabase
         .from('data_sources')
         .select('metadata')
         .eq('source_id', device.id)
+        .eq('user_id', device.userId) // Ownership check
         .single();
 
       const currentMetadata = currentData?.metadata || {};
-      
+
       const { error } = await supabase
         .from('data_sources')
         .update({
@@ -274,7 +280,8 @@ export function DeviceCard({ device, onUpdate }: DeviceCardProps) {
             status: 'faulty'
           }
         })
-        .eq('source_id', device.id);
+        .eq('source_id', device.id)
+        .eq('user_id', device.userId); // Ownership check: only update if user owns this device
 
       if (error) {
       }
@@ -293,17 +300,18 @@ export function DeviceCard({ device, onUpdate }: DeviceCardProps) {
   };
 
   const deleteDevice = async () => {
-    // Delete device from database (biomarker data will be preserved)
+    // Delete device from database with ownership verification (biomarker data will be preserved)
     try {
       const { supabase } = await import('../../utils/supabase');
-      
+
       // Simply delete the device - the database foreign key constraint
       // will automatically set source_id to NULL for all related data_points
       // This preserves the historical biomarker data
       const { error } = await supabase
         .from('data_sources')
         .delete()
-        .eq('source_id', device.id);
+        .eq('source_id', device.id)
+        .eq('user_id', device.userId); // Ownership check: only delete if user owns this device
 
       if (error) {
         toast.error('Failed to delete device from database');
@@ -440,7 +448,8 @@ export function DeviceCard({ device, onUpdate }: DeviceCardProps) {
                 await supabase
                   .from('data_sources')
                   .update({ priority: newPriority })
-                  .eq('source_id', device.id);
+                  .eq('source_id', device.id)
+                  .eq('user_id', device.userId); // Ownership check
               } catch (error) {
               }
               const devices = JSON.parse(await secureGetItem('healthApp_devices') || '[]');
@@ -467,7 +476,8 @@ export function DeviceCard({ device, onUpdate }: DeviceCardProps) {
                 await supabase
                   .from('data_sources')
                   .update({ priority: newPriority })
-                  .eq('source_id', device.id);
+                  .eq('source_id', device.id)
+                  .eq('user_id', device.userId); // Ownership check
               } catch (error) {
               }
               const devices = JSON.parse(await secureGetItem('healthApp_devices') || '[]');

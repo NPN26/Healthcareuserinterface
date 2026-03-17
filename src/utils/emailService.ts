@@ -12,6 +12,8 @@
  */
 
 import { supabase, generateUUID } from './supabase';
+import { secureGetItem, secureSetItem } from './secureStorage';
+import { checkRateLimit } from './rateLimiter';
 
 function escapeHtml(str: string): string {
   return str
@@ -37,28 +39,29 @@ export interface EmailLog {
   error?: string;
 }
 
-// ── Local email log (persisted in localStorage for demo; real app uses DB) ──
+// ── Local email log (persisted in encrypted storage for PHI compliance) ──
 const LOG_KEY = 'healthApp_emailLogs';
 
-function getEmailLogs(): EmailLog[] {
-  return JSON.parse(localStorage.getItem(LOG_KEY) || '[]');
+async function getEmailLogs(): Promise<EmailLog[]> {
+  const raw = await secureGetItem(LOG_KEY);
+  return JSON.parse(raw || '[]');
 }
 
-function appendEmailLog(log: EmailLog): void {
-  const logs = getEmailLogs();
+async function appendEmailLog(log: EmailLog): Promise<void> {
+  const logs = await getEmailLogs();
   logs.unshift(log);
   // Keep latest 500
   if (logs.length > 500) logs.length = 500;
-  localStorage.setItem(LOG_KEY, JSON.stringify(logs));
+  await secureSetItem(LOG_KEY, JSON.stringify(logs));
 }
 
-export function fetchEmailLogs(filterUserId?: string): EmailLog[] {
-  const logs = getEmailLogs();
+export async function fetchEmailLogs(filterUserId?: string): Promise<EmailLog[]> {
+  const logs = await getEmailLogs();
   if (filterUserId) return logs.filter(l => l.userId === filterUserId);
   return logs;
 }
 
-export function fetchAllEmailLogs(): EmailLog[] {
+export async function fetchAllEmailLogs(): Promise<EmailLog[]> {
   return getEmailLogs();
 }
 
@@ -75,6 +78,12 @@ async function invokeEmailFunction(payload: {
   type: EmailType;
   userId: string;
 }): Promise<{ success: boolean; error?: string }> {
+  // Rate-limit email sending
+  const rateCheck = checkRateLimit('emailSend', payload.userId);
+  if (!rateCheck.allowed) {
+    return { success: false, error: rateCheck.message };
+  }
+
   const logEntry: EmailLog = {
     id: generateUUID(),
     userId: payload.userId,
@@ -94,13 +103,13 @@ async function invokeEmailFunction(payload: {
     if (error) throw error;
 
     logEntry.status = data?.status === 'delivered' ? 'delivered' : 'sent';
-    appendEmailLog(logEntry);
+    await appendEmailLog(logEntry);
     return { success: true };
   } catch (err: any) {
     // Edge function not deployed - log as mock-sent for demo
     logEntry.status = 'sent'; // mark as "sent" for demo purposes
     logEntry.error = 'Edge function not deployed - logged locally';
-    appendEmailLog(logEntry);
+    await appendEmailLog(logEntry);
     return { success: true }; // don't block the UI
   }
 }

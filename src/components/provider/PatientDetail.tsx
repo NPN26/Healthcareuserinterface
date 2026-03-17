@@ -6,6 +6,7 @@ import { ArrowLeft, Download, Share2, User, AlertTriangle } from 'lucide-react';
 import { Biomarker, Alert, User as UserType, getBiomarkerLabel, isAbnormalReading, getBiomarkerUnit } from '../../utils/mockData';
 import { BiomarkerChart } from '../user/BiomarkerChart';
 import { toast } from 'sonner';
+import { checkRateLimit } from '../../utils/rateLimiter';
 
 interface PatientDetailProps {
   patient: UserType;
@@ -45,6 +46,13 @@ export function PatientDetail({ patient, biomarkers, alerts, onBack }: PatientDe
   };
 
   const exportPatientData = () => {
+    // Rate-limit data export
+    const rateCheck = checkRateLimit('dataExport', patient.id);
+    if (!rateCheck.allowed) {
+      toast.error(rateCheck.message);
+      return;
+    }
+
     const data = {
       patient,
       biomarkers,

@@ -6,6 +6,11 @@ import { Label } from '../ui/label';
 import { UserPlus, Mail, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { createAccessRequest } from '../../utils/supabase';
+import {
+  validateEmail,
+  sanitizeEmail,
+  containsDangerousPatterns,
+} from '../../utils/inputValidation';
 
 interface AccessRequestDialogProps {
   isOpen: boolean;
@@ -19,24 +24,29 @@ export function AccessRequestDialog({ isOpen, onClose, providerId }: AccessReque
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
-    if (!patientEmail.trim()) {
-      toast.error('Please enter a patient email address');
+
+    // Validate email using the validation utility
+    const emailValidation = validateEmail(patientEmail);
+    if (!emailValidation.isValid) {
+      toast.error(emailValidation.error || 'Please enter a valid email address');
       return;
     }
 
-    // Basic email validation
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(patientEmail)) {
-      toast.error('Please enter a valid email address');
+    // Check for dangerous patterns
+    const dangerCheck = containsDangerousPatterns(patientEmail);
+    if (dangerCheck.dangerous) {
+      toast.error('Invalid email input');
       return;
     }
+
+    // Sanitize email
+    const sanitizedEmail = sanitizeEmail(patientEmail);
 
     setIsLoading(true);
 
     try {
-      const result = await createAccessRequest(providerId, patientEmail.trim());
-      
+      const result = await createAccessRequest(providerId, sanitizedEmail);
+
       if (result.success) {
         toast.success(result.message);
         setPatientEmail('');
@@ -88,6 +98,8 @@ export function AccessRequestDialog({ isOpen, onClose, providerId }: AccessReque
                 className="pl-10"
                 disabled={isLoading}
                 autoFocus
+                maxLength={254}
+                autoComplete="email"
               />
             </div>
             <p className="text-xs text-gray-500">

@@ -8,6 +8,14 @@ import { Plus, Heart, Activity, Droplet, Wind, Footprints, Moon, Scale } from 'l
 import { toast } from 'sonner';
 import { Biomarker } from '../../utils/mockData';
 import { secureGetItem, secureSetItem } from '../../utils/secureStorage';
+import {
+  validateNumber,
+  validateDate,
+  validateText,
+  validateEnum,
+  sanitizeText,
+  containsDangerousPatterns,
+} from '../../utils/inputValidation';
 
 interface ManualDataEntryProps {
   isOpen: boolean;
@@ -36,18 +44,36 @@ export function ManualDataEntry({ isOpen, onClose, userId, deviceId, onDataAdded
   ];
 
   const handleSubmit = async () => {
+    const validDataTypes = ['heartRate', 'bloodPressure', 'glucose', 'oxygen', 'steps', 'sleep', 'weight'] as const;
+    const dataTypeValidation = validateEnum(dataType, validDataTypes);
+    if (!dataTypeValidation.isValid) {
+      toast.error('Please select a valid metric type');
+      return;
+    }
+
     const typeConfig = biomarkerTypes.find(t => t.value === dataType);
+
     if (dataType === 'bloodPressure') {
       if (!systolic || !diastolic) {
         toast.error('Please enter both systolic and diastolic values');
         return;
       }
-      const sysVal = parseInt(systolic);
-      const diaVal = parseInt(diastolic);
-      if (isNaN(sysVal) || isNaN(diaVal) || sysVal < 40 || sysVal > 300 || diaVal < 20 || diaVal > 200) {
-        toast.error('Blood pressure values out of valid range (systolic: 40-300, diastolic: 20-200)');
+
+      const sysValidation = validateNumber(systolic, { min: 40, max: 300, allowDecimal: false });
+      const diaValidation = validateNumber(diastolic, { min: 20, max: 200, allowDecimal: false });
+
+      if (!sysValidation.isValid) {
+        toast.error('Systolic value must be between 40 and 300');
         return;
       }
+      if (!diaValidation.isValid) {
+        toast.error('Diastolic value must be between 20 and 200');
+        return;
+      }
+
+      const sysVal = sysValidation.sanitizedValue as number;
+      const diaVal = diaValidation.sanitizedValue as number;
+
       if (diaVal >= sysVal) {
         toast.error('Diastolic must be lower than systolic');
         return;
@@ -57,11 +83,48 @@ export function ManualDataEntry({ isOpen, onClose, userId, deviceId, onDataAdded
         toast.error('Please enter a value');
         return;
       }
-      const numVal = parseFloat(value);
-      if (typeConfig && (isNaN(numVal) || numVal < typeConfig.min || numVal > typeConfig.max)) {
-        toast.error(`${typeConfig.label} must be between ${typeConfig.min} and ${typeConfig.max} ${typeConfig.unit}`);
+
+      const allowDecimal = dataType === 'sleep' || dataType === 'weight';
+      const valueValidation = validateNumber(value, {
+        min: typeConfig?.min ?? 0,
+        max: typeConfig?.max ?? 999999,
+        allowDecimal
+      });
+
+      if (!valueValidation.isValid) {
+        toast.error(`${typeConfig?.label || 'Value'} must be between ${typeConfig?.min} and ${typeConfig?.max} ${typeConfig?.unit}`);
         return;
       }
+    }
+
+    // Validate timestamp
+    const timestampValidation = validateDate(timestamp, {
+      required: true,
+      maxDate: new Date(Date.now() + 60000), // Allow up to 1 minute in future for clock skew
+      minDate: new Date('2000-01-01'),
+    });
+    if (!timestampValidation.isValid) {
+      toast.error(timestampValidation.error || 'Please enter a valid date and time');
+      return;
+    }
+
+    // Validate and sanitize notes (optional)
+    let sanitizedNotes = '';
+    if (notes.trim()) {
+      const notesValidation = validateText(notes, { maxLength: 500, required: false });
+      if (!notesValidation.isValid) {
+        toast.error(notesValidation.error || 'Notes contain invalid characters');
+        return;
+      }
+
+      // Check for dangerous patterns
+      const notesDangerCheck = containsDangerousPatterns(notes);
+      if (notesDangerCheck.dangerous) {
+        toast.error('Notes contain invalid content');
+        return;
+      }
+
+      sanitizedNotes = sanitizeText(notes, { maxLength: 500, allowNewlines: false });
     }
 
     const newReading: Biomarker = {
@@ -74,7 +137,7 @@ export function ManualDataEntry({ isOpen, onClose, userId, deviceId, onDataAdded
       diastolic: dataType === 'bloodPressure' ? parseInt(diastolic) : undefined,
       timestamp: new Date(timestamp).toISOString(),
       isFaulty: false,
-      notes: notes || undefined,
+      notes: sanitizedNotes || undefined,
     };
 
     // Save to database
@@ -143,7 +206,7 @@ export function ManualDataEntry({ isOpen, onClose, userId, deviceId, onDataAdded
               value: newReading.value,
               systolic: newReading.systolic,
               diastolic: newReading.diastolic,
-              notes: notes
+              notes: sanitizedNotes || undefined
             }
           });
 
@@ -274,7 +337,9 @@ export function ManualDataEntry({ isOpen, onClose, userId, deviceId, onDataAdded
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
               className="mt-1"
+              maxLength={500}
             />
+            <p className="text-xs text-muted-foreground mt-1">{notes.length}/500 characters</p>
           </div>
 
           <div className="flex gap-2 pt-4">

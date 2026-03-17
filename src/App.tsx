@@ -1,6 +1,5 @@
 import { useState, useEffect, lazy, Suspense } from 'react';
 import { AuthScreen } from './components/AuthScreen';
-import { DatabaseTest } from './components/DatabaseTest';
 import { initializeMockData, User } from './utils/mockData';
 import { Toaster } from './components/ui/sonner';
 import { toast } from 'sonner';
@@ -31,7 +30,6 @@ function DashboardFallback() {
 export default function App() {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [users, setUsers] = useState<User[]>([]);
-  const [showDatabaseTest, setShowDatabaseTest] = useState(false);
   const [isValidatingSession, setIsValidatingSession] = useState(true);
 
   useEffect(() => {
@@ -54,8 +52,8 @@ export default function App() {
       try {
         const { data: { session } } = await supabase.auth.getSession();
         if (session?.user) {
-          // Initialize encrypted storage with session-derived key
-          initSecureStorage(session.access_token);
+          // Initialize encrypted storage with stable user ID (not rotating access token)
+          initSecureStorage(session.user.id);
 
           // Fetch fresh user data from server to get authoritative role
           const { data: userData } = await supabase
@@ -79,59 +77,24 @@ export default function App() {
           } else {
             secureRemoveItem('healthApp_currentUser');
           }
-        } else if (import.meta.env.DEV) {
-          // In dev mode, allow mock accounts but ONLY with their hardcoded roles
-          // (mock accounts have fixed roles that cannot be spoofed via localStorage)
-          const parsed = JSON.parse(storedCurrentUser);
-          const { getMockAccounts } = await import('./utils/auth');
-          const mockAccounts = getMockAccounts();
-          const mockUser = mockAccounts.find(
-            (m: any) => m.user_id === (parsed.user_id || parsed.id)
-          );
-          if (mockUser) {
-            setCurrentUser(mockUser as User);
-          } else {
-            // Unknown user in dev with no session — reject
-            secureRemoveItem('healthApp_currentUser');
-          }
         } else {
-          // In production, no valid server session means log out
+          // No valid server session — log out
           secureRemoveItem('healthApp_currentUser');
         }
       } catch {
-        if (import.meta.env.DEV) {
-          const parsed = JSON.parse(storedCurrentUser);
-          const { getMockAccounts } = await import('./utils/auth');
-          const mockAccounts = getMockAccounts();
-          const mockUser = mockAccounts.find(
-            (m: any) => m.user_id === (parsed.user_id || parsed.id)
-          );
-          if (mockUser) {
-            setCurrentUser(mockUser as User);
-          } else {
-            secureRemoveItem('healthApp_currentUser');
-          }
-        } else {
-          secureRemoveItem('healthApp_currentUser');
-        }
+        secureRemoveItem('healthApp_currentUser');
       }
       setIsValidatingSession(false);
     };
 
     validateSession();
-
-    // Check URL for database test mode
-    const params = new URLSearchParams(window.location.search);
-    if (params.get('test') === 'db') {
-      setShowDatabaseTest(true);
-    }
   }, []);
 
   const handleLogin = (user: User) => {
     setCurrentUser(user);
     // Only store the user ID for session resumption — role is always re-fetched
     // from the server on page load via validateSession() to prevent role spoofing.
-    secureSetItem('healthApp_currentUser', JSON.stringify({ user_id: user.id || user.user_id }));
+    secureSetItem('healthApp_currentUser', JSON.stringify({ user_id: user.id }));
   };
 
   const handleLogout = () => {
@@ -140,16 +103,6 @@ export default function App() {
     clearSecureStorage();
     toast.success('Logged out successfully');
   };
-
-  // Show database test if in test mode
-  if (showDatabaseTest) {
-    return (
-      <>
-        <DatabaseTest />
-        <Toaster />
-      </>
-    );
-  }
 
   // Show loading while validating session
   if (isValidatingSession) {

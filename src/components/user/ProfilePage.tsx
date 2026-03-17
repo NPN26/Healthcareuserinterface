@@ -51,6 +51,19 @@ import {
 import { toast } from 'sonner';
 import { Switch } from '../ui/switch';
 import { secureGetItem } from '../../utils/secureStorage';
+import {
+  validateName,
+  validateEmail,
+  validatePhone,
+  validatePassword,
+  validateNumber,
+  validateDate,
+  validateEnum,
+  sanitizeName,
+  sanitizeEmail,
+  sanitizePhone,
+  containsDangerousPatterns,
+} from '../../utils/inputValidation';
 
 export type ProfileTab = 'personal' | 'achievements' | 'security' | 'notifications' | 'sharing' | 'emergency' | 'alertHistory';
 
@@ -268,21 +281,67 @@ export function ProfilePage({ user, onBack, onUpdate, initialTab = 'personal' }:
   };
 
   const handleAddEmergencyContact = async () => {
-    if (!newContact.name.trim()) {
-      toast.error('Contact name is required');
+    // Validate name
+    const nameValidation = validateName(newContact.name, { minLength: 2, maxLength: 100 });
+    if (!nameValidation.isValid) {
+      toast.error(nameValidation.error || 'Please enter a valid contact name');
       return;
     }
+
+    // Check for dangerous patterns in name
+    const nameDangerCheck = containsDangerousPatterns(newContact.name);
+    if (nameDangerCheck.dangerous) {
+      toast.error('Invalid input detected');
+      return;
+    }
+
     if (!newContact.phone.trim() && !newContact.email.trim()) {
       toast.error('At least a phone number or email is required');
       return;
     }
+
+    // Validate phone if provided
+    if (newContact.phone.trim()) {
+      const phoneValidation = validatePhone(newContact.phone);
+      if (!phoneValidation.isValid) {
+        toast.error(phoneValidation.error || 'Please enter a valid phone number');
+        return;
+      }
+    }
+
+    // Validate email if provided
+    if (newContact.email.trim()) {
+      const emailValidation = validateEmail(newContact.email);
+      if (!emailValidation.isValid) {
+        toast.error(emailValidation.error || 'Please enter a valid email address');
+        return;
+      }
+    }
+
+    // Validate relationship if provided
+    if (newContact.relationship.trim()) {
+      const relationshipDangerCheck = containsDangerousPatterns(newContact.relationship);
+      if (relationshipDangerCheck.dangerous) {
+        toast.error('Invalid input detected');
+        return;
+      }
+    }
+
+    // Sanitize inputs
+    const sanitizedContact = {
+      name: sanitizeName(newContact.name),
+      phone: newContact.phone ? sanitizePhone(newContact.phone) : undefined,
+      email: newContact.email ? sanitizeEmail(newContact.email) : undefined,
+      relationship: newContact.relationship ? sanitizeName(newContact.relationship) : undefined,
+    };
+
     try {
       const { addEmergencyContact } = await import('../../utils/supabase');
       const result = await addEmergencyContact(user.user_id || user.id, {
-        name: newContact.name,
-        phone: newContact.phone || undefined,
-        email: newContact.email || undefined,
-        relationship: newContact.relationship || undefined,
+        name: sanitizedContact.name,
+        phone: sanitizedContact.phone,
+        email: sanitizedContact.email,
+        relationship: sanitizedContact.relationship,
         is_primary: emergencyContacts.length === 0, // First contact is primary
       });
       if (result) {
@@ -337,24 +396,68 @@ export function ProfilePage({ user, onBack, onUpdate, initialTab = 'personal' }:
 
   // --- Save handlers with DB persistence ---
   const handleSavePersonalInfo = async () => {
-    if (!formData.name.trim()) {
-      toast.error('Name cannot be empty');
-      return;
-    }
-    if (!formData.email.trim()) {
-      toast.error('Email cannot be empty');
+    // Validate name
+    const nameValidation = validateName(formData.name, { minLength: 2, maxLength: 100 });
+    if (!nameValidation.isValid) {
+      toast.error(nameValidation.error || 'Please enter a valid name');
       return;
     }
 
+    // Validate email
+    const emailValidation = validateEmail(formData.email);
+    if (!emailValidation.isValid) {
+      toast.error(emailValidation.error || 'Please enter a valid email address');
+      return;
+    }
+
+    // Check for dangerous patterns
+    const dangerChecks = [
+      containsDangerousPatterns(formData.name),
+      containsDangerousPatterns(formData.email),
+    ];
+    if (dangerChecks.some(check => check.dangerous)) {
+      toast.error('Invalid input detected');
+      return;
+    }
+
+    // Validate date of birth if provided
+    if (formData.dateOfBirth) {
+      const dateValidation = validateDate(formData.dateOfBirth, {
+        maxDate: new Date(), // Cannot be in the future
+        minDate: new Date('1900-01-01'),
+      });
+      if (!dateValidation.isValid) {
+        toast.error(dateValidation.error || 'Please enter a valid date of birth');
+        return;
+      }
+    }
+
+    // Validate gender if provided
+    if (formData.gender) {
+      const genderValidation = validateEnum(formData.gender, ['male', 'female', 'other', 'prefer-not-to-say'] as const, { required: false });
+      if (!genderValidation.isValid) {
+        toast.error('Please select a valid gender option');
+        return;
+      }
+    }
+
+    // Sanitize inputs
+    const sanitizedFormData = {
+      name: sanitizeName(formData.name),
+      email: sanitizeEmail(formData.email),
+      dateOfBirth: formData.dateOfBirth,
+      gender: formData.gender,
+    };
+
     setIsSaving(true);
-    const updatedUser = { ...user, ...formData };
+    const updatedUser = { ...user, ...sanitizedFormData };
 
     try {
       // Persist to Supabase DB
       const { updateUserDetails } = await import('../../utils/supabase');
       const result = await updateUserDetails(user.user_id || user.id, {
-        name: formData.name,
-        email: formData.email,
+        name: sanitizedFormData.name,
+        email: sanitizedFormData.email,
       });
 
       if (!result.success) {
@@ -382,12 +485,23 @@ export function ProfilePage({ user, onBack, onUpdate, initialTab = 'personal' }:
       toast.error('Please enter your current password');
       return;
     }
-    if (securityData.newPassword !== securityData.confirmPassword) {
-      toast.error('New passwords do not match');
+
+    // Check for dangerous patterns in passwords
+    const currentPasswordDangerCheck = containsDangerousPatterns(securityData.currentPassword);
+    if (currentPasswordDangerCheck.dangerous) {
+      toast.error('Invalid input detected');
       return;
     }
-    if (securityData.newPassword.length < 6) {
-      toast.error('Password must be at least 6 characters');
+
+    // Validate new password
+    const passwordValidation = validatePassword(securityData.newPassword);
+    if (!passwordValidation.isValid) {
+      toast.error(passwordValidation.error || 'Password does not meet requirements');
+      return;
+    }
+
+    if (securityData.newPassword !== securityData.confirmPassword) {
+      toast.error('New passwords do not match');
       return;
     }
 
@@ -415,7 +529,7 @@ export function ProfilePage({ user, onBack, onUpdate, initialTab = 'personal' }:
 
       if (error) {
         setIsSaving(false);
-        toast.error('Failed to update password: ' + error.message);
+        toast.error('Failed to update password. Please try again.');
         return;
       }
     } catch (error) {
@@ -442,6 +556,44 @@ export function ProfilePage({ user, onBack, onUpdate, initialTab = 'personal' }:
   };
 
   const handleSaveNotifications = async () => {
+    // Validate alert thresholds
+    const thresholdValidations = [
+      { name: 'Heart Rate Low', value: alertThresholds.heartRate.low, min: 30, max: 200 },
+      { name: 'Heart Rate High', value: alertThresholds.heartRate.high, min: 30, max: 200 },
+      { name: 'Blood Pressure Systolic Low', value: alertThresholds.bloodPressureSystolic.low, min: 60, max: 250 },
+      { name: 'Blood Pressure Systolic High', value: alertThresholds.bloodPressureSystolic.high, min: 60, max: 250 },
+      { name: 'Blood Pressure Diastolic Low', value: alertThresholds.bloodPressureDiastolic.low, min: 30, max: 150 },
+      { name: 'Blood Pressure Diastolic High', value: alertThresholds.bloodPressureDiastolic.high, min: 30, max: 150 },
+      { name: 'Glucose Low', value: alertThresholds.glucose.low, min: 20, max: 400 },
+      { name: 'Glucose High', value: alertThresholds.glucose.high, min: 20, max: 400 },
+    ];
+
+    for (const threshold of thresholdValidations) {
+      const validation = validateNumber(threshold.value, { min: threshold.min, max: threshold.max, allowDecimal: false });
+      if (!validation.isValid) {
+        toast.error(`${threshold.name} must be between ${threshold.min} and ${threshold.max}`);
+        return;
+      }
+    }
+
+    // Validate that low thresholds are less than high thresholds
+    if (alertThresholds.heartRate.low >= alertThresholds.heartRate.high) {
+      toast.error('Heart rate low threshold must be less than high threshold');
+      return;
+    }
+    if (alertThresholds.bloodPressureSystolic.low >= alertThresholds.bloodPressureSystolic.high) {
+      toast.error('Systolic blood pressure low threshold must be less than high threshold');
+      return;
+    }
+    if (alertThresholds.bloodPressureDiastolic.low >= alertThresholds.bloodPressureDiastolic.high) {
+      toast.error('Diastolic blood pressure low threshold must be less than high threshold');
+      return;
+    }
+    if (alertThresholds.glucose.low >= alertThresholds.glucose.high) {
+      toast.error('Glucose low threshold must be less than high threshold');
+      return;
+    }
+
     const updatedUser = { ...user, ...notificationSettings, alertThresholds };
     onUpdate(updatedUser);
 
@@ -750,9 +902,9 @@ export function ProfilePage({ user, onBack, onUpdate, initialTab = 'personal' }:
                       {showNewPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                     </button>
                   </div>
-                  <p id="newPasswordHint" className="text-xs text-muted-foreground">Use at least 6 characters.</p>
-                  {securityData.newPassword && securityData.newPassword.length < 6 && (
-                    <p className="text-xs text-red-500" role="alert">Password must be at least 6 characters</p>
+                  <p id="newPasswordHint" className="text-xs text-muted-foreground">Use at least 8 characters with uppercase, lowercase, number & special character.</p>
+                  {securityData.newPassword && securityData.newPassword.length < 8 && (
+                    <p className="text-xs text-red-500" role="alert">Password must be at least 8 characters</p>
                   )}
                 </div>
 

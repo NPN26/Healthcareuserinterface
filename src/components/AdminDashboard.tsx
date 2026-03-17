@@ -11,10 +11,17 @@ import { UserPlus, Trash2, Megaphone, X, Mail, ShieldCheck, ShieldOff, UserX, Us
 import { Device, Biomarker, Alert } from '../utils/mockData';
 import { toast } from 'sonner';
 import { AdminHeader, AdminStatsCards, QuickActionsCard, SystemAlertsCard, SystemHealth, SecurityMonitor } from './admin';
-import { 
-  fetchAllUsers, 
-  fetchAllDevices, 
-  fetchAllBiomarkers, 
+import { checkRateLimit } from '../utils/rateLimiter';
+import {
+  validateText,
+  validateEnum,
+  sanitizeText,
+  containsDangerousPatterns,
+} from '../utils/inputValidation';
+import {
+  fetchAllUsers,
+  fetchAllDevices,
+  fetchAllBiomarkers,
   fetchAllAlerts,
   updateUserRole as updateUserRoleInDB,
   deleteUserAndData,
@@ -84,8 +91,8 @@ export function AdminDashboard({ user, onLogout }: AdminDashboardProps) {
       setAlerts(supabaseAlerts);
       setAnnouncements(supabaseAnnouncements);
 
-      // Load email logs from localStorage
-      setEmailLogs(fetchAllEmailLogs());
+      // Load email logs from encrypted storage
+      fetchAllEmailLogs().then(logs => setEmailLogs(logs));
 
       setSystemStatus(prev => ({
         ...prev,
@@ -109,6 +116,13 @@ export function AdminDashboard({ user, onLogout }: AdminDashboardProps) {
 
   const simulateFaultForAllDevices = async () => {
     try {
+      // Rate-limit admin bulk operations
+      const rateCheck = checkRateLimit('adminBulk', user.user_id || user.id);
+      if (!rateCheck.allowed) {
+        toast.error(rateCheck.message);
+        return;
+      }
+
       const result = await updateAllDevicesStatus('faulty');
       
       if (result.success) {
@@ -135,6 +149,13 @@ export function AdminDashboard({ user, onLogout }: AdminDashboardProps) {
 
   const resetAllDevices = async () => {
     try {
+      // Rate-limit admin bulk operations
+      const rateCheck = checkRateLimit('adminBulk', user.user_id || user.id);
+      if (!rateCheck.allowed) {
+        toast.error(rateCheck.message);
+        return;
+      }
+
       const result = await updateAllDevicesStatus('active');
       
       if (result.success) {
@@ -167,6 +188,13 @@ export function AdminDashboard({ user, onLogout }: AdminDashboardProps) {
 
   const clearAllAlerts = async () => {
     try {
+      // Rate-limit admin bulk operations
+      const rateCheck = checkRateLimit('adminBulk', user.user_id || user.id);
+      if (!rateCheck.allowed) {
+        toast.error(rateCheck.message);
+        return;
+      }
+
       const result = await clearAllAlertsForAllUsers();
       
       if (result.success) {
@@ -189,6 +217,13 @@ export function AdminDashboard({ user, onLogout }: AdminDashboardProps) {
     }
 
     try {
+      // Rate-limit admin destructive operations
+      const rateCheck = checkRateLimit('adminBulk', user.user_id || user.id);
+      if (!rateCheck.allowed) {
+        toast.error(rateCheck.message);
+        return;
+      }
+
       const result = await deleteUserAndData(userId);
       
       if (result.success) {
@@ -293,17 +328,65 @@ export function AdminDashboard({ user, onLogout }: AdminDashboardProps) {
   };
 
   const handleCreateAnnouncement = async () => {
-    if (!newAnnouncement.title.trim() || !newAnnouncement.message.trim()) {
-      toast.error('Title and message are required');
+    // Validate title
+    const titleValidation = validateText(newAnnouncement.title, {
+      minLength: 3,
+      maxLength: 200,
+      required: true,
+    });
+    if (!titleValidation.isValid) {
+      toast.error(titleValidation.error || 'Please enter a valid title (3-200 characters)');
       return;
     }
+
+    // Validate message
+    const messageValidation = validateText(newAnnouncement.message, {
+      minLength: 10,
+      maxLength: 2000,
+      required: true,
+    });
+    if (!messageValidation.isValid) {
+      toast.error(messageValidation.error || 'Please enter a valid message (10-2000 characters)');
+      return;
+    }
+
+    // Check for dangerous patterns
+    const titleDangerCheck = containsDangerousPatterns(newAnnouncement.title);
+    const messageDangerCheck = containsDangerousPatterns(newAnnouncement.message);
+    if (titleDangerCheck.dangerous || messageDangerCheck.dangerous) {
+      toast.error('Invalid content detected');
+      return;
+    }
+
+    // Validate type
+    const validTypes = ['info', 'warning', 'success', 'error'] as const;
+    const typeValidation = validateEnum(newAnnouncement.type, validTypes);
+    if (!typeValidation.isValid) {
+      toast.error('Please select a valid announcement type');
+      return;
+    }
+
+    // Validate expires_days if provided
+    if (newAnnouncement.expires_days) {
+      const validExpiresDays = ['1', '3', '7', '30', '90'] as const;
+      const expiresValidation = validateEnum(newAnnouncement.expires_days, validExpiresDays);
+      if (!expiresValidation.isValid) {
+        toast.error('Please select a valid expiration period');
+        return;
+      }
+    }
+
+    // Sanitize inputs
+    const sanitizedTitle = sanitizeText(newAnnouncement.title, { maxLength: 200 });
+    const sanitizedMessage = sanitizeText(newAnnouncement.message, { maxLength: 2000 });
+
     const expiresAt = newAnnouncement.expires_days
       ? new Date(Date.now() + parseInt(newAnnouncement.expires_days) * 86400000).toISOString()
       : undefined;
 
     const result = await createAnnouncement({
-      title: newAnnouncement.title,
-      message: newAnnouncement.message,
+      title: sanitizedTitle,
+      message: sanitizedMessage,
       type: newAnnouncement.type,
       created_by: user.user_id || user.id,
       expires_at: expiresAt,
@@ -683,7 +766,7 @@ export function AdminDashboard({ user, onLogout }: AdminDashboardProps) {
                         <SelectItem value="system">System</SelectItem>
                       </SelectContent>
                     </Select>
-                    <Button variant="outline" size="sm" onClick={() => setEmailLogs(fetchAllEmailLogs())}>
+                    <Button variant="outline" size="sm" onClick={() => fetchAllEmailLogs().then(logs => setEmailLogs(logs))}>
                       Refresh
                     </Button>
                   </div>
