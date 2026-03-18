@@ -2,7 +2,6 @@ import { useState, useRef, useEffect } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '../ui/dialog';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
-import { ScrollArea } from '../ui/scroll-area';
 import { Avatar, AvatarFallback, AvatarImage } from '../ui/avatar';
 import { Send, Bot } from 'lucide-react';
 import { Biomarker, Device, getBiomarkerLabel, getBiomarkerUnit } from '../../utils/mockData';
@@ -251,7 +250,7 @@ export function VirtualCompanion({ isOpen, onClose, biomarkers, devices, user }:
           </div>
         </DialogHeader>
 
-        <ScrollArea className="flex-1 px-6">
+        <div className="flex-1 overflow-y-auto px-6">
           <div className="py-6 space-y-4">
               {messages.map((message) => (
                 <div
@@ -300,7 +299,7 @@ export function VirtualCompanion({ isOpen, onClose, biomarkers, devices, user }:
               )}
               <div ref={scrollRef} />
             </div>
-          </ScrollArea>
+          </div>
 
         <div className="p-4 border-t flex-shrink-0">
           <div className="flex gap-2">
