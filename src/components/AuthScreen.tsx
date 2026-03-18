@@ -44,41 +44,36 @@ export function AuthScreen({ onLogin }: AuthScreenProps) {
   const [showConfirmNewPassword, setShowConfirmNewPassword] = useState(false);
 
   useEffect(() => {
-    // Log URL for debugging
-    console.log('Current URL:', window.location.href);
-    console.log('Hash:', window.location.hash);
+    // Check if this is part of a password reset flow
+    const isPasswordResetFlow = localStorage.getItem('password_reset_flow') === 'true';
+    const urlParams = new URLSearchParams(window.location.search);
+    const hasCodeParam = urlParams.has('code'); // PKCE code from Supabase
 
-    // Check if this is a password recovery session
-    const checkRecoverySession = async () => {
-      const hash = window.location.hash;
-      const hashParams = new URLSearchParams(hash.substring(1));
-      const type = hashParams.get('type');
+    console.log('URL params:', window.location.search);
+    console.log('Hash params:', window.location.hash);
+    console.log('Is password reset flow:', isPasswordResetFlow);
+    console.log('Has code param:', hasCodeParam);
 
-      console.log('Hash type:', type);
-
-      // Check if URL contains recovery type
-      if (type === 'recovery') {
-        console.log('Recovery type detected in URL');
-        setIsResettingPassword(true);
-        return;
-      }
-
-      // Also check session in case user was redirected
-      const { data: { session } } = await supabase.auth.getSession();
-      console.log('Session:', session);
-      if (session && hash.includes('type=recovery')) {
-        console.log('Recovery detected in session');
-        setIsResettingPassword(true);
-      }
-    };
-
-    checkRecoverySession();
+    // If we have a code parameter and we're in a password reset flow
+    if (isPasswordResetFlow && hasCodeParam) {
+      console.log('Password reset detected - showing reset form');
+      setIsResettingPassword(true);
+      // Don't remove the flag yet - wait until password is actually updated
+    }
 
     // Listen for auth state changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       console.log('Auth event:', event);
+
+      // Check for PASSWORD_RECOVERY event (might not fire with PKCE flow)
       if (event === 'PASSWORD_RECOVERY') {
         console.log('PASSWORD_RECOVERY event detected');
+        setIsResettingPassword(true);
+      }
+
+      // If signed in during password reset flow
+      if (event === 'SIGNED_IN' && isPasswordResetFlow) {
+        console.log('Signed in during password reset flow');
         setIsResettingPassword(true);
       }
     });
@@ -193,12 +188,15 @@ export function AuthScreen({ onLogin }: AuthScreenProps) {
         return;
       }
 
+      // Clear the password reset flow flag
+      localStorage.removeItem('password_reset_flow');
+
       toast.success('Password updated successfully! Please sign in.');
       setIsResettingPassword(false);
       setNewPassword('');
       setConfirmNewPassword('');
-      // Clear the hash from URL
-      window.location.hash = '';
+      // Clear the URL
+      window.history.replaceState({}, document.title, window.location.pathname);
     } catch {
       toast.error('An unexpected error occurred. Please try again.');
     } finally {

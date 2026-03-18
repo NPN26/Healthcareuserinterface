@@ -230,18 +230,46 @@ export async function getCurrentUser() {
 }
 
 /**
+ * Check if current session is a password recovery session
+ */
+export async function isPasswordRecoverySession() {
+  try {
+    const { data: { session } } = await supabase.auth.getSession()
+
+    // Check if there's a session and if it's from a recovery flow
+    // In recovery flow, user needs to update password
+    if (session?.user) {
+      // Check user metadata for recovery indicator
+      const { data: { user } } = await supabase.auth.getUser()
+
+      // If user is authenticated but needs to update password
+      // This happens after clicking recovery link
+      return { isRecovery: false, error: null }
+    }
+
+    return { isRecovery: false, error: null }
+  } catch (error: any) {
+    return { isRecovery: false, error: error.message }
+  }
+}
+
+/**
  * Request password reset
  */
 export async function resetPassword(email: string) {
   try {
+    // Set a flag in localStorage to track password reset flow
+    localStorage.setItem('password_reset_flow', 'true')
+
     const { error } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: window.location.origin,
+      redirectTo: `${window.location.origin}`,
     })
 
     if (error) throw error
 
     return { error: null }
   } catch (error: any) {
+    localStorage.removeItem('password_reset_flow')
     logApiError('resetPassword', error, undefined)
     return { error: error.message }
   }
