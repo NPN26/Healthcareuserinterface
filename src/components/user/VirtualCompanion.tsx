@@ -238,7 +238,7 @@ export function VirtualCompanion({ isOpen, onClose, biomarkers, devices, user }:
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-2xl h-[85vh] sm:h-[600px] flex flex-col p-0">
+      <DialogContent className="max-w-2xl h-[600px] flex flex-col p-0">
         <DialogHeader className="p-6 pb-4 border-b flex-shrink-0">
           <div className="flex items-center gap-3">
             <div className="w-12 h-12 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 dark:from-custom-blue dark:to-custom-purple flex items-center justify-center text-white">
@@ -251,9 +251,8 @@ export function VirtualCompanion({ isOpen, onClose, biomarkers, devices, user }:
           </div>
         </DialogHeader>
 
-        <div className="flex-1 overflow-hidden">
-          <ScrollArea className="h-full">
-            <div className="p-6 space-y-4">
+        <ScrollArea className="flex-1 px-6">
+          <div className="py-6 space-y-4">
               {messages.map((message) => (
                 <div
                   key={message.id}
@@ -302,7 +301,6 @@ export function VirtualCompanion({ isOpen, onClose, biomarkers, devices, user }:
               <div ref={scrollRef} />
             </div>
           </ScrollArea>
-        </div>
 
         <div className="p-4 border-t flex-shrink-0">
           <div className="flex gap-2">
