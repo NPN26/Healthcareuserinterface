@@ -102,13 +102,21 @@ export function generateUUID(): string {
 }
 
 /**
- * Fetch biomarkers for a user from Supabase
+ * Fetch biomarkers for the authenticated user from Supabase
+ * Verifies the authenticated user matches the userId to prevent IDOR
  */
 export async function fetchBiomarkers(userId: string): Promise<Biomarker[]> {
   try {
-    const rateCheck = checkRateLimit('apiCall', userId)
+    // Verify authentication and enforce ownership
+    const auth = await requireAuth()
+    if (!auth.authenticated) return []
+
+    // IDOR protection: only allow fetching own biomarkers
+    if (auth.userId !== userId) return []
+
+    const rateCheck = checkRateLimit('apiCall', auth.userId)
     if (!rateCheck.allowed) return []
-    trackApiRequest(userId)
+    trackApiRequest(auth.userId)
     const { data, error } = await supabase
       .from('data_points')
       .select(`
@@ -122,13 +130,13 @@ export async function fetchBiomarkers(userId: string): Promise<Biomarker[]> {
           unit
         )
       `)
-      .eq('user_id', userId)
+      .eq('user_id', auth.userId)
       .eq('data_type', 'BIOMARKER')
       .order('timestamp', { ascending: false })
       .limit(1000)
 
     if (error) {
-      logApiError('fetchBiomarkers', error, userId)
+      logApiError('fetchBiomarkers', error, auth.userId)
       return []
     }
 
@@ -149,26 +157,26 @@ export async function fetchBiomarkers(userId: string): Promise<Biomarker[]> {
     return data
       .filter(item => item.biomarker_data)
       .map(item => {
-        const biomarkerData = Array.isArray(item.biomarker_data) 
-          ? item.biomarker_data[0] 
+        const biomarkerData = Array.isArray(item.biomarker_data)
+          ? item.biomarker_data[0]
           : item.biomarker_data
-        
+
         const frontendType = typeMapping[biomarkerData.type] || 'heartRate';
-        
+
         // For blood pressure, value is systolic and secondary_value is diastolic
         const biomarker: Biomarker = {
           id: item.data_point_id,
-          userId: userId,
+          userId: auth.userId,
           deviceId: item.source_id || 'deleted-device', // Handle null source_id for historical data
           type: frontendType,
           value: biomarkerData.value,
           // Ensure timestamp is in ISO format with timezone (add Z if missing)
-          timestamp: item.timestamp.includes('Z') || item.timestamp.includes('+') || item.timestamp.includes('-') 
-            ? item.timestamp 
+          timestamp: item.timestamp.includes('Z') || item.timestamp.includes('+') || item.timestamp.includes('-')
+            ? item.timestamp
             : `${item.timestamp}Z`,
           isFaulty: false
         };
-        
+
         // Add blood pressure specific fields
         if (frontendType === 'bloodPressure') {
           biomarker.systolic = biomarkerData.value; // Primary value is systolic
@@ -176,7 +184,7 @@ export async function fetchBiomarkers(userId: string): Promise<Biomarker[]> {
         } else if (biomarkerData.secondary_value) {
           biomarker.diastolic = biomarkerData.secondary_value;
         }
-        
+
         return biomarker;
       })
   } catch (error) {
@@ -186,21 +194,29 @@ export async function fetchBiomarkers(userId: string): Promise<Biomarker[]> {
 }
 
 /**
- * Fetch devices (data sources) for a user from Supabase
+ * Fetch devices (data sources) for the authenticated user from Supabase
+ * Verifies the authenticated user matches the userId to prevent IDOR
  */
 export async function fetchDevices(userId: string): Promise<Device[]> {
   try {
-    const rateCheck = checkRateLimit('apiCall', userId)
+    // Verify authentication and enforce ownership
+    const auth = await requireAuth()
+    if (!auth.authenticated) return []
+
+    // IDOR protection: only allow fetching own devices
+    if (auth.userId !== userId) return []
+
+    const rateCheck = checkRateLimit('apiCall', auth.userId)
     if (!rateCheck.allowed) return []
-    trackApiRequest(userId)
+    trackApiRequest(auth.userId)
     const { data, error } = await supabase
       .from('data_sources')
       .select('source_id, user_id, name, status, last_sync, priority, metadata')
-      .eq('user_id', userId)
+      .eq('user_id', auth.userId)
       .order('created_at', { ascending: false })
 
     if (error) {
-      logApiError('fetchDevices', error, userId)
+      logApiError('fetchDevices', error, auth.userId)
       return []
     }
 
@@ -211,7 +227,7 @@ export async function fetchDevices(userId: string): Promise<Device[]> {
       const metadata = source.metadata || {}
       return {
         id: source.source_id,
-        userId: userId,
+        userId: auth.userId,
         name: source.name,
         type: metadata.device_type || 'smartwatch',
         status: metadata.status || (source.status === 'CONNECTED' ? 'active' : 'inactive'),
@@ -229,24 +245,32 @@ export async function fetchDevices(userId: string): Promise<Device[]> {
 }
 
 /**
- * Fetch unread alerts for a user from Supabase
+ * Fetch unread alerts for the authenticated user from Supabase
+ * Verifies the authenticated user matches the userId to prevent IDOR
  * Note: Alerts will be stored in notifications table
  */
 export async function fetchAlerts(userId: string): Promise<Alert[]> {
   try {
-    const rateCheck = checkRateLimit('apiCall', userId)
+    // Verify authentication and enforce ownership
+    const auth = await requireAuth()
+    if (!auth.authenticated) return []
+
+    // IDOR protection: only allow fetching own alerts
+    if (auth.userId !== userId) return []
+
+    const rateCheck = checkRateLimit('apiCall', auth.userId)
     if (!rateCheck.allowed) return []
-    trackApiRequest(userId)
+    trackApiRequest(auth.userId)
     const { data, error } = await supabase
       .from('notifications')
       .select('notification_id, user_id, type, content, timestamp, is_read')
-      .eq('user_id', userId)
+      .eq('user_id', auth.userId)
       .eq('is_read', false)
       .order('timestamp', { ascending: false })
       .limit(100)
 
     if (error) {
-      logApiError('fetchAlerts', error, userId)
+      logApiError('fetchAlerts', error, auth.userId)
       return []
     }
 
@@ -256,7 +280,7 @@ export async function fetchAlerts(userId: string): Promise<Alert[]> {
     return data.map(notification => {
       return {
         id: notification.notification_id,
-        userId: userId,
+        userId: auth.userId,
         type: notification.type === 'ALERT' ? 'warning' : 'info',
         message: notification.content,
         timestamp: notification.timestamp,
@@ -283,16 +307,24 @@ export interface NotificationData {
 }
 
 /**
- * Fetch all notifications for a user from Supabase
+ * Fetch all notifications for the authenticated user from Supabase
+ * Verifies the authenticated user matches the userId to prevent IDOR
  */
 export async function fetchNotifications(userId: string): Promise<NotificationData[]> {
   try {
-    const rateCheck = checkRateLimit('apiCall', userId)
+    // Verify authentication and enforce ownership
+    const auth = await requireAuth()
+    if (!auth.authenticated) return []
+
+    // IDOR protection: only allow fetching own notifications
+    if (auth.userId !== userId) return []
+
+    const rateCheck = checkRateLimit('apiCall', auth.userId)
     if (!rateCheck.allowed) return []
     const { data, error } = await supabase
       .from('notifications')
       .select('notification_id, user_id, type, content, timestamp, is_read, read_at')
-      .eq('user_id', userId)
+      .eq('user_id', auth.userId)
       .order('timestamp', { ascending: false })
 
     if (error) {
@@ -306,14 +338,22 @@ export async function fetchNotifications(userId: string): Promise<NotificationDa
 }
 
 /**
- * Fetch unread notifications count for a user
+ * Fetch unread notifications count for the authenticated user
+ * Verifies the authenticated user matches the userId to prevent IDOR
  */
 export async function fetchUnreadNotificationsCount(userId: string): Promise<number> {
   try {
+    // Verify authentication and enforce ownership
+    const auth = await requireAuth()
+    if (!auth.authenticated) return 0
+
+    // IDOR protection: only allow counting own notifications
+    if (auth.userId !== userId) return 0
+
     const { count, error } = await supabase
       .from('notifications')
       .select('*', { count: 'exact', head: true })
-      .eq('user_id', userId)
+      .eq('user_id', auth.userId)
       .eq('is_read', false)
 
     if (error) {
@@ -356,17 +396,25 @@ export async function markNotificationAsRead(notificationId: string): Promise<bo
 }
 
 /**
- * Mark all notifications as read for a user
+ * Mark all notifications as read for the authenticated user
+ * Verifies the authenticated user matches the userId to prevent IDOR
  */
 export async function markAllNotificationsAsRead(userId: string): Promise<boolean> {
   try {
+    // Verify authentication and enforce ownership
+    const auth = await requireAuth()
+    if (!auth.authenticated) return false
+
+    // IDOR protection: only allow marking own notifications
+    if (auth.userId !== userId) return false
+
     const { error } = await supabase
       .from('notifications')
       .update({
         is_read: true,
         read_at: new Date().toISOString()
       })
-      .eq('user_id', userId)
+      .eq('user_id', auth.userId)
       .eq('is_read', false)
 
     if (error) {
@@ -406,14 +454,22 @@ export async function deleteNotification(notificationId: string): Promise<boolea
 }
 
 /**
- * Delete all notifications for a user
+ * Delete all notifications for the authenticated user
+ * Verifies the authenticated user matches the userId to prevent IDOR
  */
 export async function deleteAllNotifications(userId: string): Promise<boolean> {
   try {
+    // Verify authentication and enforce ownership
+    const auth = await requireAuth()
+    if (!auth.authenticated) return false
+
+    // IDOR protection: only allow deleting own notifications
+    if (auth.userId !== userId) return false
+
     const { error } = await supabase
       .from('notifications')
       .delete()
-      .eq('user_id', userId)
+      .eq('user_id', auth.userId)
 
     if (error) {
       return false
@@ -426,19 +482,26 @@ export async function deleteAllNotifications(userId: string): Promise<boolean> {
 }
 
 /**
- * Client-side cleanup of expired notifications (older than 90 days).
+ * Client-side cleanup of expired notifications (older than 90 days) for the authenticated user.
  * Should be called on app load or periodically.
+ * Verifies authentication to prevent unauthorized data deletion.
  * @returns Number of deleted notifications
  */
 export async function cleanupExpiredNotifications(): Promise<number> {
   try {
+    // Verify authentication - only cleanup own notifications
+    const auth = await requireAuth()
+    if (!auth.authenticated) return 0
+
     // Delete notifications whose expires_at has passed, OR that are older than 90 days
+    // Only for the authenticated user (IDOR protection)
     const ninetyDaysAgo = new Date()
     ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - 90)
 
     const { data, error } = await supabase
       .from('notifications')
       .delete()
+      .eq('user_id', auth.userId)
       .or(`expires_at.lte.${new Date().toISOString()},timestamp.lte.${ninetyDaysAgo.toISOString()}`)
       .select('notification_id')
 
@@ -454,7 +517,8 @@ export async function cleanupExpiredNotifications(): Promise<number> {
 }
 
 /**
- * Create a notification entry in the database
+ * Create a notification entry in the database for the authenticated user
+ * Verifies the authenticated user matches the userId to prevent creating notifications for others
  */
 export async function createNotification(
   userId: string,
@@ -462,13 +526,20 @@ export async function createNotification(
   content: string
 ): Promise<NotificationData | null> {
   try {
+    // Verify authentication and enforce ownership
+    const auth = await requireAuth()
+    if (!auth.authenticated) return null
+
+    // IDOR protection: only allow creating notifications for self
+    if (auth.userId !== userId) return null
+
     const expiresAt = new Date()
     expiresAt.setDate(expiresAt.getDate() + 90)
 
     const { data, error } = await supabase
       .from('notifications')
       .insert({
-        user_id: userId,
+        user_id: auth.userId,
         type,
         content,
         is_read: false,
@@ -532,38 +603,50 @@ const categoryToGoalType: Record<string, HealthGoal['type']> = {
 };
 
 /**
- * Fetch goals for a user from Supabase (with localStorage fallback)
+ * Fetch goals for the authenticated user from Supabase (with localStorage fallback)
+ * Verifies the authenticated user matches the userId to prevent IDOR
  */
 export async function fetchGoals(userId: string): Promise<HealthGoal[]> {
   try {
+    // Verify authentication and enforce ownership
+    const auth = await requireAuth()
+    if (!auth.authenticated) {
+      // Fallback to localStorage for unauthenticated state
+      const storedGoals = JSON.parse(await secureGetItem('healthApp_goals') || '[]');
+      return storedGoals.filter((g: HealthGoal) => g.userId === userId);
+    }
+
+    // IDOR protection: only allow fetching own goals
+    if (auth.userId !== userId) return []
+
     const { data, error } = await supabase
       .from('goals')
       .select('goal_id, user_id, category, start_date, end_date, progress, target_value, created_at, updated_at')
-      .eq('user_id', userId)
+      .eq('user_id', auth.userId)
       .order('created_at', { ascending: false })
 
     if (error) {
       // Fallback to localStorage
       const storedGoals = JSON.parse(await secureGetItem('healthApp_goals') || '[]');
-      return storedGoals.filter((g: HealthGoal) => g.userId === userId);
+      return storedGoals.filter((g: HealthGoal) => g.userId === auth.userId);
     }
 
     if (!data) {
       // Fallback to localStorage if no data
       const storedGoals = JSON.parse(await secureGetItem('healthApp_goals') || '[]');
-      return storedGoals.filter((g: HealthGoal) => g.userId === userId);
+      return storedGoals.filter((g: HealthGoal) => g.userId === auth.userId);
     }
 
     // Map database format to frontend format
     const now = new Date();
     const goals = data.map(goal => {
       const frontendType = categoryToGoalType[goal.category] || 'steps';
-      
+
       // Calculate period based on date range
       const startDate = new Date(goal.start_date);
       const endDate = new Date(goal.end_date);
       const daysDiff = Math.ceil((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24));
-      
+
       let period: HealthGoal['period'] = 'daily';
       if (daysDiff > 20) period = 'monthly';
       else if (daysDiff > 5) period = 'weekly';
@@ -593,7 +676,7 @@ export async function fetchGoals(userId: string): Promise<HealthGoal[]> {
 
     // Sync to localStorage for offline access
     const allStoredGoals = JSON.parse(await secureGetItem('healthApp_goals') || '[]');
-    const otherUsersGoals = allStoredGoals.filter((g: HealthGoal) => g.userId !== userId);
+    const otherUsersGoals = allStoredGoals.filter((g: HealthGoal) => g.userId !== auth.userId);
     await secureSetItem('healthApp_goals', JSON.stringify([...otherUsersGoals, ...goals]));
 
     return goals;
@@ -606,9 +689,17 @@ export async function fetchGoals(userId: string): Promise<HealthGoal[]> {
 
 /**
  * Create a new goal in Supabase (with localStorage sync)
+ * Verifies the authenticated user matches the userId to prevent IDOR
  */
 export async function createGoal(goal: Omit<HealthGoal, 'id' | 'createdAt'>): Promise<HealthGoal | null> {
   try {
+    // Verify authentication and enforce ownership
+    const auth = await requireAuth()
+    if (!auth.authenticated) return null
+
+    // IDOR protection: only allow creating goals for self
+    if (auth.userId !== goal.userId) return null
+
     // Only allow goal types that exist in database enum
     const allowedTypes = ['steps', 'sleep', 'weight'];
     if (!allowedTypes.includes(goal.type)) {
@@ -616,11 +707,11 @@ export async function createGoal(goal: Omit<HealthGoal, 'id' | 'createdAt'>): Pr
     }
 
     const category = goalTypeToCategory[goal.type];
-    
+
     // Calculate dates based on period
     const startDate = new Date();
     const endDate = new Date();
-    
+
     if (goal.period === 'daily') {
       endDate.setDate(endDate.getDate() + 1);
     } else if (goal.period === 'weekly') {
@@ -635,7 +726,7 @@ export async function createGoal(goal: Omit<HealthGoal, 'id' | 'createdAt'>): Pr
     const { data, error } = await supabase
       .from('goals')
       .insert({
-        user_id: goal.userId,
+        user_id: auth.userId,
         category: category,
         target_value: goal.target,
         start_date: startDate.toISOString().split('T')[0],
@@ -791,17 +882,48 @@ export interface Patient {
 }
 
 /**
- * Fetch patients who have granted consent to the provider from Supabase
+ * Verify the current authenticated user has PROVIDER role.
+ * Used to enforce that only providers can access provider-specific functions.
+ */
+async function requireProvider(): Promise<{ authorized: boolean; userId: string; error?: string }> {
+  const { data: { user: authUser }, error: authError } = await supabase.auth.getUser()
+  if (authError || !authUser) {
+    return { authorized: false, userId: '', error: 'Not authenticated' }
+  }
+
+  const { data: userData, error: userError } = await supabase
+    .from('users')
+    .select('role')
+    .eq('user_id', authUser.id)
+    .single()
+
+  if (userError || !userData || userData.role !== 'PROVIDER') {
+    return { authorized: false, userId: authUser.id, error: 'Unauthorized: provider role required' }
+  }
+
+  return { authorized: true, userId: authUser.id }
+}
+
+/**
+ * Fetch patients who have granted consent to the authenticated provider from Supabase
+ * Verifies the authenticated user is the provider to prevent IDOR
  * For provider dashboard only - respects access_consents table
  * @param providerId - The provider's user ID
  */
 export async function fetchPatients(providerId: string): Promise<Patient[]> {
   try {
+    // Verify the authenticated user is a provider and matches the providerId
+    const auth = await requireProvider()
+    if (!auth.authorized) return []
+
+    // IDOR protection: only allow fetching patients for self (the authenticated provider)
+    if (auth.userId !== providerId) return []
+
     // First, get the list of patient IDs who have granted active consent to this provider
     const { data: consents, error: consentError } = await supabase
       .from('access_consents')
       .select('patient_id')
-      .eq('provider_id', providerId)
+      .eq('provider_id', auth.userId)
       .eq('status', 'ACTIVE')
       .is('revoked_at', null)
 
@@ -845,17 +967,25 @@ export async function fetchPatients(providerId: string): Promise<Patient[]> {
 }
 
 /**
- * Fetch biomarkers for patients who have granted consent to the provider
+ * Fetch biomarkers for patients who have granted consent to the authenticated provider
+ * Verifies the authenticated user is the provider to prevent IDOR
  * For provider dashboard only - respects access_consents table
  * @param providerId - The provider's user ID
  */
 export async function fetchAllPatientsBiomarkers(providerId: string): Promise<Biomarker[]> {
   try {
+    // Verify the authenticated user is a provider and matches the providerId
+    const auth = await requireProvider()
+    if (!auth.authorized) return []
+
+    // IDOR protection: only allow fetching patients' biomarkers for self
+    if (auth.userId !== providerId) return []
+
     // First, get the list of patient IDs who have granted active consent to this provider
     const { data: consents, error: consentError } = await supabase
       .from('access_consents')
       .select('patient_id')
-      .eq('provider_id', providerId)
+      .eq('provider_id', auth.userId)
       .eq('status', 'ACTIVE')
       .is('revoked_at', null)
 
@@ -910,12 +1040,12 @@ export async function fetchAllPatientsBiomarkers(providerId: string): Promise<Bi
     return data
       .filter(item => item.biomarker_data)
       .map(item => {
-        const biomarkerData = Array.isArray(item.biomarker_data) 
-          ? item.biomarker_data[0] 
+        const biomarkerData = Array.isArray(item.biomarker_data)
+          ? item.biomarker_data[0]
           : item.biomarker_data
-        
+
         const frontendType = typeMapping[biomarkerData.type] || 'heartRate';
-        
+
         const biomarker: Biomarker = {
           id: item.data_point_id,
           userId: item.user_id,
@@ -925,7 +1055,7 @@ export async function fetchAllPatientsBiomarkers(providerId: string): Promise<Bi
           timestamp: item.timestamp,
           isFaulty: false
         };
-        
+
         // Add blood pressure specific fields
         if (frontendType === 'bloodPressure') {
           biomarker.systolic = biomarkerData.value;
@@ -933,7 +1063,7 @@ export async function fetchAllPatientsBiomarkers(providerId: string): Promise<Bi
         } else if (biomarkerData.secondary_value) {
           biomarker.diastolic = biomarkerData.secondary_value;
         }
-        
+
         return biomarker;
       })
   } catch (error) {
@@ -942,17 +1072,25 @@ export async function fetchAllPatientsBiomarkers(providerId: string): Promise<Bi
 }
 
 /**
- * Fetch alerts for patients who have granted consent to the provider
+ * Fetch alerts for patients who have granted consent to the authenticated provider
+ * Verifies the authenticated user is the provider to prevent IDOR
  * For provider dashboard only - respects access_consents table
  * @param providerId - The provider's user ID
  */
 export async function fetchAllPatientsAlerts(providerId: string): Promise<Alert[]> {
   try {
+    // Verify the authenticated user is a provider and matches the providerId
+    const auth = await requireProvider()
+    if (!auth.authorized) return []
+
+    // IDOR protection: only allow fetching patients' alerts for self
+    if (auth.userId !== providerId) return []
+
     // First, get the list of patient IDs who have granted active consent to this provider
     const { data: consents, error: consentError } = await supabase
       .from('access_consents')
       .select('patient_id')
-      .eq('provider_id', providerId)
+      .eq('provider_id', auth.userId)
       .eq('status', 'ACTIVE')
       .is('revoked_at', null)
 
@@ -1017,13 +1155,25 @@ export interface AccessRequest {
 }
 
 /**
- * Create an access request from provider to patient
+ * Create an access request from authenticated provider to patient
+ * Verifies the authenticated user is the provider to prevent IDOR
  * Provider enters patient's email, system creates a pending request
  * @param providerId - The provider's user ID
  * @param patientEmail - The patient's email address
  */
 export async function createAccessRequest(providerId: string, patientEmail: string): Promise<{ success: boolean; message: string }> {
   try {
+    // Verify the authenticated user is a provider and matches the providerId
+    const auth = await requireProvider()
+    if (!auth.authorized) {
+      return { success: false, message: 'Not authorized as a provider' }
+    }
+
+    // IDOR protection: only allow creating requests as self
+    if (auth.userId !== providerId) {
+      return { success: false, message: 'Unauthorized: can only create requests as yourself' }
+    }
+
     // First, check if patient exists
     const { data: patientData, error: patientError } = await supabase
       .from('users')
@@ -1040,7 +1190,7 @@ export async function createAccessRequest(providerId: string, patientEmail: stri
     const { data: existingConsent, error: existingError } = await supabase
       .from('access_consents')
       .select('status')
-      .eq('provider_id', providerId)
+      .eq('provider_id', auth.userId)
       .eq('patient_id', patientData.user_id)
       .in('status', ['PENDING', 'ACTIVE'])
       .maybeSingle()
@@ -1058,7 +1208,7 @@ export async function createAccessRequest(providerId: string, patientEmail: stri
     const { data: providerData } = await supabase
       .from('users')
       .select('name, email')
-      .eq('user_id', providerId)
+      .eq('user_id', auth.userId)
       .single()
 
     // Create a pending access request
@@ -1066,7 +1216,7 @@ export async function createAccessRequest(providerId: string, patientEmail: stri
       .from('access_consents')
       .insert({
         patient_id: patientData.user_id,
-        provider_id: providerId,
+        provider_id: auth.userId,
         status: 'PENDING',
         requested_at: new Date().toISOString()
       })
@@ -1092,11 +1242,19 @@ export async function createAccessRequest(providerId: string, patientEmail: stri
 }
 
 /**
- * Fetch pending access requests for a patient
+ * Fetch pending access requests for the authenticated patient
+ * Verifies the authenticated user matches the patientId to prevent IDOR
  * @param patientId - The patient's user ID
  */
 export async function fetchPendingAccessRequests(patientId: string): Promise<AccessRequest[]> {
   try {
+    // Verify authentication and enforce ownership
+    const auth = await requireAuth()
+    if (!auth.authenticated) return []
+
+    // IDOR protection: only allow fetching own access requests
+    if (auth.userId !== patientId) return []
+
     const { data, error } = await supabase
       .from('access_consents')
       .select(`
@@ -1109,7 +1267,7 @@ export async function fetchPendingAccessRequests(patientId: string): Promise<Acc
         requested_at,
         provider:users!access_consents_provider_id_fkey(name, email)
       `)
-      .eq('patient_id', patientId)
+      .eq('patient_id', auth.userId)
       .eq('status', 'PENDING')
       .order('requested_at', { ascending: false })
 
@@ -1136,11 +1294,19 @@ export async function fetchPendingAccessRequests(patientId: string): Promise<Acc
 }
 
 /**
- * Fetch all access consents for a patient (active and historical)
+ * Fetch all access consents for the authenticated patient (active and historical)
+ * Verifies the authenticated user matches the patientId to prevent IDOR
  * @param patientId - The patient's user ID
  */
 export async function fetchAllAccessConsents(patientId: string): Promise<AccessRequest[]> {
   try {
+    // Verify authentication and enforce ownership
+    const auth = await requireAuth()
+    if (!auth.authenticated) return []
+
+    // IDOR protection: only allow fetching own consents
+    if (auth.userId !== patientId) return []
+
     const { data, error } = await supabase
       .from('access_consents')
       .select(`
@@ -1153,7 +1319,7 @@ export async function fetchAllAccessConsents(patientId: string): Promise<AccessR
         requested_at,
         provider:users!access_consents_provider_id_fkey(name, email)
       `)
-      .eq('patient_id', patientId)
+      .eq('patient_id', auth.userId)
       .order('requested_at', { ascending: false })
 
     if (error) {
@@ -2187,14 +2353,22 @@ export interface EmergencyAlertLog {
 }
 
 /**
- * Fetch all emergency contacts for a user
+ * Fetch all emergency contacts for the authenticated user
+ * Verifies the authenticated user matches the userId to prevent IDOR
  */
 export async function fetchEmergencyContacts(userId: string): Promise<EmergencyContact[]> {
   try {
+    // Verify authentication and enforce ownership
+    const auth = await requireAuth()
+    if (!auth.authenticated) return []
+
+    // IDOR protection: only allow fetching own emergency contacts
+    if (auth.userId !== userId) return []
+
     const { data, error } = await supabase
       .from('emergency_contacts')
       .select('contact_id, user_id, name, phone, email, relationship, is_primary, created_at, updated_at')
-      .eq('user_id', userId)
+      .eq('user_id', auth.userId)
       .order('is_primary', { ascending: false })
       .order('created_at', { ascending: true })
 
@@ -2208,17 +2382,25 @@ export async function fetchEmergencyContacts(userId: string): Promise<EmergencyC
 }
 
 /**
- * Add a new emergency contact
+ * Add a new emergency contact for the authenticated user
+ * Verifies the authenticated user matches the userId to prevent IDOR
  */
 export async function addEmergencyContact(
   userId: string,
   contact: { name: string; phone?: string; email?: string; relationship?: string; is_primary?: boolean }
 ): Promise<EmergencyContact | null> {
   try {
+    // Verify authentication and enforce ownership
+    const auth = await requireAuth()
+    if (!auth.authenticated) return null
+
+    // IDOR protection: only allow adding contacts for self
+    if (auth.userId !== userId) return null
+
     const { data, error } = await supabase
       .from('emergency_contacts')
       .insert({
-        user_id: userId,
+        user_id: auth.userId,
         name: contact.name,
         phone: contact.phone || null,
         email: contact.email || null,
@@ -2290,14 +2472,22 @@ export async function deleteEmergencyContact(contactId: string): Promise<boolean
 }
 
 /**
- * Fetch emergency alert history for a user
+ * Fetch emergency alert history for the authenticated user
+ * Verifies the authenticated user matches the userId to prevent IDOR
  */
 export async function fetchEmergencyAlertHistory(userId: string): Promise<EmergencyAlertLog[]> {
   try {
+    // Verify authentication and enforce ownership
+    const auth = await requireAuth()
+    if (!auth.authenticated) return []
+
+    // IDOR protection: only allow fetching own alert history
+    if (auth.userId !== userId) return []
+
     const { data, error } = await supabase
       .from('emergency_alert_history')
       .select('alert_id, user_id, contact_id, alert_type, trigger_reading, status, sent_at, created_at')
-      .eq('user_id', userId)
+      .eq('user_id', auth.userId)
       .order('created_at', { ascending: false })
       .limit(50)
 
@@ -2312,6 +2502,7 @@ export async function fetchEmergencyAlertHistory(userId: string): Promise<Emerge
 
 /**
  * Send emergency alert to all contacts (STUB - logs to DB with status STUBBED)
+ * Verifies the authenticated user matches the userId to prevent IDOR
  * In production, this would call an SMS/email API (Twilio, SendGrid, etc.)
  */
 export async function sendEmergencyAlerts(
@@ -2319,7 +2510,14 @@ export async function sendEmergencyAlerts(
   triggerReading: { type: string; value: number; timestamp: string }
 ): Promise<{ sent: number; failed: number }> {
   try {
-    const contacts = await fetchEmergencyContacts(userId)
+    // Verify authentication and enforce ownership
+    const auth = await requireAuth()
+    if (!auth.authenticated) return { sent: 0, failed: 0 }
+
+    // IDOR protection: only allow sending alerts for self
+    if (auth.userId !== userId) return { sent: 0, failed: 0 }
+
+    const contacts = await fetchEmergencyContacts(auth.userId)
     if (contacts.length === 0) return { sent: 0, failed: 0 }
 
     let sent = 0
@@ -2337,7 +2535,7 @@ export async function sendEmergencyAlerts(
         await supabase
           .from('emergency_alert_history')
           .insert({
-            user_id: userId,
+            user_id: auth.userId,
             contact_id: contact.contact_id,
             alert_type: alertType,
             trigger_reading: triggerReading,
@@ -2351,7 +2549,7 @@ export async function sendEmergencyAlerts(
         await supabase
           .from('emergency_alert_history')
           .insert({
-            user_id: userId,
+            user_id: auth.userId,
             contact_id: contact.contact_id,
             alert_type: alertType,
             trigger_reading: triggerReading,
@@ -2406,10 +2604,15 @@ export async function fetchActiveAnnouncements(): Promise<Announcement[]> {
 }
 
 /**
- * Fetch all announcements (admin)
+ * Fetch all announcements (Admin only)
+ * Verifies the authenticated user is an admin before returning all announcements
  */
 export async function fetchAllAnnouncements(): Promise<Announcement[]> {
   try {
+    // Verify admin authorization
+    const auth = await requireAdmin()
+    if (!auth.authorized) return []
+
     const { data, error } = await supabase
       .from('announcements')
       .select('announcement_id, title, message, type, is_active, created_by, created_at, updated_at, expires_at')
@@ -2425,12 +2628,20 @@ export async function fetchAllAnnouncements(): Promise<Announcement[]> {
 }
 
 /**
- * Create an announcement (admin)
+ * Create an announcement (Admin only)
+ * Verifies the authenticated user is an admin before creating
  */
 export async function createAnnouncement(
   announcement: { title: string; message: string; type: string; created_by: string; expires_at?: string }
 ): Promise<Announcement | null> {
   try {
+    // Verify admin authorization
+    const auth = await requireAdmin()
+    if (!auth.authorized) return null
+
+    // IDOR protection: ensure created_by matches the authenticated admin
+    if (auth.userId !== announcement.created_by) return null
+
     const { data, error } = await supabase
       .from('announcements')
       .insert({
@@ -2438,7 +2649,7 @@ export async function createAnnouncement(
         message: announcement.message,
         type: announcement.type,
         is_active: true,
-        created_by: announcement.created_by,
+        created_by: auth.userId,
         expires_at: announcement.expires_at || null,
       })
       .select()
@@ -2454,13 +2665,18 @@ export async function createAnnouncement(
 }
 
 /**
- * Update an announcement (admin)
+ * Update an announcement (Admin only)
+ * Verifies the authenticated user is an admin before updating
  */
 export async function updateAnnouncement(
   announcementId: string,
   updates: Partial<{ title: string; message: string; type: string; is_active: boolean; expires_at: string }>
 ): Promise<boolean> {
   try {
+    // Verify admin authorization
+    const auth = await requireAdmin()
+    if (!auth.authorized) return false
+
     const { error } = await supabase
       .from('announcements')
       .update({ ...updates, updated_at: new Date().toISOString() })
