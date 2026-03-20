@@ -919,41 +919,23 @@ export async function fetchPatients(providerId: string): Promise<Patient[]> {
     // IDOR protection: only allow fetching patients for self (the authenticated provider)
     if (auth.userId !== providerId) return []
 
-    // First, get the list of patient IDs who have granted active consent to this provider
-    const { data: consents, error: consentError } = await supabase
-      .from('access_consents')
-      .select('patient_id')
-      .eq('provider_id', auth.userId)
-      .eq('status', 'ACTIVE')
-      .is('revoked_at', null)
-
-    if (consentError) {
-      return []
-    }
-
-    if (!consents || consents.length === 0) {
-      return []
-    }
-
-    // Extract patient IDs
-    const patientIds = consents.map(c => c.patient_id)
-
-    // Fetch user details for consented patients
+    // Use RPC function to fetch patients with consent
+    // This bypasses RLS issues with querying the users table for consented patients
     const { data, error } = await supabase
-      .from('users')
-      .select('user_id, email, name, role, created_at, last_login')
-      .eq('role', 'END_USER')
-      .in('user_id', patientIds)
-      .order('name', { ascending: true })
+      .rpc('get_patients_with_consent', {
+        provider_uuid: auth.userId
+      })
 
     if (error) {
       return []
     }
 
-    if (!data) return []
+    if (!data || data.length === 0) {
+      return []
+    }
 
     // Map database format to frontend format
-    return data.map(user => ({
+    return data.map((user: any) => ({
       id: user.user_id,
       email: user.email,
       name: user.name,
@@ -1174,17 +1156,19 @@ export async function createAccessRequest(providerId: string, patientEmail: stri
       return { success: false, message: 'Unauthorized: can only create requests as yourself' }
     }
 
-    // First, check if patient exists
-    const { data: patientData, error: patientError } = await supabase
-      .from('users')
-      .select('user_id, name, email')
-      .eq('email', patientEmail)
-      .eq('role', 'END_USER')
-      .single()
+    // First, check if patient exists using the RPC function that bypasses RLS
+    // This is necessary because providers can't directly query the users table
+    // for patients they don't have consent from yet
+    const { data: patientResults, error: patientError } = await supabase
+      .rpc('find_patient_by_email_for_access_request', {
+        patient_email: patientEmail
+      })
 
-    if (patientError || !patientData) {
+    if (patientError || !patientResults || patientResults.length === 0) {
       return { success: false, message: 'Patient not found with this email address' }
     }
+
+    const patientData = patientResults[0]
 
     // Check if there's already an active or pending consent
     const { data: existingConsent, error: existingError } = await supabase
