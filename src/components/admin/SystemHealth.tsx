@@ -7,6 +7,7 @@ import { ApexOptions } from 'apexcharts';
 import { Server, HardDrive, Cpu, Activity, TrendingUp, CheckCircle } from 'lucide-react';
 import { Biomarker, Device } from '../../utils/mockData';
 import { AdminUser, fetchSystemMetrics, fetchDataThroughput, SystemMetrics } from '../../utils/supabase';
+import { HeartbeatLoader } from '../ui/HeartbeatLoader';
 
 interface SystemHealthProps {
   biomarkers: Biomarker[];
@@ -93,8 +94,7 @@ export function SystemHealth({ biomarkers, devices, users }: SystemHealthProps) 
   if (isLoading) {
     return (
       <div className="p-8 text-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-600 mx-auto mb-4"></div>
-        <p className="text-gray-600">Loading system metrics...</p>
+        <HeartbeatLoader label="Loading system metrics…" size="md" />
       </div>
     );
   }

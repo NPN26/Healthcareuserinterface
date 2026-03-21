@@ -5,6 +5,7 @@ import { Badge } from '../ui/badge';
 import { Separator } from '../ui/separator';
 import { ArrowLeft, Shield, UserCheck, UserX, Clock, CheckCircle, XCircle, AlertTriangle } from 'lucide-react';
 import { toast } from 'sonner';
+import { HeartbeatLoader } from '../ui/HeartbeatLoader';
 import {
   AccessRequest,
   fetchPendingAccessRequests,
@@ -151,10 +152,7 @@ export function SharingSettingsPage({ userId, onBack }: SharingSettingsPageProps
       <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50 dark:from-gray-950 dark:via-gray-900 dark:to-gray-950 p-4 md:p-8">
         <div className="max-w-4xl mx-auto">
           <div className="flex items-center justify-center h-64">
-            <div className="text-center">
-              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-              <p className="text-gray-600 dark:text-gray-400">Loading sharing settings...</p>
-            </div>
+            <HeartbeatLoader label="Loading sharing settings…" size="lg" />
           </div>
         </div>
       </div>

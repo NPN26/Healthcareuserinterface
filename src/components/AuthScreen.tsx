@@ -8,6 +8,7 @@ import { Activity, Eye, EyeOff, X } from 'lucide-react';
 import { toast } from 'sonner';
 import { User } from '../utils/mockData';
 import { signIn, signUp, resetPassword, updatePassword } from '../utils/auth';
+import { HeartbeatLoader } from './ui/HeartbeatLoader';
 import {
   validateEmail,
   validateName,
@@ -279,6 +280,11 @@ export function AuthScreen({ onLogin }: AuthScreenProps) {
   if (isResettingPassword) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-blue-500 via-purple-500 to-pink-500 dark:from-custom-blue dark:via-custom-purple dark:to-custom-pink flex items-center justify-center p-4">
+        {isLoading && (
+          <div className="fixed inset-0 bg-background/80 backdrop-blur-sm z-50 flex items-center justify-center">
+            <HeartbeatLoader label="Updating password…" size="lg" />
+          </div>
+        )}
         <Card className="w-full max-w-md p-8">
           <div className="text-center mb-8">
             <div className="inline-block p-4 rounded-2xl bg-gradient-to-br from-blue-500 to-purple-600 dark:from-custom-blue dark:to-custom-purple mb-4">
@@ -347,6 +353,11 @@ export function AuthScreen({ onLogin }: AuthScreenProps) {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-500 via-purple-500 to-pink-500 dark:from-custom-blue dark:via-custom-purple dark:to-custom-pink flex items-center justify-center p-4">
+      {isLoading && (
+        <div className="fixed inset-0 bg-background/80 backdrop-blur-sm z-50 flex items-center justify-center">
+          <HeartbeatLoader label="Please wait…" size="lg" />
+        </div>
+      )}
       <Card className="w-full max-w-md p-8">
         <div className="text-center mb-8">
           <div className="inline-block p-4 rounded-2xl bg-gradient-to-br from-blue-500 to-purple-600 dark:from-custom-blue dark:to-custom-purple mb-4">

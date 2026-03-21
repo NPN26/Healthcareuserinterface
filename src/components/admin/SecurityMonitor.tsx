@@ -5,6 +5,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '.
 import { Shield, Lock, Eye, AlertTriangle, CheckCircle, Key, UserPlus, UserX, UserCog, FileText } from 'lucide-react';
 import { Alert } from '../../utils/mockData';
 import { AdminUser, fetchSecurityEvents, AuditLog } from '../../utils/supabase';
+import { HeartbeatLoader } from '../ui/HeartbeatLoader';
 
 interface SecurityMonitorProps {
   users: AdminUser[];
@@ -183,8 +184,7 @@ export function SecurityMonitor({ users, alerts }: SecurityMonitorProps) {
         </div>
         {isLoading ? (
           <div className="p-8 text-center">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-600 mx-auto mb-2"></div>
-            <p className="text-sm text-gray-600">Loading audit logs...</p>
+            <HeartbeatLoader label="Loading audit logs…" size="sm" />
           </div>
         ) : securityEvents.length === 0 ? (
           <div className="p-8 text-center text-gray-600">

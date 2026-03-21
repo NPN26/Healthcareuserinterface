@@ -4,6 +4,7 @@ import { ProviderHeader, ProviderStatsCards, PatientListTable, CriticalAlertsPan
 import { AnnouncementBanner } from './user';
 import { Biomarker, User, Alert } from '../utils/mockData';
 import { toast } from 'sonner';
+import { HeartbeatLoader } from './ui/HeartbeatLoader';
 
 interface ProviderDashboardProps {
   user: any;
@@ -114,10 +115,7 @@ export function ProviderDashboard({ user, onLogout }: ProviderDashboardProps) {
   if (isLoading) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-green-50 via-white to-blue-50 dark:from-gray-950 dark:via-gray-900 dark:to-gray-950 flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-green-600 dark:border-green-400 mx-auto mb-4"></div>
-          <p className="text-gray-600 dark:text-gray-400">Loading patient data...</p>
-        </div>
+        <HeartbeatLoader label="Loading patient data…" size="lg" />
       </div>
     );
   }

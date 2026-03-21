@@ -5,6 +5,7 @@ import { Toaster } from './components/ui/sonner';
 import { toast } from 'sonner';
 import { supabase } from './utils/supabase';
 import { initSecureStorage, clearSecureStorage, secureGetItem, secureSetItem, secureRemoveItem } from './utils/secureStorage';
+import { HeartbeatLoader } from './components/ui/HeartbeatLoader';
 
 const UserDashboard = lazy(() =>
   import('./components/UserDashboard').then((module) => ({ default: module.UserDashboard }))
@@ -19,10 +20,7 @@ const AdminDashboard = lazy(() =>
 function DashboardFallback() {
   return (
     <div className="min-h-screen flex items-center justify-center bg-background">
-      <div className="text-center space-y-3">
-        <div className="mx-auto h-10 w-10 animate-spin rounded-full border-2 border-primary/20 border-t-primary" />
-        <p className="text-sm text-muted-foreground">Loading dashboard...</p>
-      </div>
+      <HeartbeatLoader label="Loading dashboard…" size="lg" />
     </div>
   );
 }
