@@ -354,10 +354,10 @@ export function ManualDataEntry({ isOpen, onClose, userId, deviceId, onDataAdded
           </div>
 
           <div className="flex gap-2 pt-4">
-            <Button onClick={handleSubmit} className="flex-1">
+            <Button type="button" onClick={handleSubmit} className="flex-1">
               Log Data
             </Button>
-            <Button variant="outline" onClick={onClose}>
+            <Button type="button" variant="outline" onClick={onClose}>
               Cancel
             </Button>
           </div>
