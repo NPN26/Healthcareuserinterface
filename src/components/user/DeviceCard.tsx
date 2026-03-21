@@ -97,7 +97,7 @@ export function DeviceCard({ device, onUpdate }: DeviceCardProps) {
         : d
     );
     await secureSetItem('healthApp_devices', JSON.stringify(updated));
-    onUpdate();
+    await onUpdate();
     toast.success(`${device.name} ${device.status === 'active' ? 'deactivated' : 'activated'}`);
   };
 
@@ -141,7 +141,7 @@ export function DeviceCard({ device, onUpdate }: DeviceCardProps) {
         : d
     );
     await secureSetItem('healthApp_devices', JSON.stringify(updated));
-    onUpdate();
+    await onUpdate();
     toast.success(`Auto mode ${newAutoMode ? 'enabled' : 'disabled'}`);
   };
 
@@ -253,7 +253,7 @@ export function DeviceCard({ device, onUpdate }: DeviceCardProps) {
     );
     await secureSetItem('healthApp_devices', JSON.stringify(updated));
     setIsSyncing(false);
-    onUpdate();
+    await onUpdate();
   };
 
   const simulateFault = async () => {
@@ -295,7 +295,7 @@ export function DeviceCard({ device, onUpdate }: DeviceCardProps) {
         : d
     );
     await secureSetItem('healthApp_devices', JSON.stringify(updated));
-    onUpdate();
+    await onUpdate();
     toast.error('Device fault detected!');
   };
 
