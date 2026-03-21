@@ -326,9 +326,9 @@ export function DeviceCard({ device, onUpdate }: DeviceCardProps) {
     const devices = JSON.parse(await secureGetItem('healthApp_devices') || '[]');
     const updated = devices.filter((d: Device) => d.id !== device.id);
     await secureSetItem('healthApp_devices', JSON.stringify(updated));
-    
+
     setShowDeleteDialog(false);
-    onUpdate();
+    await onUpdate();
     toast.success(`${device.name} removed. Historical data preserved.`);
   };
 
