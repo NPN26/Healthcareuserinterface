@@ -67,7 +67,7 @@ export function VirtualCompanion({ isOpen, onClose, biomarkers, devices, user }:
             : 'Keep up the good work maintaining a healthy heart rate!'
         }`;
       }
-      return "I don't have recent heart rate data. Make sure your smartwatch is synced.";
+      return "I don't have any heart rate data yet. Please sync your device to enable heart rate insights and recommendations.";
     }
 
     // Blood pressure queries
@@ -80,7 +80,7 @@ export function VirtualCompanion({ isOpen, onClose, biomarkers, devices, user }:
             : 'Consider monitoring this regularly and discussing with your doctor.'
         }`;
       }
-      return "No recent blood pressure readings found.";
+      return "I don't have any blood pressure data yet. Please sync your device to enable blood pressure insights and recommendations.";
     }
 
     // Glucose queries
@@ -94,7 +94,7 @@ export function VirtualCompanion({ isOpen, onClose, biomarkers, devices, user }:
             : 'Your glucose levels are looking good!'
         }`;
       }
-      return "I don't have recent glucose readings.";
+      return "I don't have any glucose data yet. Please sync your device to enable glucose insights and recommendations.";
     }
 
     // Steps/activity queries
@@ -109,7 +109,7 @@ export function VirtualCompanion({ isOpen, onClose, biomarkers, devices, user }:
             : `You're doing great! Keep moving to reach your goal.`
         }`;
       }
-      return "No step data available yet today.";
+      return "I don't have any step data yet. Please sync your device to enable activity insights and recommendations.";
     }
 
     // Sleep queries
@@ -123,7 +123,7 @@ export function VirtualCompanion({ isOpen, onClose, biomarkers, devices, user }:
             : 'Great job getting enough rest!'
         }`;
       }
-      return "No sleep data recorded yet.";
+      return "I don't have any sleep data yet. Please sync your device to enable sleep insights and recommendations.";
     }
 
     // Device queries
@@ -235,6 +235,9 @@ export function VirtualCompanion({ isOpen, onClose, biomarkers, devices, user }:
     }, 1000 + Math.random() * 1000);
   };
 
+  // Show info box only if user hasn't sent a message yet
+  const hasUserSentMessage = messages.some(m => m.sender === 'user');
+
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent className="max-w-2xl h-[600px] flex flex-col p-0">
@@ -249,6 +252,16 @@ export function VirtualCompanion({ isOpen, onClose, biomarkers, devices, user }:
             </div>
           </div>
         </DialogHeader>
+
+        {/* Info box about biomarker data, only before first user message */}
+        {!hasUserSentMessage && (
+          <div className="px-6 pt-4">
+            <div className="bg-blue-100 border border-blue-300 text-blue-800 rounded-lg px-4 py-2 text-sm flex items-center gap-2">
+              <svg className="w-4 h-4 text-blue-500 flex-shrink-0" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" /><path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4m0 4h.01" /></svg>
+              The companion works best once your biomarker data is loaded.
+            </div>
+          </div>
+        )}
 
         <div className="flex-1 overflow-y-auto px-6">
           <div className="py-6 space-y-4">
