@@ -1009,30 +1009,47 @@ export async function fetchAllPatientsBiomarkers(providerId: string): Promise<Bi
     // Extract patient IDs
     const patientIds = consents.map(c => c.patient_id)
 
-    const { data, error } = await supabase
-      .from('data_points')
-      .select(`
-        data_point_id,
-        user_id,
-        timestamp,
-        source_id,
-        biomarker_data (
-          type,
-          value,
-          secondary_value,
-          unit
-        )
-      `)
-      .eq('data_type', 'BIOMARKER')
-      .in('user_id', patientIds)
-      .order('timestamp', { ascending: false })
-      .limit(5000) // Limit to recent data
+    const pageSize = 1000
+    const allData: any[] = []
+    let from = 0
 
-    if (error) {
-      return []
+    while (true) {
+      const { data, error } = await supabase
+        .from('data_points')
+        .select(`
+          data_point_id,
+          user_id,
+          timestamp,
+          source_id,
+          biomarker_data (
+            type,
+            value,
+            secondary_value,
+            unit
+          )
+        `)
+        .in('data_type', ['BIOMARKER', 'MANUAL'])
+        .in('user_id', patientIds)
+        .order('timestamp', { ascending: false })
+        .order('data_point_id', { ascending: false })
+        .range(from, from + pageSize - 1)
+
+      if (error) {
+        return []
+      }
+
+      if (!data || data.length === 0) {
+        break
+      }
+
+      allData.push(...data)
+
+      if (data.length < pageSize) {
+        break
+      }
+
+      from += pageSize
     }
-
-    if (!data) return []
 
     // Map database format to frontend format
     const typeMapping: Record<string, Biomarker['type']> = {
@@ -1046,7 +1063,7 @@ export async function fetchAllPatientsBiomarkers(providerId: string): Promise<Bi
       'WEIGHT': 'weight'
     }
 
-    return data
+    return allData
       .filter(item => item.biomarker_data)
       .map(item => {
         const biomarkerData = Array.isArray(item.biomarker_data)
@@ -1061,7 +1078,7 @@ export async function fetchAllPatientsBiomarkers(providerId: string): Promise<Bi
           deviceId: item.source_id || 'deleted-device',
           type: frontendType,
           value: biomarkerData.value,
-          timestamp: item.timestamp,
+          timestamp: normalizeTimestamp(item.timestamp),
           isFaulty: false
         };
 
@@ -1114,28 +1131,45 @@ export async function fetchAllPatientsAlerts(providerId: string): Promise<Alert[
     // Extract patient IDs
     const patientIds = consents.map(c => c.patient_id)
 
-    const { data, error } = await supabase
-      .from('notifications')
-      .select('notification_id, user_id, type, content, timestamp, is_read')
-      .eq('type', 'ALERT')
-      .in('user_id', patientIds)
-      .order('timestamp', { ascending: false })
-      .limit(1000)
+    const pageSize = 1000
+    const allData: any[] = []
+    let from = 0
 
-    if (error) {
-      return []
+    while (true) {
+      const { data, error } = await supabase
+        .from('notifications')
+        .select('notification_id, user_id, type, content, timestamp, is_read')
+        .eq('type', 'ALERT')
+        .in('user_id', patientIds)
+        .order('timestamp', { ascending: false })
+        .order('notification_id', { ascending: false })
+        .range(from, from + pageSize - 1)
+
+      if (error) {
+        return []
+      }
+
+      if (!data || data.length === 0) {
+        break
+      }
+
+      allData.push(...data)
+
+      if (data.length < pageSize) {
+        break
+      }
+
+      from += pageSize
     }
 
-    if (!data) return []
-
     // Map database format to frontend format
-    return data.map(notification => {
+    return allData.map(notification => {
       return {
         id: notification.notification_id,
         userId: notification.user_id,
         type: notification.is_read ? 'info' : 'warning',
         message: notification.content,
-        timestamp: notification.timestamp,
+        timestamp: normalizeTimestamp(notification.timestamp),
         biomarkerType: undefined,
         read: notification.is_read
       } as Alert
