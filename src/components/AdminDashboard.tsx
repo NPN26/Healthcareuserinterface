@@ -56,6 +56,9 @@ export function AdminDashboard({ user, onLogout }: AdminDashboardProps) {
   const [newAnnouncement, setNewAnnouncement] = useState({ title: '', message: '', type: 'info', expires_days: '' });
   const [emailLogs, setEmailLogs] = useState<EmailLog[]>([]);
   const [emailFilter, setEmailFilter] = useState<string>('all');
+  const [activeTab, setActiveTab] = useState<string>(() => {
+    return localStorage.getItem('admin_activeTab') || 'users';
+  });
   const [systemStatus, setSystemStatus] = useState({
     uptime: '99.9%',
     activeUsers: 0,
@@ -73,6 +76,11 @@ export function AdminDashboard({ user, onLogout }: AdminDashboardProps) {
       document.documentElement.classList.add('dark');
     }
   }, []);
+
+  // Persist active tab to localStorage
+  useEffect(() => {
+    localStorage.setItem('admin_activeTab', activeTab);
+  }, [activeTab]);
 
   const loadData = async () => {
     setIsLoading(true);
@@ -451,7 +459,7 @@ export function AdminDashboard({ user, onLogout }: AdminDashboardProps) {
           faultyDevicesCount={faultyDevices.length}
           criticalAlertsCount={criticalAlerts.length}
         />
-        <Tabs defaultValue="users" className="space-y-6">
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
           <TabsList className="w-full flex flex-nowrap overflow-x-auto scrollbar-hide justify-start h-auto p-1">
             <TabsTrigger value="users" className="shrink-0 whitespace-nowrap text-xs sm:text-sm">Users</TabsTrigger>
             <TabsTrigger value="devices" className="shrink-0 whitespace-nowrap text-xs sm:text-sm">Devices</TabsTrigger>

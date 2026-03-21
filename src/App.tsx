@@ -34,58 +34,65 @@ export default function App() {
     // Initialize mock data
     initializeMockData();
 
-    // Validate session server-side before trusting localStorage
-    const validateSession = async () => {
-      // Load users from secure storage
+    // Load users from secure storage immediately
+    const loadUsers = async () => {
       const rawUsers = await secureGetItem('healthApp_users');
       const storedUsers = JSON.parse(rawUsers || '[]');
       setUsers(storedUsers);
-
-      const storedCurrentUser = await secureGetItem('healthApp_currentUser');
-      if (!storedCurrentUser) {
-        setIsValidatingSession(false);
-        return;
-      }
-
-      try {
-        const { data: { session } } = await supabase.auth.getSession();
-        if (session?.user) {
-          // Initialize encrypted storage with stable user ID (not rotating access token)
-          initSecureStorage(session.user.id);
-
-          // Fetch fresh user data from server to get authoritative role
-          const { data: userData } = await supabase
-            .from('users')
-            .select('user_id, email, name, role, age, gender')
-            .eq('user_id', session.user.id)
-            .maybeSingle();
-
-          if (userData) {
-            const validatedUser: User = {
-              id: userData.user_id,
-              name: userData.name,
-              email: userData.email,
-              role: userData.role,
-              age: userData.age,
-              gender: userData.gender,
-            };
-            setCurrentUser(validatedUser);
-            // Only persist user ID — role is always server-validated
-            await secureSetItem('healthApp_currentUser', JSON.stringify({ user_id: userData.user_id }));
-          } else {
-            secureRemoveItem('healthApp_currentUser');
-          }
-        } else {
-          // No valid server session — log out
-          secureRemoveItem('healthApp_currentUser');
-        }
-      } catch {
-        secureRemoveItem('healthApp_currentUser');
-      }
-      setIsValidatingSession(false);
     };
+    loadUsers();
 
-    validateSession();
+    // Set up auth state change listener to handle session restoration
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      async (event, session) => {
+        try {
+          if (session?.user) {
+            // User session exists - initialize secure storage
+            initSecureStorage(session.user.id);
+
+            // Fetch fresh user data from server to get authoritative role
+            const { data: userData } = await supabase
+              .from('users')
+              .select('user_id, email, name, role, age, gender')
+              .eq('user_id', session.user.id)
+              .maybeSingle();
+
+            if (userData) {
+              const validatedUser: User = {
+                id: userData.user_id,
+                name: userData.name,
+                email: userData.email,
+                role: userData.role,
+                age: userData.age,
+                gender: userData.gender,
+              };
+              setCurrentUser(validatedUser);
+              // Only persist user ID — role is always server-validated
+              await secureSetItem('healthApp_currentUser', JSON.stringify({ user_id: userData.user_id }));
+            } else {
+              secureRemoveItem('healthApp_currentUser');
+              setCurrentUser(null);
+            }
+          } else {
+            // No valid session - clear user data
+            secureRemoveItem('healthApp_currentUser');
+            clearSecureStorage();
+            setCurrentUser(null);
+          }
+        } catch (error) {
+          console.error('Auth state change error:', error);
+          secureRemoveItem('healthApp_currentUser');
+          setCurrentUser(null);
+        } finally {
+          setIsValidatingSession(false);
+        }
+      }
+    );
+
+    // Cleanup subscription on unmount
+    return () => {
+      subscription?.unsubscribe();
+    };
   }, []);
 
   const handleLogin = (user: User) => {

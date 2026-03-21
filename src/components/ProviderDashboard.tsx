@@ -21,7 +21,9 @@ export function ProviderDashboard({ user, onLogout }: ProviderDashboardProps) {
   const [isDarkMode, setIsDarkMode] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [isBiomarkerRangeLoading, setIsBiomarkerRangeLoading] = useState(false);
-  const [showAccessRequest, setShowAccessRequest] = useState(false);
+  const [activeTab, setActiveTab] = useState<string>(() => {
+    return localStorage.getItem('provider_activeTab') || 'patients';
+  });
   const loadedProviderRangesRef = useRef<Set<string>>(new Set());
   const loadingProviderRangesRef = useRef<Set<string>>(new Set());
 
@@ -34,6 +36,11 @@ export function ProviderDashboard({ user, onLogout }: ProviderDashboardProps) {
       document.documentElement.classList.add('dark');
     }
   }, []);
+
+  // Persist active tab to localStorage
+  useEffect(() => {
+    localStorage.setItem('provider_activeTab', activeTab);
+  }, [activeTab]);
 
   const loadData = async () => {
     setIsLoading(true);
@@ -192,7 +199,7 @@ export function ProviderDashboard({ user, onLogout }: ProviderDashboardProps) {
           totalReports={biomarkers.length}
         />
 
-        <Tabs defaultValue="patients" className="space-y-6">
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
           <TabsList className="grid w-full grid-cols-3">
             <TabsTrigger value="patients">Patient List</TabsTrigger>
             <TabsTrigger value="alerts">Critical Alerts</TabsTrigger>

@@ -89,7 +89,10 @@ export function UserDashboard({ user, onLogout }: UserDashboardProps) {
   const [showAddDevice, setShowAddDevice] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
   const [selectedPeriod, setSelectedPeriod] = useState<'today' | 'week' | 'month'>('today');
-  const [activeView, setActiveView] = useState<'overview' | 'trends' | 'devices' | 'heartRate' | 'bloodPressure' | 'activities' | 'weight' | 'calories'>('overview');
+  const [activeView, setActiveView] = useState<'overview' | 'trends' | 'devices' | 'heartRate' | 'bloodPressure' | 'activities' | 'weight' | 'calories'>(() => {
+    const saved = localStorage.getItem('healthApp_activeView');
+    return (saved as any) || 'overview';
+  });
   const [isDarkMode, setIsDarkMode] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [notifications, setNotifications] = useState<Notification[]>([]);
@@ -158,6 +161,11 @@ export function UserDashboard({ user, onLogout }: UserDashboardProps) {
 
     return () => clearInterval(interval);
   }, [devices]);
+
+  // Persist active view to localStorage
+  useEffect(() => {
+    localStorage.setItem('healthApp_activeView', activeView);
+  }, [activeView]);
 
   const toggleDarkMode = () => {
     const newMode = !isDarkMode;
