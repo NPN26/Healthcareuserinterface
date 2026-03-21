@@ -1992,6 +1992,94 @@ export async function updateUserDetails(userId: string, updates: {
   }
 }
 
+/**
+ * Update own profile details (for authenticated users)
+ * Users can only update their own profile, not others'
+ * @param updates - Fields to update (age, gender, height, weight, name, email)
+ * @returns Success status with updated user data
+ */
+export async function updateOwnProfile(updates: {
+  name?: string;
+  email?: string;
+  age?: number;
+  gender?: string;
+  height?: number;
+  weight?: number;
+}): Promise<{ success: boolean; message: string; user?: any }> {
+  try {
+    // Get current authenticated user
+    const { data: { user: authUser }, error: authError } = await supabase.auth.getUser()
+
+    if (authError || !authUser) {
+      return { success: false, message: 'You must be logged in to update your profile' }
+    }
+
+    // Try to update first (most common case - user record exists)
+    const { data: updateData, error: updateError, count } = await supabase
+      .from('users')
+      .update(updates)
+      .eq('user_id', authUser.id)
+      .select()
+
+    // If update succeeded and returned data
+    if (!updateError && updateData && updateData.length > 0) {
+      return { success: true, message: 'Profile updated successfully', user: updateData[0] }
+    }
+
+    // If there was an error during update (not just no rows)
+    if (updateError) {
+      logApiError('updateOwnProfile:update', updateError, authUser.id)
+      console.error('Profile update error:', updateError)
+      return { success: false, message: `Failed to update profile: ${updateError.message || 'Unknown error'}` }
+    }
+
+    // If update succeeded but no rows were affected, user record doesn't exist
+    // Use RPC function to create user record (bypasses RLS for initial setup)
+    const { data: rpcData, error: rpcError } = await supabase.rpc('create_user_profile_if_missing', {
+      p_user_id: authUser.id,
+      p_email: authUser.email || '',
+      p_name: updates.name || authUser.email?.split('@')[0] || 'User',
+      p_age: updates.age || null,
+      p_gender: updates.gender || null,
+      p_height: updates.height || null,
+      p_weight: updates.weight || null
+    })
+
+    if (rpcError) {
+      logApiError('updateOwnProfile:rpc', rpcError, authUser.id)
+      console.error('Profile creation via RPC error:', rpcError)
+
+      // If RPC function doesn't exist, provide helpful message
+      if (rpcError.message?.includes('function') && rpcError.message?.includes('does not exist')) {
+        return {
+          success: false,
+          message: 'Your profile is missing. Please log out and sign up again, or contact support.'
+        }
+      }
+
+      return { success: false, message: `Failed to create profile: ${rpcError.message || 'Unknown error'}` }
+    }
+
+    // Fetch the newly created user
+    const { data: newUser, error: fetchError } = await supabase
+      .from('users')
+      .select()
+      .eq('user_id', authUser.id)
+      .maybeSingle()
+
+    if (fetchError || !newUser) {
+      console.error('Fetch after RPC error:', fetchError)
+      return { success: false, message: 'Profile created but unable to fetch data. Try refreshing the page.' }
+    }
+
+    return { success: true, message: 'Profile created successfully', user: newUser }
+  } catch (error: any) {
+    logApiError('updateOwnProfile', error)
+    console.error('Unexpected profile update error:', error)
+    return { success: false, message: 'An error occurred while updating your profile' }
+  }
+}
+
 // =========================================
 // AUDIT LOGS & SECURITY MONITORING
 // =========================================

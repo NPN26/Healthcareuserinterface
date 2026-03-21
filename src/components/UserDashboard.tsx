@@ -1223,7 +1223,7 @@ export function UserDashboard({ user, onLogout }: UserDashboardProps) {
         <SidebarInset>
           <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50 dark:from-gray-950 dark:via-gray-900 dark:to-gray-950">
             <DashboardHeader
-              user={user}
+              user={currentUser}
               searchQuery={searchQuery}
               onSearchChange={setSearchQuery}
               isDarkMode={isDarkMode}
@@ -1274,12 +1274,12 @@ export function UserDashboard({ user, onLogout }: UserDashboardProps) {
       </div>
       )}
       {/* Virtual Companion */}
-      <VirtualCompanion 
+      <VirtualCompanion
         isOpen={showCompanion}
         onClose={() => setShowCompanion(false)}
         biomarkers={biomarkers}
         devices={devices}
-        user={user}
+        user={currentUser}
       />
 
       {/* Goals Manager */}

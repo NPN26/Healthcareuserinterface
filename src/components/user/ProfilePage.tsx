@@ -449,35 +449,57 @@ export function ProfilePage({ user, onBack, onUpdate, initialTab = 'personal' }:
       gender: formData.gender,
     };
 
+    // Calculate age from dateOfBirth if provided
+    let calculatedAge: number | undefined;
+    if (sanitizedFormData.dateOfBirth) {
+      const birthDate = new Date(sanitizedFormData.dateOfBirth);
+      const today = new Date();
+      calculatedAge = today.getFullYear() - birthDate.getFullYear();
+      const monthDiff = today.getMonth() - birthDate.getMonth();
+      if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
+        calculatedAge--;
+      }
+    }
+
     setIsSaving(true);
-    const updatedUser = { ...user, ...sanitizedFormData };
 
     try {
       // Persist to Supabase DB
-      const { updateUserDetails } = await import('../../utils/supabase');
-      const result = await updateUserDetails(user.user_id || user.id, {
+      const { updateOwnProfile } = await import('../../utils/supabase');
+      // Note: Email should NOT be updated through users table - it requires auth.updateUser()
+      const result = await updateOwnProfile({
         name: sanitizedFormData.name,
-        email: sanitizedFormData.email,
+        gender: sanitizedFormData.gender,
+        age: calculatedAge,
       });
 
       if (!result.success) {
+        setIsSaving(false);
+        toast.error(result.message || 'Failed to update profile');
+        return;
       }
-    } catch (error) {
+
+      // Update succeeded - now update local state with the fresh data from DB
+      const updatedUser = result.user || { ...user, ...sanitizedFormData };
+      onUpdate(updatedUser);
+
+      // Update localStorage cache
+      const { secureGetItem, secureSetItem } = await import('../../utils/secureStorage');
+      const rawUsers = await secureGetItem('healthApp_users');
+      const users = JSON.parse(rawUsers || '[]');
+      const updatedUsers = users.map((u: any) =>
+        (u.id === user.id || u.user_id === user.user_id) ? updatedUser : u
+      );
+      await secureSetItem('healthApp_users', JSON.stringify(updatedUsers));
+      await secureSetItem('healthApp_currentUser', JSON.stringify(updatedUser));
+
+      setIsSaving(false);
+      toast.success('Profile updated successfully');
+    } catch (error: any) {
+      setIsSaving(false);
+      toast.error(error.message || 'An error occurred while saving');
+      return;
     }
-
-    // Always update locally so the UI reflects changes
-    onUpdate(updatedUser);
-    const { secureGetItem, secureSetItem } = await import('../../utils/secureStorage');
-    const rawUsers = await secureGetItem('healthApp_users');
-    const users = JSON.parse(rawUsers || '[]');
-    const updatedUsers = users.map((u: any) =>
-      (u.id === user.id || u.user_id === user.user_id) ? updatedUser : u
-    );
-    await secureSetItem('healthApp_users', JSON.stringify(updatedUsers));
-    await secureSetItem('healthApp_currentUser', JSON.stringify(updatedUser));
-
-    setIsSaving(false);
-    toast.success('Profile updated successfully');
   };
 
   const handleSaveSecurity = async () => {
