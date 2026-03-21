@@ -4,8 +4,14 @@ import { secureGetItem, secureSetItem } from './secureStorage'
 import { logApiError, logAdminAction, trackApiRequest } from './securityLogger'
 import { checkRateLimit } from './rateLimiter'
 
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY
+const appEnv = (import.meta as ImportMeta & { env: Record<string, string | undefined> }).env
+const supabaseUrl = appEnv.VITE_SUPABASE_URL
+const supabaseAnonKey = appEnv.VITE_SUPABASE_ANON_KEY
+
+function relationOne<T>(value: T | T[] | null | undefined): T | undefined {
+  if (Array.isArray(value)) return value[0]
+  return value ?? undefined
+}
 
 if (!supabaseUrl || !supabaseAnonKey) {
   throw new Error('Missing Supabase environment variables')
@@ -131,7 +137,7 @@ export async function fetchBiomarkers(userId: string): Promise<Biomarker[]> {
         )
       `)
       .eq('user_id', auth.userId)
-      .eq('data_type', 'BIOMARKER')
+      .in('data_type', ['BIOMARKER', 'MANUAL'])
       .order('timestamp', { ascending: false })
       .limit(1000)
 
@@ -1261,17 +1267,20 @@ export async function fetchPendingAccessRequests(patientId: string): Promise<Acc
 
     if (!data) return []
 
-    return data.map(item => ({
+    return data.map(item => {
+      const provider = relationOne(item.provider as { name?: string; email?: string } | { name?: string; email?: string }[] | null | undefined)
+
+      return {
       consent_id: item.consent_id,
       patient_id: item.patient_id,
       provider_id: item.provider_id,
-      provider_name: item.provider?.name,
-      provider_email: item.provider?.email,
+      provider_name: provider?.name,
+      provider_email: provider?.email,
       status: item.status,
       granted_at: item.granted_at,
       revoked_at: item.revoked_at,
       requested_at: item.requested_at
-    }))
+    }})
   } catch (error) {
     return []
   }
@@ -1312,17 +1321,20 @@ export async function fetchAllAccessConsents(patientId: string): Promise<AccessR
 
     if (!data) return []
 
-    return data.map(item => ({
+    return data.map(item => {
+      const provider = relationOne(item.provider as { name?: string; email?: string } | { name?: string; email?: string }[] | null | undefined)
+
+      return {
       consent_id: item.consent_id,
       patient_id: item.patient_id,
       provider_id: item.provider_id,
-      provider_name: item.provider?.name,
-      provider_email: item.provider?.email,
+      provider_name: provider?.name,
+      provider_email: provider?.email,
       status: item.status,
       granted_at: item.granted_at,
       revoked_at: item.revoked_at,
       requested_at: item.requested_at
-    }))
+    }})
   } catch (error) {
     return []
   }
@@ -1366,12 +1378,14 @@ export async function approveAccessRequest(consentId: string, providerId: string
       .single()
 
     // Create notification for the provider
+    const patient = relationOne(consentData?.patient as { name?: string } | { name?: string }[] | null | undefined)
+
     await supabase
       .from('notifications')
       .insert({
         user_id: providerId,
         type: 'ACCESS_GRANTED',
-        content: `${consentData?.patient?.name || 'A patient'} has granted you access to their health data.`,
+        content: `${patient?.name || 'A patient'} has granted you access to their health data.`,
         is_read: false
       })
 
@@ -2166,17 +2180,20 @@ export async function fetchAuditLogs(limit: number = 100): Promise<AuditLog[]> {
 
     if (!data) return []
 
-    return data.map(log => ({
+    return data.map(log => {
+      const admin = relationOne(log.admin as { name?: string } | { name?: string }[] | null | undefined)
+
+      return {
       log_id: log.log_id,
       admin_id: log.admin_id,
-      admin_name: log.admin?.name,
+      admin_name: admin?.name,
       action: log.action,
       target_entity_id: log.target_entity_id,
       target_entity_type: log.target_entity_type,
       timestamp: log.timestamp,
       ip_address: log.ip_address,
       details: log.details
-    }))
+    }})
   } catch (error) {
     return []
   }
@@ -2264,17 +2281,20 @@ export async function fetchSecurityEvents(limit: number = 50): Promise<AuditLog[
 
     if (!data) return []
 
-    return data.map(log => ({
+    return data.map(log => {
+      const admin = relationOne(log.admin as { name?: string } | { name?: string }[] | null | undefined)
+
+      return {
       log_id: log.log_id,
       admin_id: log.admin_id,
-      admin_name: log.admin?.name,
+      admin_name: admin?.name,
       action: log.action,
       target_entity_id: log.target_entity_id,
       target_entity_type: log.target_entity_type,
       timestamp: log.timestamp,
       ip_address: log.ip_address,
       details: log.details
-    }))
+    }})
   } catch (error) {
     return []
   }

@@ -50,8 +50,6 @@ export function GoalsManager({ isOpen, onClose, userId, biomarkers }: GoalsManag
   const [newGoal, setNewGoal] = useState({
     type: 'steps' as HealthGoal['type'],
     target: 10000,
-    targetSystolic: 120,
-    targetDiastolic: 80,
     period: 'daily' as HealthGoal['period'],
     deadline: '',
     smartSpecific: '',
@@ -105,7 +103,7 @@ export function GoalsManager({ isOpen, onClose, userId, biomarkers }: GoalsManag
 
   const handleAddGoal = async () => {
     // Validate goal type
-    const validGoalTypes = ['steps', 'sleep', 'weight', 'heartRate', 'bloodPressure', 'glucose', 'oxygen'] as const;
+    const validGoalTypes = ['steps', 'sleep', 'weight'] as const;
     const typeValidation = validateEnum(newGoal.type, validGoalTypes);
     if (!typeValidation.isValid) {
       toast.error('Please select a valid goal type');
@@ -121,41 +119,19 @@ export function GoalsManager({ isOpen, onClose, userId, biomarkers }: GoalsManag
     }
 
     // Validate target values based on goal type
-    if (newGoal.type === 'bloodPressure') {
-      const sysValidation = validateNumber(newGoal.targetSystolic, { min: 60, max: 200, allowDecimal: false });
-      const diaValidation = validateNumber(newGoal.targetDiastolic, { min: 40, max: 130, allowDecimal: false });
+    const targetRanges: Record<string, { min: number; max: number }> = {
+      steps: { min: 100, max: 100000 },
+      sleep: { min: 1, max: 24 },
+      weight: { min: 1, max: 500 },
+    };
 
-      if (!sysValidation.isValid) {
-        toast.error('Systolic target must be between 60 and 200');
-        return;
-      }
-      if (!diaValidation.isValid) {
-        toast.error('Diastolic target must be between 40 and 130');
-        return;
-      }
-      if (newGoal.targetDiastolic >= newGoal.targetSystolic) {
-        toast.error('Diastolic must be less than systolic');
-        return;
-      }
-    } else {
-      // Define min/max for different goal types
-      const targetRanges: Record<string, { min: number; max: number }> = {
-        steps: { min: 100, max: 100000 },
-        sleep: { min: 1, max: 24 },
-        weight: { min: 1, max: 500 },
-        heartRate: { min: 40, max: 200 },
-        glucose: { min: 50, max: 400 },
-        oxygen: { min: 80, max: 100 },
-      };
+    const range = targetRanges[newGoal.type] || { min: 0, max: 999999 };
+    const allowDecimal = newGoal.type === 'sleep' || newGoal.type === 'weight';
+    const targetValidation = validateNumber(newGoal.target, { min: range.min, max: range.max, allowDecimal });
 
-      const range = targetRanges[newGoal.type] || { min: 0, max: 999999 };
-      const allowDecimal = newGoal.type === 'sleep' || newGoal.type === 'weight';
-      const targetValidation = validateNumber(newGoal.target, { min: range.min, max: range.max, allowDecimal });
-
-      if (!targetValidation.isValid) {
-        toast.error(`Target must be between ${range.min} and ${range.max}`);
-        return;
-      }
+    if (!targetValidation.isValid) {
+      toast.error(`Target must be between ${range.min} and ${range.max}`);
+      return;
     }
 
     // Validate deadline if provided
@@ -204,9 +180,7 @@ export function GoalsManager({ isOpen, onClose, userId, biomarkers }: GoalsManag
       const goal: Omit<HealthGoal, 'id' | 'createdAt'> = {
         userId,
         type: newGoal.type,
-        target: newGoal.type === 'bloodPressure' ? 0 : newGoal.target,
-        targetSystolic: newGoal.type === 'bloodPressure' ? newGoal.targetSystolic : undefined,
-        targetDiastolic: newGoal.type === 'bloodPressure' ? newGoal.targetDiastolic : undefined,
+        target: newGoal.target,
         period: newGoal.period,
         deadline: newGoal.deadline || undefined,
         smartSpecific: sanitizedSmartSpecific,
@@ -224,8 +198,6 @@ export function GoalsManager({ isOpen, onClose, userId, biomarkers }: GoalsManag
         setNewGoal({
           type: 'steps',
           target: 10000,
-          targetSystolic: 120,
-          targetDiastolic: 80,
           period: 'daily',
           deadline: '',
           smartSpecific: '',
@@ -260,20 +232,14 @@ export function GoalsManager({ isOpen, onClose, userId, biomarkers }: GoalsManag
       steps: { min: 100, max: 100000 },
       sleep: { min: 1, max: 24 },
       weight: { min: 1, max: 500 },
-      heartRate: { min: 40, max: 200 },
-      glucose: { min: 50, max: 400 },
-      oxygen: { min: 80, max: 100 },
-      bloodPressure: { min: 0, max: 0 }, // Uses targetSystolic/targetDiastolic
     };
 
     const range = targetRanges[editingGoal.type] || { min: 0, max: 999999 };
-    if (editingGoal.type !== 'bloodPressure') {
-      const allowDecimal = editingGoal.type === 'sleep' || editingGoal.type === 'weight';
-      const targetValidation = validateNumber(editingGoal.target, { min: range.min, max: range.max, allowDecimal });
-      if (!targetValidation.isValid) {
-        toast.error(`Target must be between ${range.min} and ${range.max}`);
-        return;
-      }
+    const allowDecimal = editingGoal.type === 'sleep' || editingGoal.type === 'weight';
+    const targetValidation = validateNumber(editingGoal.target, { min: range.min, max: range.max, allowDecimal });
+    if (!targetValidation.isValid) {
+      toast.error(`Target must be between ${range.min} and ${range.max}`);
+      return;
     }
 
     // Validate deadline if provided
@@ -384,13 +350,8 @@ export function GoalsManager({ isOpen, onClose, userId, biomarkers }: GoalsManag
   };
 
   const getGoalTargetText = (goal: HealthGoal) => {
-    if (goal.type === 'bloodPressure') {
-      return `${goal.targetSystolic}/${goal.targetDiastolic} mmHg`;
-    }
     const units: Record<string, string> = {
       steps: 'steps',
-      heartRate: 'bpm',
-      glucose: 'mg/dL',
       sleep: 'hours',
       weight: 'kg',
     };
@@ -420,9 +381,6 @@ export function GoalsManager({ isOpen, onClose, userId, biomarkers }: GoalsManag
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="steps">Daily Steps</SelectItem>
-                  <SelectItem value="heartRate">Heart Rate</SelectItem>
-                  <SelectItem value="bloodPressure">Blood Pressure</SelectItem>
-                  <SelectItem value="glucose">Blood Glucose</SelectItem>
                   <SelectItem value="sleep">Sleep Hours</SelectItem>
                   <SelectItem value="weight">Weight</SelectItem>
                 </SelectContent>
@@ -449,38 +407,15 @@ export function GoalsManager({ isOpen, onClose, userId, biomarkers }: GoalsManag
               <h3 className="text-lg font-semibold">{step.label}</h3>
               <p className="text-sm text-muted-foreground">{step.description}</p>
             </div>
-            {newGoal.type === 'bloodPressure' ? (
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <Label>Target Systolic</Label>
-                  <Input
-                    type="number"
-                    value={newGoal.targetSystolic}
-                    onChange={(e) => setNewGoal({ ...newGoal, targetSystolic: parseInt(e.target.value) })}
-                    className="mt-1"
-                  />
-                </div>
-                <div>
-                  <Label>Target Diastolic</Label>
-                  <Input
-                    type="number"
-                    value={newGoal.targetDiastolic}
-                    onChange={(e) => setNewGoal({ ...newGoal, targetDiastolic: parseInt(e.target.value) })}
-                    className="mt-1"
-                  />
-                </div>
-              </div>
-            ) : (
-              <div>
-                <Label>Target Value</Label>
-                <Input
-                  type="number"
-                  value={newGoal.target}
-                  onChange={(e) => setNewGoal({ ...newGoal, target: parseInt(e.target.value) })}
-                  className="mt-1"
-                />
-              </div>
-            )}
+            <div>
+              <Label>Target Value</Label>
+              <Input
+                type="number"
+                value={newGoal.target}
+                onChange={(e) => setNewGoal({ ...newGoal, target: parseInt(e.target.value) })}
+                className="mt-1"
+              />
+            </div>
             <div>
               <Label>Period</Label>
               <Select value={newGoal.period} onValueChange={(value: any) => setNewGoal({ ...newGoal, period: value })}>
@@ -574,7 +509,7 @@ export function GoalsManager({ isOpen, onClose, userId, biomarkers }: GoalsManag
             <Card className="p-4 bg-muted/50 space-y-2">
               <h4 className="font-medium text-sm">Goal Summary</h4>
               <p className="text-sm"><strong>Type:</strong> {getGoalTypeLabel(newGoal.type)}</p>
-              <p className="text-sm"><strong>Target:</strong> {newGoal.type === 'bloodPressure' ? `${newGoal.targetSystolic}/${newGoal.targetDiastolic} mmHg` : newGoal.target}</p>
+              <p className="text-sm"><strong>Target:</strong> {newGoal.target}</p>
               <p className="text-sm"><strong>Period:</strong> {newGoal.period}</p>
               {newGoal.smartSpecific && <p className="text-sm"><strong>Specific:</strong> {newGoal.smartSpecific}</p>}
               {newGoal.deadline && <p className="text-sm"><strong>Deadline:</strong> {new Date(newGoal.deadline).toLocaleDateString()}</p>}

@@ -21,8 +21,8 @@ interface ManualDataEntryProps {
   isOpen: boolean;
   onClose: () => void;
   userId: string;
-  deviceId: string;
-  onDataAdded: () => void;
+  deviceId?: string;
+  onDataAdded: (newReading: Biomarker) => void | Promise<void>;
 }
 
 export function ManualDataEntry({ isOpen, onClose, userId, deviceId, onDataAdded }: ManualDataEntryProps) {
@@ -179,61 +179,79 @@ export function ManualDataEntry({ isOpen, onClose, userId, deviceId, onDataAdded
       };
 
       // First, create data_point
+      const dataPointPayload: {
+        user_id: string;
+        source_id?: string | null;
+        timestamp: string;
+        data_type: 'MANUAL';
+      } = {
+        user_id: userId,
+        timestamp: newReading.timestamp,
+        data_type: 'MANUAL'
+      };
+
+      if (deviceId) {
+        dataPointPayload.source_id = deviceId;
+      }
+
       const { data: dataPoint, error: dataPointError } = await supabase
         .from('data_points')
-        .insert({
-          user_id: userId,
-          source_id: deviceId,
-          timestamp: newReading.timestamp,
-          data_type: 'MANUAL'
-        })
+        .insert(dataPointPayload)
         .select()
         .single();
 
       if (dataPointError) {
-      } else if (dataPoint) {
-        // Create both biomarker_data and manual_entries records
-        const { error: biomarkerError } = await supabase
-          .from('biomarker_data')
-          .insert({
-            data_point_id: dataPoint.data_point_id,
-            type: typeMapping[dataType] || 'HEART_RATE',
+        throw new Error(dataPointError.message || 'Failed to create data point');
+      }
+
+      if (!dataPoint) {
+        throw new Error('No data point returned after insert');
+      }
+
+      // Create both biomarker_data and manual_entries records
+      const { error: biomarkerError } = await supabase
+        .from('biomarker_data')
+        .insert({
+          data_point_id: dataPoint.data_point_id,
+          type: typeMapping[dataType] || 'HEART_RATE',
+          value: newReading.value,
+          secondary_value: newReading.diastolic || null,
+          unit: unitMapping[dataType] || 'unit'
+        });
+
+      if (biomarkerError) {
+        throw new Error(biomarkerError.message || 'Failed to create biomarker record');
+      }
+
+      // Also insert into manual_entries
+      const { error: manualError } = await supabase
+        .from('manual_entries')
+        .insert({
+          data_point_id: dataPoint.data_point_id,
+          entry_type: 'MEASUREMENT',
+          content: {
+            type: dataType,
             value: newReading.value,
-            secondary_value: newReading.diastolic || null,
-            unit: unitMapping[dataType] || 'unit'
-          });
+            systolic: newReading.systolic,
+            diastolic: newReading.diastolic,
+            notes: sanitizedNotes || undefined
+          }
+        });
 
-        if (biomarkerError) {
-        }
-
-        // Also insert into manual_entries
-        const { error: manualError } = await supabase
-          .from('manual_entries')
-          .insert({
-            data_point_id: dataPoint.data_point_id,
-            entry_type: 'MEASUREMENT',
-            content: {
-              type: dataType,
-              value: newReading.value,
-              systolic: newReading.systolic,
-              diastolic: newReading.diastolic,
-              notes: sanitizedNotes || undefined
-            }
-          });
-
-        if (manualError) {
-        }
+      // Manual entry metadata should not block the core health reading insert.
+      if (manualError) {
       }
     } catch (error) {
-      // Continue with localStorage as fallback
+      toast.error('Failed to save reading. Please try again.');
+      return;
     }
 
     const allBiomarkers = JSON.parse(await secureGetItem('healthApp_biomarkers') || '[]');
     const updatedBiomarkers = [...allBiomarkers, newReading];
     await secureSetItem('healthApp_biomarkers', JSON.stringify(updatedBiomarkers));
 
+    await onDataAdded(newReading);
     toast.success('Data logged successfully!');
-    onDataAdded();
     resetForm();
     onClose();
   };

@@ -73,6 +73,7 @@ interface UserDashboardProps {
 }
 
 export function UserDashboard({ user, onLogout }: UserDashboardProps) {
+  const dashboardUserId = user.user_id || user.id;
   const [currentUser, setCurrentUser] = useState(user);
   const [biomarkers, setBiomarkers] = useState<Biomarker[]>([]);
   const [devices, setDevices] = useState<Device[]>([]);
@@ -779,6 +780,19 @@ export function UserDashboard({ user, onLogout }: UserDashboardProps) {
     setCurrentUser(updatedUser);
   };
 
+  const handleManualDataAdded = async (newReading: Biomarker) => {
+    setBiomarkers(prev => {
+      const withoutSameId = prev.filter(b => b.id !== newReading.id);
+      const updated = [...withoutSameId, newReading];
+      const userBiomarkers = updated.filter(b => b.userId === dashboardUserId);
+      checkAchievements(userBiomarkers.length, newReading.type === 'steps' ? newReading.value : undefined);
+      return updated;
+    });
+
+    // Refresh from source of truth after optimistic update.
+    await loadData();
+  };
+
   // Notification handlers
   const handleMarkNotificationAsRead = async (notificationId: string) => {
     try {
@@ -1286,7 +1300,7 @@ export function UserDashboard({ user, onLogout }: UserDashboardProps) {
       <GoalsManager
         isOpen={showGoals}
         onClose={() => setShowGoals(false)}
-        userId={user.id}
+        userId={dashboardUserId}
         biomarkers={biomarkers}
       />
 
@@ -1294,9 +1308,9 @@ export function UserDashboard({ user, onLogout }: UserDashboardProps) {
       <ManualDataEntry
         isOpen={showManualEntry}
         onClose={() => setShowManualEntry(false)}
-        userId={user.id}
-        deviceId={devices.find(d => d.status === 'active')?.id || devices[0]?.id || 'manual-entry'}
-        onDataAdded={loadData}
+        userId={dashboardUserId}
+        deviceId={devices.find(d => d.status === 'active')?.id || devices[0]?.id}
+        onDataAdded={handleManualDataAdded}
       />
 
       {/* Notifications Page */}
