@@ -74,6 +74,7 @@ interface UserDashboardProps {
 
 export function UserDashboard({ user, onLogout }: UserDashboardProps) {
   const BIOMARKER_LOOKBACK_DAYS = 30;
+  const AUTO_REFRESH_COOLDOWN_MS = 2 * 60 * 1000;
   const dashboardUserId = user.user_id || user.id;
   const [currentUser, setCurrentUser] = useState(user);
   const [biomarkers, setBiomarkers] = useState<Biomarker[]>([]);
@@ -104,11 +105,13 @@ export function UserDashboard({ user, onLogout }: UserDashboardProps) {
   const [currentStreak, setCurrentStreak] = useState(0);
   const loadedBiomarkerRangesRef = useRef<Set<string>>(new Set());
   const loadingBiomarkerRangesRef = useRef<Set<string>>(new Set());
+  const lastAutoRefreshAtRef = useRef<number>(0);
   
   // Track last generation time for each biomarker type (ref avoids stale closure issues in interval)
   const lastGeneratedTimeRef = useRef<Record<string, number>>({});
 
   useEffect(() => {
+    lastAutoRefreshAtRef.current = Date.now();
     loadData();
     // Cleanup expired notifications on load
     import('../utils/supabase').then(({ cleanupExpiredNotifications }) => {
@@ -122,26 +125,23 @@ export function UserDashboard({ user, onLogout }: UserDashboardProps) {
     }
   }, []);
 
-  // Sync devices when page becomes visible (tab focus/refresh)
+  // Sync devices when tab becomes visible, but avoid repeated refreshes.
   useEffect(() => {
     const handleVisibilityChange = () => {
       if (document.visibilityState === 'visible') {
+        const now = Date.now();
+        if (now - lastAutoRefreshAtRef.current < AUTO_REFRESH_COOLDOWN_MS) {
+          return;
+        }
+        lastAutoRefreshAtRef.current = now;
         loadData();
       }
     };
 
     document.addEventListener('visibilitychange', handleVisibilityChange);
-    
-    // Also sync on window focus
-    const handleFocus = () => {
-      loadData();
-    };
-    
-    window.addEventListener('focus', handleFocus);
 
     return () => {
       document.removeEventListener('visibilitychange', handleVisibilityChange);
-      window.removeEventListener('focus', handleFocus);
     };
   }, []);
 
