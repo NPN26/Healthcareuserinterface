@@ -360,9 +360,7 @@ export function AuthScreen({ onLogin }: AuthScreenProps) {
       )}
       <Card className="w-full max-w-md p-8">
         <div className="text-center mb-8">
-          <div className="inline-block p-4 rounded-2xl bg-gradient-to-br from-blue-500 to-purple-600 dark:from-custom-blue dark:to-custom-purple mb-4">
-            <Activity className="w-12 h-12 text-white dark:text-custom-white" />
-          </div>
+          <img src="/images/healthsync_logo.svg" alt="HealthSync Logo" className="w-24 h-24 mx-auto mb-4" />
           <h1 className="mb-2">HealthSync</h1>
           <p className="text-muted-foreground">
             Advanced Health Monitoring System

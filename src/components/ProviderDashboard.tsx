@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
 import { ProviderHeader, ProviderStatsCards, PatientListTable, CriticalAlertsPanel, PatientDetail, PatternAnalysis, AccessRequestDialog } from './provider';
 import { AnnouncementBanner } from './user';
@@ -12,6 +12,7 @@ interface ProviderDashboardProps {
 }
 
 export function ProviderDashboard({ user, onLogout }: ProviderDashboardProps) {
+  const PROVIDER_LOOKBACK_DAYS = 30;
   const [patients, setPatients] = useState<User[]>([]);
   const [selectedPatient, setSelectedPatient] = useState<User | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
@@ -19,7 +20,10 @@ export function ProviderDashboard({ user, onLogout }: ProviderDashboardProps) {
   const [alerts, setAlerts] = useState<Alert[]>([]);
   const [isDarkMode, setIsDarkMode] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+  const [isBiomarkerRangeLoading, setIsBiomarkerRangeLoading] = useState(false);
   const [showAccessRequest, setShowAccessRequest] = useState(false);
+  const loadedProviderRangesRef = useRef<Set<string>>(new Set());
+  const loadingProviderRangesRef = useRef<Set<string>>(new Set());
 
   useEffect(() => {
     loadData();
@@ -39,12 +43,23 @@ export function ProviderDashboard({ user, onLogout }: ProviderDashboardProps) {
       
       // Use the provider's user_id or id
       const providerId = user.user_id || user.id;
+      const now = new Date();
+      const rangeStart = new Date(now);
+      rangeStart.setDate(rangeStart.getDate() - PROVIDER_LOOKBACK_DAYS);
+      rangeStart.setHours(0, 0, 0, 0);
       
       const [supabasePatients, supabaseBiomarkers, supabaseAlerts] = await Promise.all([
         fetchPatients(providerId),
-        fetchAllPatientsBiomarkers(providerId),
+        fetchAllPatientsBiomarkers(providerId, {
+          startDate: rangeStart.toISOString(),
+          endDate: now.toISOString(),
+        }),
         fetchAllPatientsAlerts(providerId)
       ]);
+
+      loadedProviderRangesRef.current.clear();
+      loadedProviderRangesRef.current.add(`all|${rangeStart.toISOString()}|${now.toISOString()}`);
+      loadingProviderRangesRef.current.clear();
 
 
       // Map Patient type to User type
@@ -68,6 +83,8 @@ export function ProviderDashboard({ user, onLogout }: ProviderDashboardProps) {
       setPatients([]);
       setBiomarkers([]);
       setAlerts([]);
+      loadedProviderRangesRef.current.clear();
+      loadingProviderRangesRef.current.clear();
     } finally {
       setIsLoading(false);
     }
@@ -78,6 +95,40 @@ export function ProviderDashboard({ user, onLogout }: ProviderDashboardProps) {
     setIsDarkMode(newMode);
     localStorage.setItem('healthApp_darkMode', String(newMode));
     document.documentElement.classList.toggle('dark', newMode);
+  };
+
+  const mergeBiomarkers = (existing: Biomarker[], incoming: Biomarker[]) => {
+    const byId = new Map(existing.map(b => [b.id, b]));
+    incoming.forEach(b => byId.set(b.id, b));
+    return Array.from(byId.values());
+  };
+
+  const requestProviderPatientRange = async (patientId: string, range: { startDate: string; endDate: string }) => {
+    const providerId = user.user_id || user.id;
+    const rangeKey = `${patientId}|${range.startDate}|${range.endDate}`;
+    if (loadedProviderRangesRef.current.has(rangeKey) || loadingProviderRangesRef.current.has(rangeKey)) {
+      return;
+    }
+
+    loadingProviderRangesRef.current.add(rangeKey);
+    setIsBiomarkerRangeLoading(true);
+    try {
+      const { fetchAllPatientsBiomarkers } = await import('../utils/supabase');
+      const fetched = await fetchAllPatientsBiomarkers(providerId, {
+        patientId,
+        startDate: range.startDate,
+        endDate: range.endDate,
+      });
+      setBiomarkers(prev => mergeBiomarkers(prev, fetched));
+      loadedProviderRangesRef.current.add(rangeKey);
+    } catch (error) {
+      toast.error('Unable to load older patient data');
+    } finally {
+      loadingProviderRangesRef.current.delete(rangeKey);
+      if (loadingProviderRangesRef.current.size === 0) {
+        setIsBiomarkerRangeLoading(false);
+      }
+    }
   };
 
   const filteredPatients = patients.filter(p => 
@@ -107,6 +158,8 @@ export function ProviderDashboard({ user, onLogout }: ProviderDashboardProps) {
         patient={selectedPatient}
         biomarkers={biomarkers.filter(b => b.userId === selectedPatient.id)}
         alerts={alerts.filter(a => a.userId === selectedPatient.id)}
+        isBiomarkersLoading={isBiomarkerRangeLoading}
+        onRequestRange={(range) => requestProviderPatientRange(selectedPatient.id, range)}
         onBack={() => setSelectedPatient(null)}
       />
     );

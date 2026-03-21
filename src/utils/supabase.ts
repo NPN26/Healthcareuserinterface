@@ -112,12 +112,21 @@ export function generateUUID(): string {
   return `${hex.slice(0,8)}-${hex.slice(8,12)}-${hex.slice(12,16)}-${hex.slice(16,20)}-${hex.slice(20,32)}`;
 }
 
+interface BiomarkerFetchOptions {
+  startDate?: string;
+  endDate?: string;
+}
+
+interface ProviderBiomarkerFetchOptions extends BiomarkerFetchOptions {
+  patientId?: string;
+}
+
 /**
  * Fetch biomarkers for the authenticated user from Supabase
  * Verifies the authenticated user matches the userId to prevent IDOR
  * @param userId - User ID to fetch biomarkers for
  */
-export async function fetchBiomarkers(userId: string): Promise<Biomarker[]> {
+export async function fetchBiomarkers(userId: string, options?: BiomarkerFetchOptions): Promise<Biomarker[]> {
   try {
     // Verify authentication and enforce ownership
     const auth = await requireAuth()
@@ -134,7 +143,7 @@ export async function fetchBiomarkers(userId: string): Promise<Biomarker[]> {
     let from = 0
 
     while (true) {
-      const { data, error } = await supabase
+      let query = supabase
         .from('data_points')
         .select(`
           data_point_id,
@@ -152,6 +161,15 @@ export async function fetchBiomarkers(userId: string): Promise<Biomarker[]> {
         .order('timestamp', { ascending: false })
         .order('data_point_id', { ascending: false })
         .range(from, from + pageSize - 1)
+
+      if (options?.startDate) {
+        query = query.gte('timestamp', options.startDate)
+      }
+      if (options?.endDate) {
+        query = query.lte('timestamp', options.endDate)
+      }
+
+      const { data, error } = await query
 
       if (error) {
         logApiError('fetchBiomarkers', error, auth.userId)
@@ -981,7 +999,7 @@ export async function fetchPatients(providerId: string): Promise<Patient[]> {
  * For provider dashboard only - respects access_consents table
  * @param providerId - The provider's user ID
  */
-export async function fetchAllPatientsBiomarkers(providerId: string): Promise<Biomarker[]> {
+export async function fetchAllPatientsBiomarkers(providerId: string, options?: ProviderBiomarkerFetchOptions): Promise<Biomarker[]> {
   try {
     // Verify the authenticated user is a provider and matches the providerId
     const auth = await requireProvider()
@@ -1009,12 +1027,16 @@ export async function fetchAllPatientsBiomarkers(providerId: string): Promise<Bi
     // Extract patient IDs
     const patientIds = consents.map(c => c.patient_id)
 
+    if (options?.patientId && !patientIds.includes(options.patientId)) {
+      return []
+    }
+
     const pageSize = 1000
     const allData: any[] = []
     let from = 0
 
     while (true) {
-      const { data, error } = await supabase
+      let query = supabase
         .from('data_points')
         .select(`
           data_point_id,
@@ -1029,10 +1051,23 @@ export async function fetchAllPatientsBiomarkers(providerId: string): Promise<Bi
           )
         `)
         .in('data_type', ['BIOMARKER', 'MANUAL'])
-        .in('user_id', patientIds)
         .order('timestamp', { ascending: false })
         .order('data_point_id', { ascending: false })
         .range(from, from + pageSize - 1)
+
+      if (options?.patientId) {
+        query = query.eq('user_id', options.patientId)
+      } else {
+        query = query.in('user_id', patientIds)
+      }
+      if (options?.startDate) {
+        query = query.gte('timestamp', options.startDate)
+      }
+      if (options?.endDate) {
+        query = query.lte('timestamp', options.endDate)
+      }
+
+      const { data, error } = await query
 
       if (error) {
         return []

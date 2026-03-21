@@ -12,10 +12,12 @@ interface PatientDetailProps {
   patient: UserType;
   biomarkers: Biomarker[];
   alerts: Alert[];
+  isBiomarkersLoading?: boolean;
+  onRequestRange?: (range: { startDate: string; endDate: string }) => Promise<void> | void;
   onBack: () => void;
 }
 
-export function PatientDetail({ patient, biomarkers, alerts, onBack }: PatientDetailProps) {
+export function PatientDetail({ patient, biomarkers, alerts, isBiomarkersLoading = false, onRequestRange, onBack }: PatientDetailProps) {
   const biomarkerTypes: Biomarker['type'][] = ['heartRate', 'bloodPressure', 'glucose', 'oxygen', 'steps', 'sleep'];
 
   const getAverageByType = (type: Biomarker['type'], days: number = 7) => {
@@ -126,7 +128,7 @@ export function PatientDetail({ patient, biomarkers, alerts, onBack }: PatientDe
             <div>
               <p className="text-sm text-gray-600">Total Readings</p>
               <p className="text-2xl text-gray-900">{biomarkers.length}</p>
-              <p className="text-xs text-gray-500 mt-1">All time</p>
+              <p className="text-xs text-gray-500 mt-1">Loaded range</p>
             </div>
           </Card>
 
@@ -243,6 +245,8 @@ export function PatientDetail({ patient, biomarkers, alerts, onBack }: PatientDe
                   biomarkers={biomarkers.filter(b => b.type === type)}
                   type={type}
                   showDetails
+                  isLoading={isBiomarkersLoading}
+                  onRequestRange={onRequestRange}
                 />
               ))}
             </div>
@@ -254,6 +258,8 @@ export function PatientDetail({ patient, biomarkers, alerts, onBack }: PatientDe
                 biomarkers={biomarkers.filter(b => b.type === type)}
                 type={type}
                 showDetails
+                isLoading={isBiomarkersLoading}
+                onRequestRange={onRequestRange}
               />
             </TabsContent>
           ))}

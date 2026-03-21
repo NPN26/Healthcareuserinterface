@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect, useRef } from 'react';
 import { Card } from '../ui/card';
 import { Badge } from '../ui/badge';
 import { Button } from '../ui/button';
@@ -15,6 +15,7 @@ interface BiomarkerChartProps {
   showDetails?: boolean;
   devices?: Device[];
   isLoading?: boolean;
+  onRequestRange?: (range: { startDate: string; endDate: string }) => Promise<void> | void;
   /** Optional completed goals to annotate on the chart */
   goals?: HealthGoal[];
 }
@@ -39,9 +40,10 @@ interface ChartPoint {
   isGap?: boolean;
 }
 
-export function BiomarkerChart({ biomarkers, type, showDetails, devices = [], isLoading = false, goals = [] }: BiomarkerChartProps) {
+export function BiomarkerChart({ biomarkers, type, showDetails, devices = [], isLoading = false, onRequestRange, goals = [] }: BiomarkerChartProps) {
   const [timeRange, setTimeRange] = useState<TimeRange>('daily');
   const [offset, setOffset] = useState(0); // 0 = current period, 1 = previous period, etc.
+  const requestedRangesRef = useRef<Set<string>>(new Set());
   // Helper function to get device name by ID
   const getDeviceName = (deviceId: string) => {
     if (deviceId === 'deleted-device' || !deviceId) {
@@ -584,6 +586,25 @@ export function BiomarkerChart({ biomarkers, type, showDetails, devices = [], is
   };
 
   const displayChartData = useMemo(() => insertDataGaps(chartData), [chartData, timeRange]);
+
+  useEffect(() => {
+    if (!onRequestRange || isLoading || sortedData.length > 0) return;
+
+    const { startDate, endDate } = getDateRange();
+    const rangeKey = `${startDate.toISOString()}|${endDate.toISOString()}`;
+    if (requestedRangesRef.current.has(rangeKey)) return;
+    requestedRangesRef.current.add(rangeKey);
+
+    void Promise.resolve(
+      onRequestRange({
+        startDate: startDate.toISOString(),
+        endDate: endDate.toISOString(),
+      })
+    ).catch(() => {
+      // Allow retry after transient failures.
+      requestedRangesRef.current.delete(rangeKey);
+    });
+  }, [onRequestRange, isLoading, sortedData.length, timeRange, offset]);
 
   // ── Anomaly count for review badge ──
   const abnormalCount = useMemo(() => {

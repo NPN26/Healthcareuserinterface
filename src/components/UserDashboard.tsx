@@ -73,6 +73,7 @@ interface UserDashboardProps {
 }
 
 export function UserDashboard({ user, onLogout }: UserDashboardProps) {
+  const BIOMARKER_LOOKBACK_DAYS = 30;
   const dashboardUserId = user.user_id || user.id;
   const [currentUser, setCurrentUser] = useState(user);
   const [biomarkers, setBiomarkers] = useState<Biomarker[]>([]);
@@ -101,6 +102,8 @@ export function UserDashboard({ user, onLogout }: UserDashboardProps) {
   const criticalAlertQueueRef = useRef<CriticalAlert[]>([]);
   const [streakMilestone, setStreakMilestone] = useState<StreakMilestone | null>(null);
   const [currentStreak, setCurrentStreak] = useState(0);
+  const loadedBiomarkerRangesRef = useRef<Set<string>>(new Set());
+  const loadingBiomarkerRangesRef = useRef<Set<string>>(new Set());
   
   // Track last generation time for each biomarker type (ref avoids stale closure issues in interval)
   const lastGeneratedTimeRef = useRef<Record<string, number>>({});
@@ -176,15 +179,27 @@ export function UserDashboard({ user, onLogout }: UserDashboardProps) {
     try {
       // Always try to load from Supabase first
       const { fetchBiomarkers, fetchDevices, fetchAlerts, fetchNotifications } = await import('../utils/supabase');
-      
+
+      const now = new Date();
+      const rangeStart = new Date(now);
+      rangeStart.setDate(rangeStart.getDate() - BIOMARKER_LOOKBACK_DAYS);
+      rangeStart.setHours(0, 0, 0, 0);
+      const rangeKey = `${rangeStart.toISOString()}|${now.toISOString()}`;
+
       [supabaseBiomarkers, supabaseDevices, supabaseAlerts, supabaseNotifications] = await Promise.all([
-        fetchBiomarkers(user.user_id || user.id),
+        fetchBiomarkers(user.user_id || user.id, {
+          startDate: rangeStart.toISOString(),
+          endDate: now.toISOString(),
+        }),
         fetchDevices(user.user_id || user.id),
         fetchAlerts(user.user_id || user.id),
         fetchNotifications(user.user_id || user.id)
       ]);
 
       dbLoadSuccess = true;
+      loadedBiomarkerRangesRef.current.clear();
+      loadedBiomarkerRangesRef.current.add(rangeKey);
+      loadingBiomarkerRangesRef.current.clear();
     } catch (error) {
     }
 
@@ -211,9 +226,39 @@ export function UserDashboard({ user, onLogout }: UserDashboardProps) {
       setAlerts(storedAlerts.filter((a: Alert) => a.userId === user.id && !a.read));
       setNotifications([]);
       setUnreadNotificationsCount(0);
+      loadedBiomarkerRangesRef.current.clear();
+      loadingBiomarkerRangesRef.current.clear();
     }
 
     setIsDataLoading(false);
+  };
+
+  const mergeBiomarkers = (existing: Biomarker[], incoming: Biomarker[]) => {
+    const byId = new Map(existing.map(b => [b.id, b]));
+    incoming.forEach(b => byId.set(b.id, b));
+    return Array.from(byId.values());
+  };
+
+  const requestUserBiomarkerRange = async ({ startDate, endDate }: { startDate: string; endDate: string }) => {
+    const rangeKey = `${startDate}|${endDate}`;
+    if (loadedBiomarkerRangesRef.current.has(rangeKey) || loadingBiomarkerRangesRef.current.has(rangeKey)) {
+      return;
+    }
+
+    loadingBiomarkerRangesRef.current.add(rangeKey);
+    setIsDataLoading(true);
+    try {
+      const { fetchBiomarkers } = await import('../utils/supabase');
+      const fetched = await fetchBiomarkers(user.user_id || user.id, { startDate, endDate });
+      setBiomarkers(prev => mergeBiomarkers(prev, fetched));
+      loadedBiomarkerRangesRef.current.add(rangeKey);
+    } catch (error) {
+    } finally {
+      loadingBiomarkerRangesRef.current.delete(rangeKey);
+      if (loadingBiomarkerRangesRef.current.size === 0) {
+        setIsDataLoading(false);
+      }
+    }
   };
 
   // ── Streak tracking ──
@@ -1017,6 +1062,7 @@ export function UserDashboard({ user, onLogout }: UserDashboardProps) {
                   type={type}
                   devices={devices}
                   isLoading={isDataLoading}
+                  onRequestRange={requestUserBiomarkerRange}
                 />
               ))}
             </div>
@@ -1034,6 +1080,7 @@ export function UserDashboard({ user, onLogout }: UserDashboardProps) {
                 showDetails
                 devices={devices}
                 isLoading={isDataLoading}
+                onRequestRange={requestUserBiomarkerRange}
               />
             ))}
           </div>
@@ -1089,6 +1136,7 @@ export function UserDashboard({ user, onLogout }: UserDashboardProps) {
                 showDetails
                 devices={devices}
                 isLoading={isDataLoading}
+                onRequestRange={requestUserBiomarkerRange}
               />
             </Card>
           </div>
@@ -1105,6 +1153,7 @@ export function UserDashboard({ user, onLogout }: UserDashboardProps) {
                 showDetails
                 devices={devices}
                 isLoading={isDataLoading}
+                onRequestRange={requestUserBiomarkerRange}
               />
             </Card>
           </div>
@@ -1122,6 +1171,7 @@ export function UserDashboard({ user, onLogout }: UserDashboardProps) {
                   showDetails
                   devices={devices}
                   isLoading={isDataLoading}
+                  onRequestRange={requestUserBiomarkerRange}
                 />
                 <BiomarkerChart 
                   biomarkers={biomarkers.filter(b => b.type === 'sleep')}
@@ -1129,6 +1179,7 @@ export function UserDashboard({ user, onLogout }: UserDashboardProps) {
                   showDetails
                   devices={devices}
                   isLoading={isDataLoading}
+                  onRequestRange={requestUserBiomarkerRange}
                 />
               </div>
             </Card>
@@ -1146,6 +1197,7 @@ export function UserDashboard({ user, onLogout }: UserDashboardProps) {
                 showDetails
                 devices={devices}
                 isLoading={isDataLoading}
+                onRequestRange={requestUserBiomarkerRange}
               />
             </Card>
           </div>
