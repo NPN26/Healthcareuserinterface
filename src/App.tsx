@@ -90,6 +90,8 @@ export default function App() {
 
   const handleLogin = (user: User) => {
     setCurrentUser(user);
+    // Initialize secure storage with user ID before storing PHI
+    initSecureStorage(user.id);
     // Only store the user ID for session resumption — role is always re-fetched
     // from the server on page load via validateSession() to prevent role spoofing.
     secureSetItem('healthApp_currentUser', JSON.stringify({ user_id: user.id }));
