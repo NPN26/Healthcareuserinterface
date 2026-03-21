@@ -5,7 +5,7 @@ import { Button } from '../ui/button';
 import ReactApexChart from 'react-apexcharts';
 import { ApexOptions } from 'apexcharts';
 import { Biomarker, Device, getBiomarkerLabel, getBiomarkerUnit, getBiomarkerColor, classifyReading, PHYSIOLOGICAL_RANGES, type AnomalySeverity } from '../../utils/mockData';
-import { TrendingUp, TrendingDown, AlertTriangle, ChevronLeft, ChevronRight } from 'lucide-react';
+import { TrendingUp, TrendingDown, AlertTriangle, ChevronLeft, ChevronRight, Loader2 } from 'lucide-react';
 import type { HealthGoal } from '../../utils/supabase';
 
 interface BiomarkerChartProps {
@@ -13,6 +13,7 @@ interface BiomarkerChartProps {
   type: Biomarker['type'];
   showDetails?: boolean;
   devices?: Device[];
+  isLoading?: boolean;
   /** Optional completed goals to annotate on the chart */
   goals?: HealthGoal[];
 }
@@ -37,7 +38,7 @@ interface ChartPoint {
   isGap?: boolean;
 }
 
-export function BiomarkerChart({ biomarkers, type, showDetails, devices = [], goals = [] }: BiomarkerChartProps) {
+export function BiomarkerChart({ biomarkers, type, showDetails, devices = [], isLoading = false, goals = [] }: BiomarkerChartProps) {
   const [timeRange, setTimeRange] = useState<TimeRange>('daily');
   const [offset, setOffset] = useState(0); // 0 = current period, 1 = previous period, etc.
   // Helper function to get device name by ID
@@ -706,8 +707,26 @@ export function BiomarkerChart({ biomarkers, type, showDetails, devices = [], go
           </div>
         </div>
 
-        {/* Check if there's no data */}
-        {sortedData.length === 0 ? (
+        {/* Show loading state while dashboard is fetching data */}
+        {isLoading ? (
+          <div className="h-64 flex items-center justify-center">
+            <div className="w-full max-w-xl space-y-4">
+              <div className="flex items-center justify-center gap-2 text-muted-foreground">
+                <Loader2 className="w-4 h-4 animate-spin" />
+                <p className="text-sm">Loading chart data...</p>
+              </div>
+              <div className="grid grid-cols-6 gap-2 h-40 items-end">
+                {Array.from({ length: 12 }).map((_, index) => (
+                  <div
+                    key={index}
+                    className="bg-muted rounded-sm animate-pulse"
+                    style={{ height: `${25 + ((index * 13) % 60)}%` }}
+                  />
+                ))}
+              </div>
+            </div>
+          </div>
+        ) : sortedData.length === 0 ? (
           <div className="h-64 flex items-center justify-center">
             <div className="text-center text-muted-foreground">
               <p className="text-lg mb-2">No data for this period</p>

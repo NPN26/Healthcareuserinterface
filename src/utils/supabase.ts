@@ -13,6 +13,11 @@ function relationOne<T>(value: T | T[] | null | undefined): T | undefined {
   return value ?? undefined
 }
 
+function normalizeTimestamp(timestamp: string): string {
+  // Add UTC timezone suffix only when the timestamp has no explicit zone.
+  return /(Z|[+-]\d{2}:\d{2})$/.test(timestamp) ? timestamp : `${timestamp}Z`
+}
+
 if (!supabaseUrl || !supabaseAnonKey) {
   throw new Error('Missing Supabase environment variables')
 }
@@ -110,6 +115,7 @@ export function generateUUID(): string {
 /**
  * Fetch biomarkers for the authenticated user from Supabase
  * Verifies the authenticated user matches the userId to prevent IDOR
+ * @param userId - User ID to fetch biomarkers for
  */
 export async function fetchBiomarkers(userId: string): Promise<Biomarker[]> {
   try {
@@ -123,30 +129,48 @@ export async function fetchBiomarkers(userId: string): Promise<Biomarker[]> {
     const rateCheck = checkRateLimit('apiCall', auth.userId)
     if (!rateCheck.allowed) return []
     trackApiRequest(auth.userId)
-    const { data, error } = await supabase
-      .from('data_points')
-      .select(`
-        data_point_id,
-        timestamp,
-        source_id,
-        biomarker_data (
-          type,
-          value,
-          secondary_value,
-          unit
-        )
-      `)
-      .eq('user_id', auth.userId)
-      .in('data_type', ['BIOMARKER', 'MANUAL'])
-      .order('timestamp', { ascending: false })
-      .limit(1000)
+    const pageSize = 1000
+    const allData: any[] = []
+    let from = 0
 
-    if (error) {
-      logApiError('fetchBiomarkers', error, auth.userId)
-      return []
+    while (true) {
+      const { data, error } = await supabase
+        .from('data_points')
+        .select(`
+          data_point_id,
+          timestamp,
+          source_id,
+          biomarker_data (
+            type,
+            value,
+            secondary_value,
+            unit
+          )
+        `)
+        .eq('user_id', auth.userId)
+        .in('data_type', ['BIOMARKER', 'MANUAL'])
+        .order('timestamp', { ascending: false })
+        .order('data_point_id', { ascending: false })
+        .range(from, from + pageSize - 1)
+
+      if (error) {
+        logApiError('fetchBiomarkers', error, auth.userId)
+        return []
+      }
+
+      if (!data || data.length === 0) {
+        break
+      }
+
+      allData.push(...data)
+
+      // Last page reached when Supabase returns fewer rows than requested.
+      if (data.length < pageSize) {
+        break
+      }
+
+      from += pageSize
     }
-
-    if (!data) return []
 
     // Map database format to frontend format
     const typeMapping: Record<string, Biomarker['type']> = {
@@ -160,7 +184,7 @@ export async function fetchBiomarkers(userId: string): Promise<Biomarker[]> {
       'WEIGHT': 'weight'
     }
 
-    return data
+    return allData
       .filter(item => item.biomarker_data)
       .map(item => {
         const biomarkerData = Array.isArray(item.biomarker_data)
@@ -176,10 +200,7 @@ export async function fetchBiomarkers(userId: string): Promise<Biomarker[]> {
           deviceId: item.source_id || 'deleted-device', // Handle null source_id for historical data
           type: frontendType,
           value: biomarkerData.value,
-          // Ensure timestamp is in ISO format with timezone (add Z if missing)
-          timestamp: item.timestamp.includes('Z') || item.timestamp.includes('+') || item.timestamp.includes('-')
-            ? item.timestamp
-            : `${item.timestamp}Z`,
+          timestamp: normalizeTimestamp(item.timestamp),
           isFaulty: false
         };
 
@@ -1620,9 +1641,7 @@ export async function fetchAllBiomarkers(): Promise<Biomarker[]> {
           deviceId: item.source_id || 'deleted-device',
           type: frontendType,
           value: biomarkerData.value,
-          timestamp: item.timestamp.includes('Z') || item.timestamp.includes('+') || item.timestamp.includes('-') 
-            ? item.timestamp 
-            : `${item.timestamp}Z`,
+          timestamp: normalizeTimestamp(item.timestamp),
           isFaulty: false
         };
         

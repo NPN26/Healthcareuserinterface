@@ -78,6 +78,7 @@ export function UserDashboard({ user, onLogout }: UserDashboardProps) {
   const [biomarkers, setBiomarkers] = useState<Biomarker[]>([]);
   const [devices, setDevices] = useState<Device[]>([]);
   const [alerts, setAlerts] = useState<Alert[]>([]);
+  const [isDataLoading, setIsDataLoading] = useState(true);
   const [showCompanion, setShowCompanion] = useState(false);
   const [showGoals, setShowGoals] = useState(false);
   const [showManualEntry, setShowManualEntry] = useState(false);
@@ -163,6 +164,9 @@ export function UserDashboard({ user, onLogout }: UserDashboardProps) {
   };
 
   const loadData = async () => {
+    if (biomarkers.length === 0) {
+      setIsDataLoading(true);
+    }
     let supabaseBiomarkers: Biomarker[] = [];
     let supabaseDevices: Device[] = [];
     let supabaseAlerts: Alert[] = [];
@@ -208,6 +212,8 @@ export function UserDashboard({ user, onLogout }: UserDashboardProps) {
       setNotifications([]);
       setUnreadNotificationsCount(0);
     }
+
+    setIsDataLoading(false);
   };
 
   // ── Streak tracking ──
@@ -1005,11 +1011,12 @@ export function UserDashboard({ user, onLogout }: UserDashboardProps) {
             <DailySummary biomarkers={biomarkers} selectedDate={selectedDate} />
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               {biomarkerCards.slice(0, 4).map(({ type }) => (
-                <BiomarkerChart 
+                <BiomarkerChart
                   key={type}
-                  biomarkers={filteredBiomarkers.filter(b => b.type === type)}
+                  biomarkers={biomarkers.filter(b => b.type === type)}
                   type={type}
                   devices={devices}
+                  isLoading={isDataLoading}
                 />
               ))}
             </div>
@@ -1026,6 +1033,7 @@ export function UserDashboard({ user, onLogout }: UserDashboardProps) {
                 type={type}
                 showDetails
                 devices={devices}
+                isLoading={isDataLoading}
               />
             ))}
           </div>
@@ -1080,6 +1088,7 @@ export function UserDashboard({ user, onLogout }: UserDashboardProps) {
                 type="heartRate"
                 showDetails
                 devices={devices}
+                isLoading={isDataLoading}
               />
             </Card>
           </div>
@@ -1095,6 +1104,7 @@ export function UserDashboard({ user, onLogout }: UserDashboardProps) {
                 type="bloodPressure"
                 showDetails
                 devices={devices}
+                isLoading={isDataLoading}
               />
             </Card>
           </div>
@@ -1111,12 +1121,14 @@ export function UserDashboard({ user, onLogout }: UserDashboardProps) {
                   type="steps"
                   showDetails
                   devices={devices}
+                  isLoading={isDataLoading}
                 />
                 <BiomarkerChart 
                   biomarkers={biomarkers.filter(b => b.type === 'sleep')}
                   type="sleep"
                   showDetails
                   devices={devices}
+                  isLoading={isDataLoading}
                 />
               </div>
             </Card>
@@ -1133,6 +1145,7 @@ export function UserDashboard({ user, onLogout }: UserDashboardProps) {
                 type="weight"
                 showDetails
                 devices={devices}
+                isLoading={isDataLoading}
               />
             </Card>
           </div>
