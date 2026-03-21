@@ -254,7 +254,7 @@ export function AuthScreen({ onLogin }: AuthScreenProps) {
       }
 
       if (!user) {
-        toast.error('Failed to create account');
+        toast.info('Check your inbox to confirm sign up.');
         return;
       }
 

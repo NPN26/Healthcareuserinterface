@@ -51,6 +51,11 @@ export async function signUp(email: string, password: string, name: string) {
     const { data: authData, error: authError } = await supabase.auth.signUp({
       email,
       password,
+      options: {
+        data: { 
+          name: name 
+        },
+      },
     })
 
     if (authError) throw authError

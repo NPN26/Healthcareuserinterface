@@ -30,7 +30,18 @@ export function ManualDataEntry({ isOpen, onClose, userId, deviceId, onDataAdded
   const [value, setValue] = useState('');
   const [systolic, setSystolic] = useState('');
   const [diastolic, setDiastolic] = useState('');
-  const [timestamp, setTimestamp] = useState(new Date().toISOString().slice(0, 16));
+  // Helper to get current local datetime in yyyy-MM-ddTHH:mm format for datetime-local input
+  function getLocalDateTimeString() {
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = String(now.getMonth() + 1).padStart(2, '0');
+    const day = String(now.getDate()).padStart(2, '0');
+    const hours = String(now.getHours()).padStart(2, '0');
+    const minutes = String(now.getMinutes()).padStart(2, '0');
+    return `${year}-${month}-${day}T${hours}:${minutes}`;
+  }
+
+  const [timestamp, setTimestamp] = useState(getLocalDateTimeString());
   const [notes, setNotes] = useState('');
 
   const biomarkerTypes = [
