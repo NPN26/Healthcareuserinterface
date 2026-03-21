@@ -76,6 +76,13 @@ export function PatientDetail({ patient, biomarkers, alerts, onBack }: PatientDe
 
   const unreadAlerts = alerts.filter(a => !a.read);
 
+  // Find the most recent biomarker by timestamp
+  const latestBiomarker = biomarkers.length > 0
+    ? biomarkers.reduce((latest, b) =>
+        new Date(b.timestamp) > new Date(latest.timestamp) ? b : latest,
+      biomarkers[0])
+    : null;
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-green-50 via-white to-blue-50 dark:from-gray-950 dark:via-gray-900 dark:to-gray-950 p-4 md:p-8">
       <div className="max-w-7xl mx-auto space-y-6">
@@ -137,14 +144,14 @@ export function PatientDetail({ patient, biomarkers, alerts, onBack }: PatientDe
             <div>
               <p className="text-sm text-gray-600">Last Reading</p>
               <p className="text-gray-900">
-                {biomarkers.length > 0 
-                  ? new Date(biomarkers[biomarkers.length - 1].timestamp).toLocaleDateString()
+                {latestBiomarker
+                  ? new Date(latestBiomarker.timestamp).toLocaleDateString('en-GB')
                   : 'No data'
                 }
               </p>
               <p className="text-xs text-gray-500 mt-1">
-                {biomarkers.length > 0 
-                  ? new Date(biomarkers[biomarkers.length - 1].timestamp).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', second: '2-digit' })
+                {latestBiomarker
+                  ? new Date(latestBiomarker.timestamp).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', second: '2-digit' })
                   : ''
                 }
               </p>
