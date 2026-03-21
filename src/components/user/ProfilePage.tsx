@@ -166,6 +166,33 @@ export function ProfilePage({ user, onBack, onUpdate, initialTab = 'personal' }:
     loadAssignedDoctor();
   }, [user.assignedDoctor]);
 
+  // Load alert thresholds from localStorage on mount
+  useEffect(() => {
+    const loadThresholdsFromStorage = async () => {
+      try {
+        const rawCurrentUser = await secureGetItem('healthApp_currentUser');
+        if (rawCurrentUser) {
+          const currentUser = JSON.parse(rawCurrentUser);
+          if (currentUser?.alertThresholds) {
+            setAlertThresholds(currentUser.alertThresholds);
+            return;
+          }
+        }
+
+        // Fallback: try to load from healthApp_users
+        const rawUsers = await secureGetItem('healthApp_users');
+        const users = JSON.parse(rawUsers || '[]');
+        const savedUser = users.find((u: any) => u.id === user.id || u.user_id === user.user_id);
+        if (savedUser?.alertThresholds) {
+          setAlertThresholds(savedUser.alertThresholds);
+        }
+      } catch (error) {
+        console.error('Error loading thresholds from storage:', error);
+      }
+    };
+    loadThresholdsFromStorage();
+  }, [user.id, user.user_id]);
+
   // --- Sharing data helpers ---
   const loadSharingData = async () => {
     setIsSharingLoading(true);
@@ -616,6 +643,8 @@ export function ProfilePage({ user, onBack, onUpdate, initialTab = 'personal' }:
       return;
     }
 
+    setIsSaving(true);
+
     const updatedUser = { ...user, ...notificationSettings, alertThresholds };
     onUpdate(updatedUser);
 
@@ -647,18 +676,24 @@ export function ProfilePage({ user, onBack, onUpdate, initialTab = 'personal' }:
           );
       }
     } catch (error) {
+      console.error('Error syncing to Supabase:', error);
     }
 
-    const { secureGetItem, secureSetItem } = await import('../../utils/secureStorage');
-    const rawUsers = await secureGetItem('healthApp_users');
-    const users = JSON.parse(rawUsers || '[]');
-    const updatedUsers = users.map((u: any) =>
-      (u.id === user.id || u.user_id === user.user_id) ? updatedUser : u
-    );
-    await secureSetItem('healthApp_users', JSON.stringify(updatedUsers));
-    await secureSetItem('healthApp_currentUser', JSON.stringify(updatedUser));
+    try {
+      const { secureGetItem, secureSetItem } = await import('../../utils/secureStorage');
+      const rawUsers = await secureGetItem('healthApp_users');
+      const users = JSON.parse(rawUsers || '[]');
+      const updatedUsers = users.map((u: any) =>
+        (u.id === user.id || u.user_id === user.user_id) ? updatedUser : u
+      );
+      await secureSetItem('healthApp_users', JSON.stringify(updatedUsers));
+      await secureSetItem('healthApp_currentUser', JSON.stringify(updatedUser));
+    } catch (error) {
+      console.error('Error saving to localStorage:', error);
+    }
 
-    toast.success('Notification preferences saved');
+    setIsSaving(false);
+    toast.success('✓ Notification preferences saved successfully');
   };
 
   const tabs = [
@@ -1183,9 +1218,9 @@ export function ProfilePage({ user, onBack, onUpdate, initialTab = 'personal' }:
               </div>
 
               <div className="flex justify-end pt-2">
-                <Button onClick={handleSaveNotifications} className="bg-gradient-to-r from-purple-500 to-pink-600">
-                  <Save className="w-4 h-4 mr-2" />
-                  Save Preferences
+                <Button onClick={handleSaveNotifications} disabled={isSaving} className="bg-gradient-to-r from-purple-500 to-pink-600">
+                  {isSaving ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Save className="w-4 h-4 mr-2" />}
+                  {isSaving ? 'Saving...' : 'Save Preferences'}
                 </Button>
               </div>
             </div>
