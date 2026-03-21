@@ -1033,15 +1033,26 @@ export function UserDashboard({ user, onLogout }: UserDashboardProps) {
                 </Button>
               </div>
             </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {[...devices].sort((a, b) => (b.priority ?? 0) - (a.priority ?? 0)).map(device => (
-                <DeviceCard 
-                  key={device.id} 
-                  device={device}
-                  onUpdate={loadData}
-                />
-              ))}
-            </div>
+            {devices.length === 0 ? (
+              <Card className="p-8 text-center border-dashed">
+                <h3 className="text-lg font-semibold text-foreground mb-2">No devices connected yet</h3>
+                <p className="text-muted-foreground mb-5">Add your first device to start tracking biometrics automatically.</p>
+                <Button onClick={() => setShowAddDevice(true)}>
+                  <Plus className="w-4 h-4 mr-2" />
+                  Add Your First Device
+                </Button>
+              </Card>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {[...devices].sort((a, b) => (b.priority ?? 0) - (a.priority ?? 0)).map(device => (
+                  <DeviceCard 
+                    key={device.id} 
+                    device={device}
+                    onUpdate={loadData}
+                  />
+                ))}
+              </div>
+            )}
           </div>
         );
       

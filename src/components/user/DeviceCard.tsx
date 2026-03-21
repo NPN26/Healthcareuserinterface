@@ -549,7 +549,7 @@ export function DeviceCard({ device, onUpdate }: DeviceCardProps) {
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={deleteDevice} className="bg-red-600 hover:bg-red-700">
+            <AlertDialogAction onClick={deleteDevice} variant="destructive" >
               Delete
             </AlertDialogAction>
           </AlertDialogFooter>
