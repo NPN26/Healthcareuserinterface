@@ -764,11 +764,10 @@ export function AdminDashboard({ user, onLogout }: AdminDashboardProps) {
                         </TableCell>
                         <TableCell>
                           <div className="flex gap-1 sm:gap-2 flex-wrap">
-                            {!provider.is_verified && (
+                            {!provider.is_verified && provider.verification_status !== 'denied' && (
                               <Button
                                 size="sm"
-                                variant="default"
-                                className="bg-emerald-600 hover:bg-emerald-700"
+                                className="!bg-emerald-600 !text-white hover:!bg-emerald-700"
                                 onClick={() => handleVerifyProvider(provider.id, true)}
                               >
                                 <CheckCircle2 className="w-4 h-4 mr-1" /> Approve
@@ -794,8 +793,7 @@ export function AdminDashboard({ user, onLogout }: AdminDashboardProps) {
                             ) : (
                               <Button
                                 size="sm"
-                                variant="default"
-                                className="bg-emerald-600 hover:bg-emerald-700"
+                                className="!bg-emerald-600 !text-white hover:!bg-emerald-700"
                                 onClick={() => handleVerifyProvider(provider.id, true)}
                               >
                                 <CheckCircle2 className="w-4 h-4 mr-1" /> Approve
