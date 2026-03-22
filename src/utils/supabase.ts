@@ -1575,18 +1575,22 @@ export interface AdminUser {
 export async function fetchAllUsers(): Promise<AdminUser[]> {
   try {
     const auth = await requireAdmin()
-    if (!auth.authorized) return []
+    if (!auth.authorized) {
+      console.error('fetchAllUsers: Admin authorization failed:', auth.error)
+      return []
+    }
 
     const { data, error } = await supabase
-      .from('users')
-      .select('user_id, email, name, role, age, created_at, last_login, is_active, is_verified')
-      .order('created_at', { ascending: false })
+      .rpc('get_all_users_for_admin')
 
     if (error) {
+      console.error('fetchAllUsers: Database error:', error)
       return []
     }
 
     if (!data) return []
+
+    console.log('fetchAllUsers: Successfully fetched', data.length, 'users')
 
     return data.map((user: any) => {
       const isActive = user.is_active !== false
@@ -1608,6 +1612,7 @@ export async function fetchAllUsers(): Promise<AdminUser[]> {
       }
     })
   } catch (error) {
+    console.error('fetchAllUsers: Unexpected error:', error)
     return []
   }
 }
