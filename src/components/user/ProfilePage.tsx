@@ -498,6 +498,7 @@ export function ProfilePage({ user, onBack, onUpdate, initialTab = 'personal' }:
         name: sanitizedFormData.name,
         gender: sanitizedFormData.gender,
         age: calculatedAge,
+        date_of_birth: sanitizedFormData.dateOfBirth,
       });
 
       if (!result.success) {

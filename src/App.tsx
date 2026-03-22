@@ -53,7 +53,7 @@ export default function App() {
             // Fetch fresh user data from server to get authoritative role
             const { data: userData } = await supabase
               .from('users')
-              .select('user_id, email, name, role, age, gender')
+              .select('user_id, email, name, role, age, gender, date_of_birth')
               .eq('user_id', session.user.id)
               .maybeSingle();
 
@@ -65,6 +65,7 @@ export default function App() {
                 role: userData.role,
                 age: userData.age,
                 gender: userData.gender,
+                dateOfBirth: userData.date_of_birth,
               };
               setCurrentUser(validatedUser);
               // Only persist user ID — role is always server-validated
