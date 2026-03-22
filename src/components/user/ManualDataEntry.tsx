@@ -4,7 +4,7 @@ import { Button } from '../ui/button';
 import { Input } from '../ui/input';
 import { Label } from '../ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
-import { Plus, Heart, Activity, Droplet, Wind, Footprints, Moon, Scale } from 'lucide-react';
+import { Plus, Heart, Activity, Droplet, Wind, Footprints, Moon, Scale, Flame } from 'lucide-react';
 import { toast } from 'sonner';
 import { Biomarker } from '../../utils/mockData';
 import { secureGetItem, secureSetItem } from '../../utils/secureStorage';
@@ -52,10 +52,11 @@ export function ManualDataEntry({ isOpen, onClose, userId, deviceId, onDataAdded
     { value: 'steps', label: 'Steps', icon: Footprints, unit: 'steps', placeholder: '8000', min: 0, max: 200000 },
     { value: 'sleep', label: 'Sleep', icon: Moon, unit: 'hours', placeholder: '7.5', min: 0, max: 24 },
     { value: 'weight', label: 'Weight', icon: Scale, unit: 'kg', placeholder: '70', min: 1, max: 500 },
+    { value: 'calories', label: 'Calories', icon: Flame, unit: 'kcal', placeholder: '2000', min: 0, max: 10000 },
   ];
 
   const handleSubmit = async () => {
-    const validDataTypes = ['heartRate', 'bloodPressure', 'glucose', 'oxygen', 'steps', 'sleep', 'weight'] as const;
+    const validDataTypes = ['heartRate', 'bloodPressure', 'glucose', 'oxygen', 'steps', 'sleep', 'weight', 'calories'] as const;
     const dataTypeValidation = validateEnum(dataType, validDataTypes);
     if (!dataTypeValidation.isValid) {
       toast.error('Please select a valid metric type');
@@ -95,7 +96,7 @@ export function ManualDataEntry({ isOpen, onClose, userId, deviceId, onDataAdded
         return;
       }
 
-      const allowDecimal = dataType === 'sleep' || dataType === 'weight';
+      const allowDecimal = dataType === 'sleep' || dataType === 'weight' || dataType === 'calories';
       const valueValidation = validateNumber(value, {
         min: typeConfig?.min ?? 0,
         max: typeConfig?.max ?? 999999,
@@ -164,7 +165,8 @@ export function ManualDataEntry({ isOpen, onClose, userId, deviceId, onDataAdded
         'steps': 'STEPS',
         'sleep': 'SLEEP',
         'temperature': 'RESPIRATORY_RATE',
-        'weight': 'WEIGHT'
+        'weight': 'WEIGHT',
+        'calories': 'CALORIES'
       };
 
       const unitMapping: Record<string, string> = {
@@ -175,7 +177,8 @@ export function ManualDataEntry({ isOpen, onClose, userId, deviceId, onDataAdded
         'steps': 'steps',
         'sleep': 'hours',
         'temperature': '°F',
-        'weight': 'kg'
+        'weight': 'kg',
+        'calories': 'kcal'
       };
 
       // First, create data_point
@@ -208,22 +211,26 @@ export function ManualDataEntry({ isOpen, onClose, userId, deviceId, onDataAdded
         throw new Error('No data point returned after insert');
       }
 
-      // Create both biomarker_data and manual_entries records
-      const { error: biomarkerError } = await supabase
-        .from('biomarker_data')
-        .insert({
-          data_point_id: dataPoint.data_point_id,
-          type: typeMapping[dataType] || 'HEART_RATE',
-          value: newReading.value,
-          secondary_value: newReading.diastolic || null,
-          unit: unitMapping[dataType] || 'unit'
-        });
+      // For calories, skip biomarker_data insert and only save to manual_entries
+      // since CALORIES may not be a valid enum in the biomarker_data type column
+      if (dataType !== 'calories') {
+        // Create biomarker_data record for non-calorie types
+        const { error: biomarkerError } = await supabase
+          .from('biomarker_data')
+          .insert({
+            data_point_id: dataPoint.data_point_id,
+            type: typeMapping[dataType] || 'HEART_RATE',
+            value: newReading.value,
+            secondary_value: newReading.diastolic || null,
+            unit: unitMapping[dataType] || 'unit'
+          });
 
-      if (biomarkerError) {
-        throw new Error(biomarkerError.message || 'Failed to create biomarker record');
+        if (biomarkerError) {
+          throw new Error(biomarkerError.message || 'Failed to create biomarker record');
+        }
       }
 
-      // Also insert into manual_entries
+      // Also insert into manual_entries (for all types including calories)
       const { error: manualError } = await supabase
         .from('manual_entries')
         .insert({

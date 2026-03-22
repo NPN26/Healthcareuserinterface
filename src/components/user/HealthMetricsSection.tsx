@@ -6,9 +6,10 @@ interface HealthMetricsSectionProps {
   activeView: string;
   onViewChange: (view: 'heartRate' | 'bloodPressure' | 'activities' | 'calories' | 'weight') => void;
   getLatestBiomarker: (type: Biomarker['type']) => Biomarker | undefined;
+  consumedCalories?: number;
 }
 
-export function HealthMetricsSection({ activeView, onViewChange, getLatestBiomarker }: HealthMetricsSectionProps) {
+export function HealthMetricsSection({ activeView, onViewChange, getLatestBiomarker, consumedCalories = 0 }: HealthMetricsSectionProps) {
   const healthStatusItems = [
     { id: 'heartRate' as const, label: 'Heart Rate', icon: Heart, color: 'text-red-500', unit: 'bpm' },
     { id: 'bloodPressure' as const, label: 'Blood Pressure', icon: Activity, color: 'text-purple-500', unit: 'mmHg' },
@@ -46,7 +47,7 @@ export function HealthMetricsSection({ activeView, onViewChange, getLatestBiomar
                       {item.id === 'bloodPressure' && latest.systolic
                         ? `${latest.systolic}/${latest.diastolic}`
                         : item.id === 'calories'
-                        ? '2.3k'
+                        ? `${consumedCalories.toLocaleString()}`
                         : item.id === 'weight'
                         ? latest.value?.toFixed(1)
                         : latest.value?.toFixed(0)}

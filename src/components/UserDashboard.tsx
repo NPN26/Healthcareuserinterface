@@ -4,7 +4,7 @@ import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { Chart } from 'chart.js/auto';
 import { Checkbox } from './ui/checkbox';
-import { Activity, Flame, Droplet, Settings, User, Heart, Wind, Footprints, Moon, Plus, Scale, Zap, Target, Trophy, Star, Crown, Sparkles, Award, RefreshCw } from 'lucide-react';
+import { Activity, Flame, Droplet, Settings, User, Heart, Wind, Footprints, Moon, Plus, Scale, Zap, Target, Trophy, Star, Crown, Sparkles, Award, RefreshCw, Edit2, Check, X } from 'lucide-react';
 import {
   BiomarkerChart,
   DeviceCard,
@@ -106,6 +106,16 @@ export function UserDashboard({ user, onLogout }: UserDashboardProps) {
   const criticalAlertQueueRef = useRef<CriticalAlert[]>([]);
   const [streakMilestone, setStreakMilestone] = useState<StreakMilestone | null>(null);
   const [currentStreak, setCurrentStreak] = useState(0);
+  const [burnedCalories, setBurnedCalories] = useState<number>(() => {
+    const saved = localStorage.getItem('healthApp_burnedCalories');
+    return saved ? parseInt(saved) : 2340;
+  });
+  const [consumedCalories, setConsumedCalories] = useState<number>(() => {
+    const saved = localStorage.getItem('healthApp_consumedCalories');
+    return saved ? parseInt(saved) : 1850;
+  });
+  const [showCalorieEditor, setShowCalorieEditor] = useState<'burned' | 'consumed' | null>(null);
+  const [editCalorieValue, setEditCalorieValue] = useState('');
   const loadedBiomarkerRangesRef = useRef<Set<string>>(new Set());
   const loadingBiomarkerRangesRef = useRef<Set<string>>(new Set());
   const lastAutoRefreshAtRef = useRef<number>(0);
@@ -166,6 +176,15 @@ export function UserDashboard({ user, onLogout }: UserDashboardProps) {
   useEffect(() => {
     localStorage.setItem('healthApp_activeView', activeView);
   }, [activeView]);
+
+  // Persist calorie data to localStorage
+  useEffect(() => {
+    localStorage.setItem('healthApp_burnedCalories', String(burnedCalories));
+  }, [burnedCalories]);
+
+  useEffect(() => {
+    localStorage.setItem('healthApp_consumedCalories', String(consumedCalories));
+  }, [consumedCalories]);
 
   const toggleDarkMode = () => {
     const newMode = !isDarkMode;
@@ -848,6 +867,12 @@ export function UserDashboard({ user, onLogout }: UserDashboardProps) {
       return updated;
     });
 
+    // If the logged data is calories, add to consumed calories total
+    if (newReading.type === 'calories') {
+      setConsumedCalories(prev => prev + Math.round(newReading.value));
+      toast.success(`${Math.round(newReading.value)} kcal added to daily intake`);
+    }
+
     // Refresh from source of truth after optimistic update.
     await loadData();
   };
@@ -1041,6 +1066,25 @@ export function UserDashboard({ user, onLogout }: UserDashboardProps) {
     if (type === 'weight') setActiveView('weight');
   };
 
+  const handleSaveCalorieValue = (type: 'burned' | 'consumed') => {
+    const value = parseInt(editCalorieValue);
+
+    if (!editCalorieValue || isNaN(value) || value < 0 || value > 10000) {
+      toast.error('Please enter a valid calorie value (0-10000)');
+      return;
+    }
+
+    if (type === 'burned') {
+      setBurnedCalories(value);
+    } else {
+      setConsumedCalories(value);
+    }
+
+    setShowCalorieEditor(null);
+    setEditCalorieValue('');
+    toast.success(`${type === 'burned' ? 'Burned' : 'Consumed'} calories updated`);
+  };
+
   const biomarkerCards = [
     { type: 'heartRate' as const, icon: Heart, color: 'text-red-500' },
     { type: 'bloodPressure' as const, icon: Activity, color: 'text-purple-500' },
@@ -1212,32 +1256,58 @@ export function UserDashboard({ user, onLogout }: UserDashboardProps) {
         );
       
       case 'calories':
+        const netBalance = burnedCalories - consumedCalories;
         return (
           <div className="space-y-6">
             <Card className="p-6">
               <h3 className="text-foreground mb-4">Calorie Tracking</h3>
               <p className="text-muted-foreground mb-6">Track your daily calorie intake and expenditure</p>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div className="p-6 bg-gradient-to-br from-orange-50 to-red-50 dark:from-orange-950 dark:to-red-950 rounded-lg">
+                {/* Burned Calories Card */}
+                <div className="p-6 bg-gradient-to-br from-orange-50 to-red-50 dark:from-orange-950 dark:to-red-950 rounded-lg relative">
+                  <button
+                    onClick={() => {
+                      setEditCalorieValue(String(burnedCalories));
+                      setShowCalorieEditor('burned');
+                    }}
+                    className="absolute top-3 right-3 p-2 hover:bg-orange-200 dark:hover:bg-orange-800 rounded-md transition"
+                    title="Edit burned calories"
+                  >
+                    <Edit2 className="w-4 h-4 text-orange-600 dark:text-orange-400" />
+                  </button>
                   <div className="flex items-center gap-3 mb-2">
                     <div className="w-10 h-10 rounded-full bg-orange-500/10 flex items-center justify-center">
                       <Flame className="w-5 h-5 text-orange-600 dark:text-orange-400" />
                     </div>
                     <p className="text-sm text-muted-foreground">Burned</p>
                   </div>
-                  <p className="text-2xl font-semibold">2,340</p>
+                  <p className="text-2xl font-semibold">{burnedCalories.toLocaleString()}</p>
                   <p className="text-xs text-muted-foreground mt-1">kcal today</p>
                 </div>
-                <div className="p-6 bg-gradient-to-br from-blue-50 to-cyan-50 dark:from-blue-950 dark:to-cyan-950 rounded-lg">
+
+                {/* Consumed Calories Card */}
+                <div className="p-6 bg-gradient-to-br from-blue-50 to-cyan-50 dark:from-blue-950 dark:to-cyan-950 rounded-lg relative">
+                  <button
+                    onClick={() => {
+                      setEditCalorieValue(String(consumedCalories));
+                      setShowCalorieEditor('consumed');
+                    }}
+                    className="absolute top-3 right-3 p-2 hover:bg-blue-200 dark:hover:bg-blue-800 rounded-md transition"
+                    title="Edit consumed calories"
+                  >
+                    <Edit2 className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+                  </button>
                   <div className="flex items-center gap-3 mb-2">
                     <div className="w-10 h-10 rounded-full bg-blue-500/10 flex items-center justify-center">
                       <Droplet className="w-5 h-5 text-blue-600 dark:text-blue-400" />
                     </div>
                     <p className="text-sm text-muted-foreground">Consumed</p>
                   </div>
-                  <p className="text-2xl font-semibold">1,850</p>
+                  <p className="text-2xl font-semibold">{consumedCalories.toLocaleString()}</p>
                   <p className="text-xs text-muted-foreground mt-1">kcal today</p>
                 </div>
+
+                {/* Net Balance Card */}
                 <div className="p-6 bg-gradient-to-br from-green-50 to-emerald-50 dark:from-green-950 dark:to-emerald-950 rounded-lg">
                   <div className="flex items-center gap-3 mb-2">
                     <div className="w-10 h-10 rounded-full bg-green-500/10 flex items-center justify-center">
@@ -1245,11 +1315,61 @@ export function UserDashboard({ user, onLogout }: UserDashboardProps) {
                     </div>
                     <p className="text-sm text-muted-foreground">Net Balance</p>
                   </div>
-                  <p className="text-2xl font-semibold text-green-600 dark:text-green-400">-490</p>
-                  <p className="text-xs text-muted-foreground mt-1">kcal deficit</p>
+                  <p className={`text-2xl font-semibold ${netBalance >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
+                    {netBalance >= 0 ? '+' : ''}{netBalance.toLocaleString()}
+                  </p>
+                  <p className="text-xs text-muted-foreground mt-1">{netBalance >= 0 ? 'kcal surplus' : 'kcal deficit'}</p>
                 </div>
               </div>
             </Card>
+
+            {/* Calorie Editor Dialog */}
+            <Dialog open={showCalorieEditor !== null} onOpenChange={(open) => !open && setShowCalorieEditor(null)}>
+              <DialogContent className="max-w-sm">
+                <DialogHeader>
+                  <DialogTitle>
+                    Edit {showCalorieEditor === 'burned' ? 'Burned' : 'Consumed'} Calories
+                  </DialogTitle>
+                </DialogHeader>
+                <div className="space-y-4 mt-4">
+                  <div>
+                    <Label htmlFor="calorie-value">Value (kcal)</Label>
+                    <Input
+                      id="calorie-value"
+                      type="number"
+                      min="0"
+                      max="10000"
+                      placeholder="e.g., 2000"
+                      value={editCalorieValue}
+                      onChange={(e) => setEditCalorieValue(e.target.value)}
+                      className="mt-1"
+                      autoFocus
+                    />
+                    <p className="text-xs text-muted-foreground mt-1">Enter a value between 0 and 10,000</p>
+                  </div>
+                  <div className="flex gap-2 pt-4">
+                    <Button
+                      onClick={() => handleSaveCalorieValue(showCalorieEditor!)}
+                      className="flex-1"
+                    >
+                      <Check className="w-4 h-4 mr-2" />
+                      Save
+                    </Button>
+                    <Button
+                      variant="outline"
+                      onClick={() => {
+                        setShowCalorieEditor(null);
+                        setEditCalorieValue('');
+                      }}
+                      className="flex-1"
+                    >
+                      <X className="w-4 h-4 mr-2" />
+                      Cancel
+                    </Button>
+                  </div>
+                </div>
+              </DialogContent>
+            </Dialog>
           </div>
         );
       
@@ -1284,6 +1404,7 @@ export function UserDashboard({ user, onLogout }: UserDashboardProps) {
               activeView={activeView}
               onViewChange={setActiveView}
               getLatestBiomarker={getLatestBiomarker}
+              consumedCalories={consumedCalories}
             />
 
             <SidebarSeparator className="w-[90%] mx-auto" />
