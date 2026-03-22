@@ -36,6 +36,7 @@ import {
   Announcement,
   updateUserActiveStatus,
   updateProviderVerification,
+  createUserAsAdmin,
 } from '../utils/supabase';
 import { AnnouncementBanner } from './user';
 import { fetchAllEmailLogs, EmailLog } from '../utils/emailService';
@@ -65,6 +66,14 @@ export function AdminDashboard({ user, onLogout }: AdminDashboardProps) {
     totalDevices: 0,
     dataPoints: 0,
     lastBackup: new Date().toISOString(),
+  });
+  const [showAddUserModal, setShowAddUserModal] = useState(false);
+  const [newUser, setNewUser] = useState({
+    email: '',
+    password: '',
+    name: '',
+    role: 'END_USER' as 'END_USER' | 'PROVIDER' | 'ADMIN',
+    age: '',
   });
 
   useEffect(() => {
@@ -336,6 +345,66 @@ export function AdminDashboard({ user, onLogout }: AdminDashboardProps) {
     }
   };
 
+  const handleAddUser = async () => {
+    // Validate email
+    if (!newUser.email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(newUser.email)) {
+      toast.error('Please enter a valid email address');
+      return;
+    }
+
+    // Validate password
+    if (!newUser.password || newUser.password.length < 6) {
+      toast.error('Password must be at least 6 characters');
+      return;
+    }
+
+    // Validate name
+    const nameValidation = validateText(newUser.name, {
+      minLength: 2,
+      maxLength: 100,
+      required: true,
+    });
+    if (!nameValidation.isValid) {
+      toast.error(nameValidation.error || 'Please enter a valid name (2-100 characters)');
+      return;
+    }
+
+    // Validate age if provided
+    const age = newUser.age ? parseInt(newUser.age) : undefined;
+    if (newUser.age && (isNaN(age!) || age! < 0 || age! > 150)) {
+      toast.error('Please enter a valid age (0-150)');
+      return;
+    }
+
+    try {
+      const result = await createUserAsAdmin(
+        newUser.email.trim(),
+        newUser.password,
+        sanitizeText(newUser.name.trim()),
+        newUser.role,
+        age
+      );
+
+      if (result.success) {
+        toast.success(`User ${newUser.email} created successfully`);
+        setShowAddUserModal(false);
+        setNewUser({
+          email: '',
+          password: '',
+          name: '',
+          role: 'END_USER',
+          age: '',
+        });
+        // Reload users list
+        await loadData();
+      } else {
+        toast.error(result.error || 'Failed to create user');
+      }
+    } catch (error: any) {
+      toast.error(error.message || 'Failed to create user');
+    }
+  };
+
   const handleCreateAnnouncement = async () => {
     // Validate title
     const titleValidation = validateText(newAnnouncement.title, {
@@ -476,7 +545,7 @@ export function AdminDashboard({ user, onLogout }: AdminDashboardProps) {
               <div className="p-4 sm:p-6 border-b">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                   <h3 className="text-foreground">User Management</h3>
-                  <Button size="sm">
+                  <Button size="sm" onClick={() => setShowAddUserModal(true)}>
                     <UserPlus className="w-4 h-4 mr-2" />
                     Add User
                   </Button>
@@ -1070,6 +1139,101 @@ export function AdminDashboard({ user, onLogout }: AdminDashboardProps) {
             </div>
           </TabsContent>
         </Tabs>
+
+        {/* Add User Modal */}
+        {showAddUserModal && (
+          <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+            <Card className="w-full max-w-md">
+              <div className="p-6 border-b flex items-center justify-between">
+                <h3 className="text-lg font-semibold text-foreground">Add New User</h3>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setShowAddUserModal(false)}
+                >
+                  <X className="w-4 h-4" />
+                </Button>
+              </div>
+              <div className="p-6 space-y-4">
+                <div>
+                  <label className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1 block">
+                    Email *
+                  </label>
+                  <Input
+                    type="email"
+                    placeholder="user@example.com"
+                    value={newUser.email}
+                    onChange={(e) => setNewUser({ ...newUser, email: e.target.value })}
+                  />
+                </div>
+                <div>
+                  <label className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1 block">
+                    Password *
+                  </label>
+                  <Input
+                    type="password"
+                    placeholder="Min 6 characters"
+                    value={newUser.password}
+                    onChange={(e) => setNewUser({ ...newUser, password: e.target.value })}
+                  />
+                </div>
+                <div>
+                  <label className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1 block">
+                    Name *
+                  </label>
+                  <Input
+                    type="text"
+                    placeholder="Full name"
+                    value={newUser.name}
+                    onChange={(e) => setNewUser({ ...newUser, name: e.target.value })}
+                  />
+                </div>
+                <div>
+                  <label className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1 block">
+                    Role *
+                  </label>
+                  <Select
+                    value={newUser.role}
+                    onValueChange={(value: 'END_USER' | 'PROVIDER' | 'ADMIN') =>
+                      setNewUser({ ...newUser, role: value })
+                    }
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="END_USER">End User</SelectItem>
+                      <SelectItem value="PROVIDER">Provider</SelectItem>
+                      <SelectItem value="ADMIN">Admin</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <label className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1 block">
+                    Age (optional)
+                  </label>
+                  <Input
+                    type="number"
+                    placeholder="Age"
+                    value={newUser.age}
+                    onChange={(e) => setNewUser({ ...newUser, age: e.target.value })}
+                  />
+                </div>
+              </div>
+              <div className="p-6 border-t flex justify-end gap-2">
+                <Button
+                  variant="outline"
+                  onClick={() => setShowAddUserModal(false)}
+                >
+                  Cancel
+                </Button>
+                <Button onClick={handleAddUser}>
+                  Create User
+                </Button>
+              </div>
+            </Card>
+          </div>
+        )}
       </div>
     </div>
   );

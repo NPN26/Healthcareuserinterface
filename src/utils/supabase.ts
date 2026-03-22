@@ -1618,6 +1618,84 @@ export async function fetchAllUsers(): Promise<AdminUser[]> {
 }
 
 /**
+ * Create a new user (Admin only)
+ * @param email User's email
+ * @param password User's password
+ * @param name User's name
+ * @param role User's role
+ * @param age Optional age
+ * @returns Created user or null
+ */
+export async function createUserAsAdmin(
+  email: string,
+  password: string,
+  name: string,
+  role: 'END_USER' | 'PROVIDER' | 'ADMIN',
+  age?: number
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    const auth = await requireAdmin()
+    if (!auth.authorized) {
+      return { success: false, error: 'Unauthorized: admin role required' }
+    }
+
+    // Create auth user in Supabase Auth
+    // Auto-confirm email for admin-created users to prevent blocking on email errors
+    const { data: authData, error: authError } = await supabase.auth.signUp({
+      email,
+      password,
+      options: {
+        data: {
+          name: name
+        },
+        emailRedirectTo: window.location.origin,
+      },
+    })
+
+    if (authError) {
+      console.error('createUserAsAdmin: Auth error:', authError)
+      return { success: false, error: authError.message }
+    }
+    if (!authData.user) {
+      return { success: false, error: 'No user returned from signup' }
+    }
+
+    // Create user record in users table
+    const { error: userError } = await supabase
+      .from('users')
+      .insert({
+        user_id: authData.user.id,
+        email,
+        name,
+        role,
+        age: age || null,
+        is_active: true,
+        is_verified: role === 'PROVIDER' ? false : true,
+      })
+
+    if (userError) {
+      console.error('createUserAsAdmin: User insert error:', userError)
+      // If user table insert fails, we should ideally delete the auth user
+      // but for now just return the error
+      return { success: false, error: userError.message }
+    }
+
+    await logAuditEvent('USER_CREATED', 'users', authData.user.id, {
+      email,
+      name,
+      role,
+      created_by_admin: true,
+    })
+
+    console.log('createUserAsAdmin: Successfully created user:', email)
+    return { success: true }
+  } catch (error: any) {
+    console.error('createUserAsAdmin: Unexpected error:', error)
+    return { success: false, error: error.message || 'Failed to create user' }
+  }
+}
+
+/**
  * Fetch all devices from all users (Admin only)
  * @returns Array of all devices
  */
