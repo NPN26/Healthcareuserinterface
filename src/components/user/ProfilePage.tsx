@@ -138,6 +138,16 @@ export function ProfilePage({ user, onBack, onUpdate, initialTab = 'personal' }:
     setActiveTab(initialTab);
   }, [initialTab]);
 
+  // Sync formData when user prop changes (e.g., after navigation or update)
+  useEffect(() => {
+    setFormData({
+      name: user.name || '',
+      email: user.email || '',
+      dateOfBirth: user.dateOfBirth || '',
+      gender: user.gender || '',
+    });
+  }, [user.id, user.name, user.email, user.dateOfBirth, user.gender]);
+
   // Load sharing data when tab is active
   useEffect(() => {
     if (activeTab === 'sharing') {
@@ -498,6 +508,7 @@ export function ProfilePage({ user, onBack, onUpdate, initialTab = 'personal' }:
         name: sanitizedFormData.name,
         gender: sanitizedFormData.gender,
         age: calculatedAge,
+        date_of_birth: sanitizedFormData.dateOfBirth,
       });
 
       if (!result.success) {
@@ -507,7 +518,12 @@ export function ProfilePage({ user, onBack, onUpdate, initialTab = 'personal' }:
       }
 
       // Update succeeded - now update local state with the fresh data from DB
-      const updatedUser = result.user || { ...user, ...sanitizedFormData };
+      // Convert database format (snake_case) to frontend format (camelCase)
+      const dbUser = result.user;
+      const updatedUser = dbUser ? {
+        ...dbUser,
+        dateOfBirth: dbUser.date_of_birth, // Map snake_case to camelCase
+      } : { ...user, ...sanitizedFormData };
       onUpdate(updatedUser);
 
       // Update localStorage cache

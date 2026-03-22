@@ -127,6 +127,7 @@ export function AuthScreen({ onLogin }: AuthScreenProps) {
         role: user.role,
         age: user.age,
         gender: user.gender,
+        dateOfBirth: user.date_of_birth,
       };
 
       onLogin(appUser);
@@ -265,6 +266,7 @@ export function AuthScreen({ onLogin }: AuthScreenProps) {
         name: user.name,
         email: user.email,
         role: user.role,
+        dateOfBirth: user.date_of_birth,
       };
 
       onLogin(appUser);

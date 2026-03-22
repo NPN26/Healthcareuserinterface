@@ -2107,6 +2107,7 @@ export async function updateOwnProfile(updates: {
   gender?: string;
   height?: number;
   weight?: number;
+  date_of_birth?: string;
 }): Promise<{ success: boolean; message: string; user?: any }> {
   try {
     // Get current authenticated user
@@ -2144,7 +2145,8 @@ export async function updateOwnProfile(updates: {
       p_age: updates.age || null,
       p_gender: updates.gender || null,
       p_height: updates.height || null,
-      p_weight: updates.weight || null
+      p_weight: updates.weight || null,
+      p_date_of_birth: updates.date_of_birth || null
     })
 
     if (rpcError) {
