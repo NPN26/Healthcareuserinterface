@@ -58,11 +58,33 @@ export function GoalsManager({ isOpen, onClose, userId, biomarkers }: GoalsManag
     smartRelevant: '',
   });
 
+  const [refreshTrigger, setRefreshTrigger] = useState(0);
+
   useEffect(() => {
     if (isOpen) {
       loadGoals();
     }
   }, [userId, isOpen]);
+
+  // Trigger re-render when biomarkers change to update goal progress in real-time
+  useEffect(() => {
+    if (isOpen && biomarkers.length > 0) {
+      // Force component to recalculate all goal progress by incrementing trigger
+      setRefreshTrigger(prev => prev + 1);
+    }
+  }, [biomarkers, isOpen]);
+
+  // Occasionally refresh goals from database to catch any updates
+  useEffect(() => {
+    if (!isOpen || goals.length === 0) return;
+
+    // Only refresh periodically if goals list might have changed
+    const interval = setInterval(() => {
+      loadGoals();
+    }, 10000); // Refresh goals every 10 seconds while dialog is open
+
+    return () => clearInterval(interval);
+  }, [isOpen, goals.length]);
 
   // Track which goals have already been notified to avoid duplicates
   const [notifiedGoals, setNotifiedGoals] = useState<Set<string>>(new Set());
@@ -305,9 +327,21 @@ export function GoalsManager({ isOpen, onClose, userId, biomarkers }: GoalsManag
     if (goal.period === 'weekly') filterDate = startOfWeek;
     if (goal.period === 'monthly') filterDate = startOfMonth;
 
-    const relevantData = biomarkers.filter(
-      b => b.type === goal.type && new Date(b.timestamp) >= filterDate
-    );
+    // Only count biomarkers logged AFTER the goal was created
+    const goalCreatedAt = new Date(goal.createdAt);
+
+    // Use the later of the period start or goal creation as the cutoff
+    // But set both to start of their respective days to avoid timezone issues with time precision
+    const goalCreatedDate = new Date(goalCreatedAt.getFullYear(), goalCreatedAt.getMonth(), goalCreatedAt.getDate());
+    const effectiveStartDate = filterDate > goalCreatedDate ? filterDate : goalCreatedDate;
+
+    const relevantData = biomarkers.filter(b => {
+      if (b.type !== goal.type) return false;
+      const biomarkerDate = new Date(b.timestamp);
+      // Compare dates at the day level to avoid timezone precision issues
+      const biomarkerDay = new Date(biomarkerDate.getFullYear(), biomarkerDate.getMonth(), biomarkerDate.getDate());
+      return biomarkerDay >= effectiveStartDate;
+    });
 
     if (relevantData.length === 0) return 0;
 
@@ -636,7 +670,7 @@ export function GoalsManager({ isOpen, onClose, userId, biomarkers }: GoalsManag
                 const isEditing = editingGoal?.id === goal.id;
 
                 return (
-                  <Card key={goal.id} className="p-6">
+                  <Card key={`${goal.id}-${refreshTrigger}`} className="p-6">
                     {isEditing ? (
                       <div className="space-y-4">
                         <h3>Edit Goal</h3>
