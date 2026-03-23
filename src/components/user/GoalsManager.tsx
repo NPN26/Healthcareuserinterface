@@ -540,7 +540,7 @@ export function GoalsManager({ isOpen, onClose, userId, biomarkers }: GoalsManag
                 className="mt-1 dark:text-gray-700"
               />
             </div>
-            <Card className="p-4 bg-muted/50 space-y-2">
+            <Card className="p-4 bg-muted/50 space-y-1 gap-1">
               <h4 className="font-medium text-sm">Goal Summary</h4>
               <p className="text-sm"><strong>Type:</strong> {getGoalTypeLabel(newGoal.type)}</p>
               <p className="text-sm"><strong>Target:</strong> {newGoal.target}</p>
@@ -559,8 +559,8 @@ export function GoalsManager({ isOpen, onClose, userId, biomarkers }: GoalsManag
   return (
     <>
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-3xl max-h-[90vh] sm:max-h-[80vh] flex flex-col">
-        <DialogHeader>
+      <DialogContent className="w-[min(95vw,56rem)] max-h-[90dvh] flex flex-col overflow-hidden p-4 sm:p-6">
+        <DialogHeader className="shrink-0 pr-8">
           <DialogTitle className="flex items-center gap-2">
             <Target className="w-5 h-5" />
             Health Goals
@@ -569,8 +569,9 @@ export function GoalsManager({ isOpen, onClose, userId, biomarkers }: GoalsManag
         </DialogHeader>
 
         {/* Tabs */}
-        <div className="flex gap-2 border-b pb-2">
+        <div className="flex shrink-0 gap-2 border-b pb-2">
           <Button
+            type="button"
             variant={activeTab === 'active' ? 'default' : 'ghost'}
             size="sm"
             onClick={() => setActiveTab('active')}
@@ -579,6 +580,7 @@ export function GoalsManager({ isOpen, onClose, userId, biomarkers }: GoalsManag
             Active Goals ({activeGoals.length})
           </Button>
           <Button
+            type="button"
             variant={activeTab === 'past' ? 'default' : 'ghost'}
             size="sm"
             onClick={() => setActiveTab('past')}
@@ -588,7 +590,7 @@ export function GoalsManager({ isOpen, onClose, userId, biomarkers }: GoalsManag
           </Button>
         </div>
 
-        <div className="flex-1 overflow-auto pr-2">
+        <div className="min-h-0 flex-1 overflow-y-auto pr-2">
           {activeTab === 'active' ? (
             <>
               {loading && goals.length === 0 ? (
@@ -601,7 +603,7 @@ export function GoalsManager({ isOpen, onClose, userId, biomarkers }: GoalsManag
                   <Target className="w-16 h-16 text-muted-foreground mx-auto mb-4" />
                   <h3 className="mb-2">No Active Goals</h3>
                   <p className="text-muted-foreground mb-6">Set your first SMART health goal to get started</p>
-                  <Button onClick={() => { setShowAddGoal(true); setWizardStep(0); }} disabled={loading}>
+                  <Button type="button" onClick={() => { setShowAddGoal(true); setWizardStep(0); }} disabled={loading}>
                     <Plus className="w-4 h-4 mr-2" />
                     Create SMART Goal
                   </Button>
@@ -609,19 +611,20 @@ export function GoalsManager({ isOpen, onClose, userId, biomarkers }: GoalsManag
               ) : (
                 <div className="space-y-4">
                   {!showAddGoal && !editingGoal && (
-                    <Button onClick={() => { setShowAddGoal(true); setWizardStep(0); }} className="w-full" disabled={loading}>
+                    <Button type="button" onClick={() => { setShowAddGoal(true); setWizardStep(0); }} className="w-full" disabled={loading}>
                       <Plus className="w-4 h-4 mr-2" />
                       Create SMART Goal
                     </Button>
                   )}
 
                   {showAddGoal && (
-                    <Card className="p-4 sm:p-6 border-2 border-primary">
+                    <Card className="p-4 sm:p-6 border-2 border-primary gap-2">
                       {/* SMART Step Indicators */}
                       <div className="flex items-center justify-center gap-1 mb-6 overflow-x-auto pb-2">
                         {SMART_STEPS.map((s, i) => (
                           <div key={s.key} className="flex items-center">
                             <button
+                              type="button"
                               onClick={() => setWizardStep(i)}
                               className={`w-8 h-8 rounded-full text-xs font-bold flex items-center justify-center transition-colors ${
                                 i === wizardStep
@@ -644,23 +647,23 @@ export function GoalsManager({ isOpen, onClose, userId, biomarkers }: GoalsManag
 
                       <div className="flex gap-2 mt-6 flex-wrap">
                         {wizardStep > 0 && (
-                          <Button variant="outline" onClick={() => setWizardStep(wizardStep - 1)}>
+                          <Button type="button" variant="outline" onClick={() => setWizardStep(wizardStep - 1)}>
                             <ChevronLeft className="w-4 h-4 mr-1" />
                             Back
                           </Button>
                         )}
                         <div className="flex-1" />
                         {wizardStep < SMART_STEPS.length - 1 ? (
-                          <Button onClick={() => setWizardStep(wizardStep + 1)}>
+                          <Button type="button" onClick={() => setWizardStep(wizardStep + 1)}>
                             Next
                             <ChevronRight className="w-4 h-4 ml-1" />
                           </Button>
                         ) : (
-                          <Button onClick={handleAddGoal} disabled={loading}>
+                          <Button type="button" onClick={handleAddGoal} disabled={loading}>
                             {loading ? 'Creating...' : 'Create Goal'}
                           </Button>
                         )}
-                        <Button variant="outline" onClick={() => { setShowAddGoal(false); setWizardStep(0); }} disabled={loading}>Cancel</Button>
+                        <Button type="button" variant="outline" onClick={() => { setShowAddGoal(false); setWizardStep(0); }} disabled={loading}>Cancel</Button>
                       </div>
                     </Card>
                   )}
@@ -699,10 +702,10 @@ export function GoalsManager({ isOpen, onClose, userId, biomarkers }: GoalsManag
                           </div>
                         </div>
                         <div className="flex gap-2">
-                          <Button onClick={handleUpdateGoal} className="flex-1" disabled={loading}>
+                          <Button type="button" onClick={handleUpdateGoal} className="flex-1" disabled={loading}>
                             {loading ? 'Saving...' : 'Save Changes'}
                           </Button>
-                          <Button variant="outline" onClick={() => setEditingGoal(null)} disabled={loading}>Cancel</Button>
+                          <Button type="button" variant="outline" onClick={() => setEditingGoal(null)} disabled={loading}>Cancel</Button>
                         </div>
                       </div>
                     ) : (
@@ -715,10 +718,10 @@ export function GoalsManager({ isOpen, onClose, userId, biomarkers }: GoalsManag
                             </p>
                           </div>
                           <div className="flex items-center gap-2">
-                            <Button variant="ghost" size="icon" onClick={() => setEditingGoal(goal)} disabled={loading}>
+                            <Button type="button" variant="ghost" size="icon" onClick={() => setEditingGoal(goal)} disabled={loading}>
                               <Edit2 className="w-4 h-4" />
                             </Button>
-                            <Button variant="ghost" size="icon" onClick={() => handleDeleteGoal(goal.id)} disabled={loading}>
+                            <Button type="button" variant="ghost" size="icon" onClick={() => handleDeleteGoal(goal.id)} disabled={loading}>
                               <Trash2 className="w-4 h-4" />
                             </Button>
                           </div>
@@ -776,7 +779,7 @@ export function GoalsManager({ isOpen, onClose, userId, biomarkers }: GoalsManag
                           {goal.period} Target: {getGoalTargetText(goal)}
                         </p>
                       </div>
-                      <Button variant="ghost" size="icon" onClick={() => handleDeleteGoal(goal.id)} disabled={loading}>
+                      <Button type="button" variant="ghost" size="icon" onClick={() => handleDeleteGoal(goal.id)} disabled={loading}>
                         <Trash2 className="w-4 h-4" />
                       </Button>
                     </div>
