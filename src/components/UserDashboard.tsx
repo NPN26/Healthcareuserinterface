@@ -232,7 +232,7 @@ export function UserDashboard({ user, onLogout }: UserDashboardProps) {
 
     // If database load was successful, use that data
     if (dbLoadSuccess) {
-      setBiomarkers(supabaseBiomarkers);
+      setBiomarkers(prev => mergeBiomarkers(prev, supabaseBiomarkers));
       setDevices(supabaseDevices);
       setAlerts(supabaseAlerts);
       setNotifications(supabaseNotifications);

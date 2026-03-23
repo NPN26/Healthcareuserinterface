@@ -21,6 +21,7 @@ export function ProviderDashboard({ user, onLogout }: ProviderDashboardProps) {
   const [isDarkMode, setIsDarkMode] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [isBiomarkerRangeLoading, setIsBiomarkerRangeLoading] = useState(false);
+  const [showAccessRequest, setShowAccessRequest] = useState(false);
   const [activeTab, setActiveTab] = useState<string>(() => {
     return localStorage.getItem('provider_activeTab') || 'patients';
   });

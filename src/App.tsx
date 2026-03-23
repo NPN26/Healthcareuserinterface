@@ -1,4 +1,5 @@
 import { useState, useEffect, lazy, Suspense } from 'react';
+import type { Session } from '@supabase/supabase-js';
 import { AuthScreen } from './components/AuthScreen';
 import { initializeMockData, User } from './utils/mockData';
 import { Toaster } from './components/ui/sonner';
@@ -31,6 +32,64 @@ export default function App() {
   const [isValidatingSession, setIsValidatingSession] = useState(true);
 
   useEffect(() => {
+    let isMounted = true;
+    let initialValidationComplete = false;
+
+    const completeInitialValidation = () => {
+      if (!isMounted || initialValidationComplete) return;
+      initialValidationComplete = true;
+      setIsValidatingSession(false);
+    };
+
+    const applySessionState = async (session: Session | null) => {
+      try {
+        if (session?.user) {
+          // User session exists - initialize secure storage
+          initSecureStorage(session.user.id);
+
+          // Fetch fresh user data from server to get authoritative role
+          const { data: userData, error: userError } = await supabase
+            .from('users')
+            .select('user_id, email, name, role, age, gender, date_of_birth')
+            .eq('user_id', session.user.id)
+            .maybeSingle();
+
+          if (userError) throw userError;
+          if (!isMounted) return;
+
+          if (userData) {
+            const validatedUser: User = {
+              id: userData.user_id,
+              name: userData.name,
+              email: userData.email,
+              role: userData.role,
+              age: userData.age,
+              gender: userData.gender,
+              dateOfBirth: userData.date_of_birth,
+            };
+            setCurrentUser(validatedUser);
+            // Only persist user ID - role is always server-validated
+            await secureSetItem('healthApp_currentUser', JSON.stringify({ user_id: userData.user_id }));
+          } else {
+            secureRemoveItem('healthApp_currentUser');
+            setCurrentUser(null);
+          }
+        } else {
+          // No valid session - clear user data
+          secureRemoveItem('healthApp_currentUser');
+          clearSecureStorage();
+          setCurrentUser(null);
+        }
+      } catch (error) {
+        console.error('Session validation error:', error);
+        if (!isMounted) return;
+        secureRemoveItem('healthApp_currentUser');
+        setCurrentUser(null);
+      } finally {
+        completeInitialValidation();
+      }
+    };
+
     // Initialize mock data
     initializeMockData();
 
@@ -43,55 +102,38 @@ export default function App() {
     loadUsers();
 
     // Set up auth state change listener to handle session restoration
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (event, session) => {
-        try {
-          if (session?.user) {
-            // User session exists - initialize secure storage
-            initSecureStorage(session.user.id);
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      // Keep auth callback non-blocking; async DB work here can stall sign-in completion.
+      void applySessionState(session);
+    });
 
-            // Fetch fresh user data from server to get authoritative role
-            const { data: userData } = await supabase
-              .from('users')
-              .select('user_id, email, name, role, age, gender, date_of_birth')
-              .eq('user_id', session.user.id)
-              .maybeSingle();
-
-            if (userData) {
-              const validatedUser: User = {
-                id: userData.user_id,
-                name: userData.name,
-                email: userData.email,
-                role: userData.role,
-                age: userData.age,
-                gender: userData.gender,
-                dateOfBirth: userData.date_of_birth,
-              };
-              setCurrentUser(validatedUser);
-              // Only persist user ID — role is always server-validated
-              await secureSetItem('healthApp_currentUser', JSON.stringify({ user_id: userData.user_id }));
-            } else {
-              secureRemoveItem('healthApp_currentUser');
-              setCurrentUser(null);
-            }
-          } else {
-            // No valid session - clear user data
-            secureRemoveItem('healthApp_currentUser');
-            clearSecureStorage();
-            setCurrentUser(null);
-          }
-        } catch (error) {
-          console.error('Auth state change error:', error);
-          secureRemoveItem('healthApp_currentUser');
-          setCurrentUser(null);
-        } finally {
-          setIsValidatingSession(false);
-        }
+    // Bootstrap session on initial load in case auth events are delayed or missed.
+    const bootstrapSession = async () => {
+      try {
+        const { data, error } = await supabase.auth.getSession();
+        if (error) throw error;
+        await applySessionState(data.session);
+      } catch (error) {
+        console.error('Initial session bootstrap error:', error);
+        secureRemoveItem('healthApp_currentUser');
+        setCurrentUser(null);
+        completeInitialValidation();
       }
-    );
+    };
+    void bootstrapSession();
+
+    // Safety net: never block app forever on loading state.
+    const validationTimeout = window.setTimeout(() => {
+      if (!initialValidationComplete && isMounted) {
+        console.warn('Session validation timed out. Proceeding to app.');
+        completeInitialValidation();
+      }
+    }, 10000);
 
     // Cleanup subscription on unmount
     return () => {
+      isMounted = false;
+      window.clearTimeout(validationTimeout);
       subscription?.unsubscribe();
     };
   }, []);
