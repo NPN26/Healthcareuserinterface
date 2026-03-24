@@ -154,7 +154,7 @@ export function AuthScreen({ onLogin }: AuthScreenProps) {
       const { error } = await resetPassword(sanitizedEmail);
 
       if (error) {
-        toast.error('Failed to send reset email. Please try again.');
+        toast.error(error);
         return;
       }
 

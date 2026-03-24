@@ -12,6 +12,43 @@ import {
 import { checkRateLimit, peekRateLimit, resetRateLimit } from './rateLimiter'
 import { isLikelyBot } from './botDetection'
 
+const appEnv = (import.meta as ImportMeta & { env: Record<string, string | undefined> }).env
+const configuredPasswordResetRedirect = appEnv.VITE_PASSWORD_RESET_REDIRECT_URL?.trim()
+
+function getErrorMessage(error: unknown): string {
+  if (error instanceof Error && error.message) return error.message
+
+  if (typeof error === 'string') return error
+
+  if (error && typeof error === 'object') {
+    const maybeError = error as {
+      message?: unknown
+      error_description?: unknown
+      msg?: unknown
+    }
+
+    if (typeof maybeError.message === 'string' && maybeError.message.length > 0) {
+      return maybeError.message
+    }
+
+    if (typeof maybeError.error_description === 'string' && maybeError.error_description.length > 0) {
+      return maybeError.error_description
+    }
+
+    if (typeof maybeError.msg === 'string' && maybeError.msg.length > 0) {
+      return maybeError.msg
+    }
+
+    try {
+      return JSON.stringify(error)
+    } catch {
+      return 'Unknown error'
+    }
+  }
+
+  return 'Unknown error'
+}
+
 export interface User {
   user_id: string
   email: string
@@ -266,8 +303,10 @@ export async function resetPassword(email: string) {
     // Set a flag in localStorage to track password reset flow
     localStorage.setItem('password_reset_flow', 'true')
 
+    const redirectTo = configuredPasswordResetRedirect || window.location.origin
+
     const { error } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: `${window.location.origin}`,
+      redirectTo,
     })
 
     if (error) throw error
@@ -276,7 +315,7 @@ export async function resetPassword(email: string) {
   } catch (error: any) {
     localStorage.removeItem('password_reset_flow')
     logApiError('resetPassword', error, undefined)
-    return { error: error.message }
+    return { error: getErrorMessage(error) }
   }
 }
 
@@ -297,5 +336,4 @@ export async function updatePassword(newPassword: string) {
     return { error: error.message }
   }
 }
-
 

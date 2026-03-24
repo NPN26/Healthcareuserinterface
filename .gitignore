@@ -7,6 +7,7 @@ node_modules
 guide
 dist
 database
+docs
 scripts/testing
 .DS_Store
 .vscode

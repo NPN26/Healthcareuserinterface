@@ -163,10 +163,51 @@ export function logSessionInvalid(reason: string): void {
 }
 
 export function logApiError(fnName: string, error: unknown, userId?: string): void {
-  const message = error instanceof Error ? error.message : String(error);
+  let message = 'Unknown error';
+  const metadata: Record<string, unknown> = { function: fnName };
+
+  if (error instanceof Error) {
+    message = error.message;
+    if (error.name) metadata.errorName = error.name;
+  } else if (typeof error === 'string') {
+    message = error;
+  } else if (error && typeof error === 'object') {
+    const maybeError = error as {
+      message?: unknown;
+      error_description?: unknown;
+      msg?: unknown;
+      code?: unknown;
+      status?: unknown;
+      hint?: unknown;
+      details?: unknown;
+    };
+
+    const extractedMessage =
+      (typeof maybeError.message === 'string' && maybeError.message) ||
+      (typeof maybeError.error_description === 'string' && maybeError.error_description) ||
+      (typeof maybeError.msg === 'string' && maybeError.msg);
+
+    if (extractedMessage) message = extractedMessage;
+
+    if (maybeError.code !== undefined) metadata.errorCode = maybeError.code;
+    if (maybeError.status !== undefined) metadata.errorStatus = maybeError.status;
+    if (maybeError.hint !== undefined) metadata.errorHint = maybeError.hint;
+    if (maybeError.details !== undefined) metadata.errorDetails = maybeError.details;
+
+    if (!extractedMessage) {
+      try {
+        message = JSON.stringify(error);
+      } catch {
+        message = '[unserializable error object]';
+      }
+    }
+  } else {
+    message = String(error);
+  }
+
   logSecurityEvent('error', 'API_ERROR', `API error in ${fnName}: ${message}`, {
     userId,
-    metadata: { function: fnName },
+    metadata,
   });
 }
 
