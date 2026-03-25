@@ -919,16 +919,24 @@ export function UserDashboard({ user, onLogout }: UserDashboardProps) {
 
   const handleDeleteNotification = async (notificationId: string) => {
     try {
-      const { deleteNotification } = await import('../utils/supabase');
+      const { deleteNotification, fetchNotifications } = await import('../utils/supabase');
       const success = await deleteNotification(notificationId);
       
       if (success) {
-        const deletedNotification = notifications.find(n => n.notification_id === notificationId);
-        setNotifications(prev => prev.filter(n => n.notification_id !== notificationId));
-        if (deletedNotification && !deletedNotification.is_read) {
-          setUnreadNotificationsCount(prev => Math.max(0, prev - 1));
+        // Re-fetch from DB to guarantee UI reflects persisted state.
+        const freshNotifications = await fetchNotifications(user.user_id || user.id);
+        const stillExists = freshNotifications.some(n => n.notification_id === notificationId);
+
+        if (stillExists) {
+          toast.error('Delete did not persist to database');
+          return;
         }
+
+        setNotifications(freshNotifications);
+        setUnreadNotificationsCount(freshNotifications.filter(n => !n.is_read).length);
         toast.success('Notification deleted');
+      } else {
+        toast.error('Failed to delete notification');
       }
     } catch (error) {
       toast.error('Failed to delete notification');
@@ -937,13 +945,21 @@ export function UserDashboard({ user, onLogout }: UserDashboardProps) {
 
   const handleDeleteAllNotifications = async () => {
     try {
-      const { deleteAllNotifications } = await import('../utils/supabase');
+      const { deleteAllNotifications, fetchNotifications } = await import('../utils/supabase');
       const success = await deleteAllNotifications(user.user_id || user.id);
       
       if (success) {
-        setNotifications([]);
-        setUnreadNotificationsCount(0);
-        toast.success('All notifications deleted');
+        const freshNotifications = await fetchNotifications(user.user_id || user.id);
+        setNotifications(freshNotifications);
+        setUnreadNotificationsCount(freshNotifications.filter(n => !n.is_read).length);
+
+        if (freshNotifications.length === 0) {
+          toast.success('All notifications deleted');
+        } else {
+          toast.error('Some notifications could not be deleted');
+        }
+      } else {
+        toast.error('Failed to delete all notifications');
       }
     } catch (error) {
       toast.error('Failed to delete all notifications');

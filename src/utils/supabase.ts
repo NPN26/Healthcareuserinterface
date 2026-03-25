@@ -482,17 +482,19 @@ export async function deleteNotification(notificationId: string): Promise<boolea
     const auth = await requireAuth()
     if (!auth.authenticated) return false
 
-    const { error } = await supabase
+    const { data, error } = await supabase
       .from('notifications')
       .delete()
       .eq('notification_id', notificationId)
       .eq('user_id', auth.userId) // Ownership check: only delete if user owns this notification
+      .select('notification_id')
 
     if (error) {
       return false
     }
 
-    return true
+    // Treat "no matching row deleted" as failure so UI does not drift from DB state.
+    return (data?.length || 0) > 0
   } catch (error) {
     return false
   }
@@ -538,23 +540,37 @@ export async function cleanupExpiredNotifications(): Promise<number> {
     const auth = await requireAuth()
     if (!auth.authenticated) return 0
 
-    // Delete notifications whose expires_at has passed, OR that are older than 90 days
-    // Only for the authenticated user (IDOR protection)
+    // Delete notifications whose expires_at has passed, and also clean up legacy rows by timestamp.
+    // Split into two queries instead of a single OR filter to avoid PostgREST parser edge-cases.
     const ninetyDaysAgo = new Date()
     ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - 90)
 
-    const { data, error } = await supabase
+    const nowIso = new Date().toISOString()
+
+    const { data: expiredByExpiry, error: expiryError } = await supabase
       .from('notifications')
       .delete()
       .eq('user_id', auth.userId)
-      .or(`expires_at.lte.${new Date().toISOString()},timestamp.lte.${ninetyDaysAgo.toISOString()}`)
+      .lte('expires_at', nowIso)
       .select('notification_id')
 
-    if (error) {
+    // If expires_at doesn't exist in an older schema, continue with timestamp-based cleanup.
+    if (expiryError && !(`${expiryError.message || ''}`.toLowerCase().includes('expires_at'))) {
       return 0
     }
 
-    const count = data?.length || 0
+    const { data: expiredByTimestamp, error: timestampError } = await supabase
+      .from('notifications')
+      .delete()
+      .eq('user_id', auth.userId)
+      .lte('timestamp', ninetyDaysAgo.toISOString())
+      .select('notification_id')
+
+    if (timestampError) {
+      return expiredByExpiry?.length || 0
+    }
+
+    const count = (expiredByExpiry?.length || 0) + (expiredByTimestamp?.length || 0)
     return count
   } catch (error) {
     return 0
