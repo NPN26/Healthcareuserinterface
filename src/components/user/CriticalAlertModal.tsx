@@ -92,7 +92,7 @@ export function CriticalAlertModal({ alert, onAcknowledge, onCallEmergency }: Cr
         {/* Pulsing header bar */}
         <div className={`relative ${severityBg} text-white p-6 sm:p-8 text-center`}>
           {pulseAnim && (
-            <div className="absolute inset-0 animate-ping opacity-20 bg-white rounded-lg" />
+            <div className="absolute inset-0 animate-ping opacity-20 rounded-lg" />
           )}
           <div className="relative z-10 flex flex-col items-center gap-3">
             <div className="w-20 h-20 rounded-full bg-white/20 backdrop-blur-sm flex items-center justify-center animate-bounce">
@@ -104,7 +104,7 @@ export function CriticalAlertModal({ alert, onAcknowledge, onCallEmergency }: Cr
           </div>
         </div>
 
-        <div className="p-5 sm:p-6 space-y-6 overflow-y-auto max-h-[calc(85vh-160px)]">
+        <div className="p-6 sm:p-6 space-y-6 overflow-y-auto max-h-[calc(85vh-160px)]">
           <DialogHeader className="space-y-3">
             <DialogTitle className="text-2xl text-center text-red-600 dark:text-red-400 flex items-center justify-center gap-2">
               <Icon className="w-7 h-7" />
