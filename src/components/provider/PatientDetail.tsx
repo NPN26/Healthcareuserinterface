@@ -7,6 +7,9 @@ import { Biomarker, Alert, User as UserType, getBiomarkerLabel, isAbnormalReadin
 import { BiomarkerChart } from '../user/BiomarkerChart';
 import { toast } from 'sonner';
 import { checkRateLimit } from '../../utils/rateLimiter';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
+import { Chart } from 'chart.js/auto';
 
 interface PatientDetailProps {
   patient: UserType;
@@ -47,7 +50,7 @@ export function PatientDetail({ patient, biomarkers, alerts, isBiomarkersLoading
     return `Decreasing (${change.toFixed(1)}%)`;
   };
 
-  const exportPatientData = () => {
+  const exportPatientData = async () => {
     // Rate-limit data export
     const rateCheck = checkRateLimit('dataExport', patient.id);
     if (!rateCheck.allowed) {
@@ -55,21 +58,173 @@ export function PatientDetail({ patient, biomarkers, alerts, isBiomarkersLoading
       return;
     }
 
-    const data = {
-      patient,
-      biomarkers,
-      alerts,
-      exportDate: new Date().toISOString(),
-    };
-    
-    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `patient-${patient.id}-${new Date().toISOString().split('T')[0]}.json`;
-    a.click();
-    
-    toast.success('Patient data exported');
+    try {
+      toast.info('Generating PDF report...');
+
+      // Get all biomarkers for this patient (last 6 months)
+      const cutoffDate = new Date();
+      cutoffDate.setMonth(cutoffDate.getMonth() - 6);
+
+      const patientBiomarkers = biomarkers.filter(
+        b => new Date(b.timestamp) >= cutoffDate
+      );
+
+      if (patientBiomarkers.length === 0) {
+        toast.error('No data available for this patient');
+        return;
+      }
+
+      const doc = new jsPDF();
+      let yPosition = 20;
+
+      // Header
+      doc.setFontSize(20);
+      doc.text('Patient Health Report', 14, yPosition);
+      yPosition += 10;
+
+      // Patient info
+      doc.setFontSize(12);
+      doc.text(`Patient: ${patient.name}`, 14, yPosition);
+      yPosition += 7;
+      doc.text(`Email: ${patient.email}`, 14, yPosition);
+      yPosition += 7;
+      doc.text(`Report Date: ${new Date().toLocaleDateString()}`, 14, yPosition);
+      yPosition += 7;
+      doc.text(`Duration: Last 6 Months`, 14, yPosition);
+      yPosition += 7;
+      doc.text(`Total Readings: ${patientBiomarkers.length}`, 14, yPosition);
+      yPosition += 15;
+
+      // Get unique biomarker types
+      const availableBiomarkerTypes = Array.from(new Set(patientBiomarkers.map(b => b.type))) as Biomarker['type'][];
+
+      // Create chart images array
+      const chartImages = [];
+
+      for (const type of availableBiomarkerTypes) {
+        const typeBiomarkers = patientBiomarkers
+          .filter(b => b.type === type)
+          .sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+
+        if (typeBiomarkers.length === 0) continue;
+
+        // Create canvas
+        const canvas = document.createElement('canvas');
+        canvas.width = 800;
+        canvas.height = 300;
+
+        const ctx = canvas.getContext('2d');
+        if (ctx) {
+          const chart = new Chart(ctx, {
+            type: 'line',
+            data: {
+              labels: typeBiomarkers.map(b =>
+                new Date(b.timestamp).toLocaleDateString()
+              ),
+              datasets: [{
+                label: getBiomarkerLabel(type),
+                data: typeBiomarkers.map(b => b.value),
+                borderColor: 'rgb(59, 130, 246)',
+                backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                tension: 0.4,
+                fill: true
+              }]
+            },
+            options: {
+              responsive: false,
+              animation: false,
+              plugins: {
+                title: {
+                  display: true,
+                  text: `${getBiomarkerLabel(type)} Trend`,
+                  font: { size: 16 }
+                },
+                legend: {
+                  display: true
+                }
+              },
+              scales: {
+                y: {
+                  beginAtZero: false,
+                  title: {
+                    display: true,
+                    text: getBiomarkerUnit(type)
+                  }
+                }
+              }
+            }
+          });
+
+          await new Promise(resolve => setTimeout(resolve, 100));
+
+          const imgData = canvas.toDataURL('image/png');
+          chartImages.push(imgData);
+
+          chart.destroy();
+        }
+      }
+
+      // Add chart images to PDF
+      for (const imgData of chartImages) {
+        if (yPosition > 200) {
+          doc.addPage();
+          yPosition = 20;
+        }
+
+        doc.addImage(imgData, 'PNG', 14, yPosition, 180, 67.5);
+        yPosition += 75;
+      }
+
+      // Add new page for statistics
+      doc.addPage();
+      yPosition = 20;
+
+      // Summary Statistics
+      doc.setFontSize(16);
+      doc.text('Summary Statistics', 14, yPosition);
+      yPosition += 10;
+
+      availableBiomarkerTypes.forEach(type => {
+        const typeData = patientBiomarkers.filter(b => b.type === type);
+        if (typeData.length === 0) return;
+
+        const values = typeData.map(b => b.value);
+        const avg = (values.reduce((a, b) => a + b, 0) / values.length).toFixed(1);
+        const min = Math.min(...values).toFixed(1);
+        const max = Math.max(...values).toFixed(1);
+
+        doc.setFontSize(12);
+        doc.text(`${getBiomarkerLabel(type)}: Avg ${avg}, Min ${min}, Max ${max} ${getBiomarkerUnit(type)}`, 14, yPosition);
+        yPosition += 7;
+      });
+
+      yPosition += 10;
+
+      // Detailed data table
+      const tableData = patientBiomarkers
+        .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
+        .slice(0, 50)
+        .map(bio => [
+          new Date(bio.timestamp).toLocaleString(),
+          getBiomarkerLabel(bio.type),
+          bio.value.toString(),
+          getBiomarkerUnit(bio.type)
+        ]);
+
+      autoTable(doc, {
+        head: [['Date & Time', 'Biomarker', 'Value', 'Unit']],
+        body: tableData,
+        startY: yPosition,
+        styles: { fontSize: 8 },
+        headStyles: { fillColor: [59, 130, 246] }
+      });
+
+      doc.save(`patient-${patient.name.replace(/\s+/g, '-')}-report-${new Date().toISOString().split('T')[0]}.pdf`);
+      toast.success('Report downloaded successfully!');
+    } catch (error) {
+      console.error('Error generating report:', error);
+      toast.error('Failed to generate report');
+    }
   };
 
   const shareWithSpecialist = () => {

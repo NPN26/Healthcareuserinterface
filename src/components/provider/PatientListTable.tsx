@@ -14,6 +14,7 @@ interface PatientListTableProps {
   getPatientAlerts: (patientId: string) => Alert[];
   getLatestReading: (patientId: string, type: Biomarker['type']) => Biomarker | undefined;
   onViewPatient: (patient: User) => void;
+  onExport: () => void;
 }
 
 export function PatientListTable({
@@ -23,6 +24,7 @@ export function PatientListTable({
   getPatientAlerts,
   getLatestReading,
   onViewPatient,
+  onExport,
 }: PatientListTableProps) {
   return (
     <div className="space-y-4">
@@ -37,7 +39,7 @@ export function PatientListTable({
               className="pl-10"
             />
           </div>
-          <Button variant="outline">
+          <Button variant="outline" onClick={onExport}>
             <Download className="w-4 h-4 mr-2" />
             Export
           </Button>

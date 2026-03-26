@@ -5,3 +5,4 @@ export { CriticalAlertsPanel } from './CriticalAlertsPanel';
 export { PatientDetail } from './PatientDetail';
 export { PatternAnalysis } from './PatternAnalysis';
 export { AccessRequestDialog } from './AccessRequestDialog';
+export { PatientSelectDialog } from './PatientSelectDialog';
