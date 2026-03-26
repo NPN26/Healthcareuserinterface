@@ -135,6 +135,23 @@ export async function signIn(email: string, password: string) {
       }
     }
 
+    // Check if account is disabled BEFORE attempting authentication
+    // Query users table by email to check is_active status
+    const { data: existingUser } = await supabase
+      .from('users')
+      .select('user_id, is_active')
+      .eq('email', email)
+      .maybeSingle()
+
+    // If user exists and is explicitly disabled, reject immediately
+    if (existingUser && existingUser.is_active === false) {
+      logAuthFailure(email, 'Account disabled')
+      return {
+        user: null,
+        error: 'This account has been disabled. Please contact an administrator for assistance.'
+      }
+    }
+
     // Use Supabase Auth
     const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
       email,
@@ -163,14 +180,6 @@ export async function signIn(email: string, password: string) {
 
     // Successful login — clear rate limit record
     resetRateLimit('login', email.trim().toLowerCase())
-
-    // Check if user account is active
-    const isActive = await checkUserIsActive(authData.user.id)
-    if (!isActive) {
-      logAuthFailure(email, 'Account disabled')
-      await supabase.auth.signOut()
-      return { user: null, error: 'Your account has been disabled. Please contact an administrator.' }
-    }
 
     // Get user details from our users table
     const { data: userData, error: userError } = await supabase

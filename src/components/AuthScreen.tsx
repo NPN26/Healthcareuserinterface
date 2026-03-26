@@ -111,7 +111,7 @@ export function AuthScreen({ onLogin }: AuthScreenProps) {
       const { user, error } = await signIn(sanitizedEmail, loginPassword);
 
       if (error) {
-        toast.error(error);
+        toast.error(error, { duration: 5000 });
         return;
       }
 
