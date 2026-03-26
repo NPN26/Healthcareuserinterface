@@ -1640,6 +1640,7 @@ export async function fetchAllUsers(): Promise<AdminUser[]> {
  * @param name User's name
  * @param role User's role
  * @param age Optional age
+ * @param practiceId Required practice ID for PROVIDER role
  * @returns Created user or null
  */
 export async function createUserAsAdmin(
@@ -1647,12 +1648,18 @@ export async function createUserAsAdmin(
   password: string,
   name: string,
   role: 'END_USER' | 'PROVIDER' | 'ADMIN',
-  age?: number
+  age?: number,
+  practiceId?: string
 ): Promise<{ success: boolean; error?: string }> {
   try {
     const auth = await requireAdmin()
     if (!auth.authorized) {
       return { success: false, error: 'Unauthorized: admin role required' }
+    }
+
+    // Validate PROVIDER has practice_id
+    if (role === 'PROVIDER' && !practiceId) {
+      return { success: false, error: 'Practice ID is required for PROVIDER role' }
     }
 
     // Create auth user in Supabase Auth
@@ -1677,17 +1684,24 @@ export async function createUserAsAdmin(
     }
 
     // Create user record in users table
+    const userRecord: any = {
+      user_id: authData.user.id,
+      email,
+      name,
+      role,
+      age: age || null,
+      is_active: true,
+      is_verified: role === 'PROVIDER' ? false : true,
+    }
+
+    // Add provider-specific fields if role is PROVIDER
+    if (role === 'PROVIDER') {
+      userRecord.practice_id = practiceId
+    }
+
     const { error: userError } = await supabase
       .from('users')
-      .insert({
-        user_id: authData.user.id,
-        email,
-        name,
-        role,
-        age: age || null,
-        is_active: true,
-        is_verified: role === 'PROVIDER' ? false : true,
-      })
+      .insert(userRecord)
 
     if (userError) {
       console.error('createUserAsAdmin: User insert error:', userError)

@@ -74,6 +74,7 @@ export function AdminDashboard({ user, onLogout }: AdminDashboardProps) {
     name: '',
     role: 'END_USER' as 'END_USER' | 'PROVIDER' | 'ADMIN',
     age: '',
+    practiceId: '',
   });
 
   useEffect(() => {
@@ -376,13 +377,20 @@ export function AdminDashboard({ user, onLogout }: AdminDashboardProps) {
       return;
     }
 
+    // Validate practice ID for PROVIDER role
+    if (newUser.role === 'PROVIDER' && !newUser.practiceId.trim()) {
+      toast.error('Practice ID is required for Provider accounts');
+      return;
+    }
+
     try {
       const result = await createUserAsAdmin(
         newUser.email.trim(),
         newUser.password,
         sanitizeText(newUser.name.trim()),
         newUser.role,
-        age
+        age,
+        newUser.practiceId.trim() || undefined
       );
 
       if (result.success) {
@@ -394,6 +402,7 @@ export function AdminDashboard({ user, onLogout }: AdminDashboardProps) {
           name: '',
           role: 'END_USER',
           age: '',
+          practiceId: '',
         });
         // Reload users list
         await loadData();
@@ -1217,6 +1226,22 @@ export function AdminDashboard({ user, onLogout }: AdminDashboardProps) {
                     onChange={(e) => setNewUser({ ...newUser, age: e.target.value })}
                   />
                 </div>
+                {newUser.role === 'PROVIDER' && (
+                  <div>
+                    <label className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1 block">
+                      Practice ID * (Required for Providers)
+                    </label>
+                    <Input
+                      type="text"
+                      placeholder="e.g., PRAC-12345"
+                      value={newUser.practiceId}
+                      onChange={(e) => setNewUser({ ...newUser, practiceId: e.target.value })}
+                    />
+                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                      Unique identifier for the provider's medical practice
+                    </p>
+                  </div>
+                )}
               </div>
               <div className="p-6 border-t flex justify-end gap-2">
                 <Button

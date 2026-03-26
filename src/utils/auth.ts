@@ -136,10 +136,10 @@ export async function signIn(email: string, password: string) {
     }
 
     // Check if account is disabled BEFORE attempting authentication
-    // Query users table by email to check is_active status
+    // Query users table by email to check is_active status and provider verification
     const { data: existingUser } = await supabase
       .from('users')
-      .select('user_id, is_active')
+      .select('user_id, is_active, role, is_verified')
       .eq('email', email)
       .maybeSingle()
 
@@ -149,6 +149,15 @@ export async function signIn(email: string, password: string) {
       return {
         user: null,
         error: 'This account has been disabled. Please contact an administrator for assistance.'
+      }
+    }
+
+    // If user is a provider and not verified, reject immediately
+    if (existingUser && existingUser.role === 'PROVIDER' && !existingUser.is_verified) {
+      logAuthFailure(email, 'Provider not verified')
+      return {
+        user: null,
+        error: 'Your provider account is pending verification. Please contact an administrator to activate your account.'
       }
     }
 
@@ -210,6 +219,16 @@ export async function signIn(email: string, password: string) {
       }
       logAuthSuccess(authData.user.id, email)
       return { user: newProfile, error: null }
+    }
+
+    // Check if provider account needs verification
+    if (userData.role === 'PROVIDER' && !userData.is_verified) {
+      logAuthFailure(email, 'Provider not verified')
+      await supabase.auth.signOut()
+      return {
+        user: null,
+        error: 'Your provider account is pending verification. Please contact an administrator to activate your account.'
+      }
     }
 
     // Update last login
