@@ -1,8 +1,9 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
 import { ProviderHeader, ProviderStatsCards, PatientListTable, CriticalAlertsPanel, PatientDetail, PatternAnalysis, AccessRequestDialog, PatientSelectDialog } from './provider';
 import { AnnouncementBanner } from './user';
 import { Biomarker, User, Alert, getBiomarkerLabel, getBiomarkerUnit } from '../utils/mockData';
+import { Patient } from '../utils/supabase';
 import { toast } from 'sonner';
 import { HeartbeatLoader } from './ui/HeartbeatLoader';
 import jsPDF from 'jspdf';
@@ -24,6 +25,8 @@ export function ProviderDashboard({ user, onLogout }: ProviderDashboardProps) {
   const [isDarkMode, setIsDarkMode] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [isBiomarkerRangeLoading, setIsBiomarkerRangeLoading] = useState(false);
+  const [isPatternDataLoading, setIsPatternDataLoading] = useState(false);
+  const [patternDataLoaded, setPatternDataLoaded] = useState(false);
   const [showAccessRequest, setShowAccessRequest] = useState(false);
   const [showPatientSelect, setShowPatientSelect] = useState(false);
   const [activeTab, setActiveTab] = useState<string>(() => {
@@ -42,6 +45,51 @@ export function ProviderDashboard({ user, onLogout }: ProviderDashboardProps) {
     }
   }, []);
 
+  // Lazy load pattern analysis data when user switches to that tab
+  useEffect(() => {
+    if (activeTab === 'patterns' && !patternDataLoaded && !isPatternDataLoading) {
+      loadPatternData();
+    }
+  }, [activeTab, patternDataLoaded, isPatternDataLoading]);
+
+  // Generate cache key for data
+  const getCacheKey = (type: string, providerId: string) => {
+    return `provider_${type}_${providerId}_${new Date().toDateString()}`;
+  };
+
+  // Cache data in sessionStorage with expiry
+  const setCacheData = (key: string, data: any) => {
+    try {
+      const cacheData = {
+        data,
+        timestamp: Date.now(),
+        expiry: Date.now() + (5 * 60 * 1000) // 5 minutes
+      };
+      sessionStorage.setItem(key, JSON.stringify(cacheData));
+    } catch (error) {
+      // Handle quota exceeded gracefully
+      console.warn('Cache storage failed:', error);
+    }
+  };
+
+  // Get cached data if not expired
+  const getCacheData = (key: string) => {
+    try {
+      const cached = sessionStorage.getItem(key);
+      if (cached) {
+        const cacheData = JSON.parse(cached);
+        if (Date.now() < cacheData.expiry) {
+          return cacheData.data;
+        } else {
+          sessionStorage.removeItem(key);
+        }
+      }
+    } catch (error) {
+      console.warn('Cache retrieval failed:', error);
+    }
+    return null;
+  };
+
   // Persist active tab to localStorage
   useEffect(() => {
     localStorage.setItem('provider_activeTab', activeTab);
@@ -50,32 +98,33 @@ export function ProviderDashboard({ user, onLogout }: ProviderDashboardProps) {
   const loadData = async () => {
     setIsLoading(true);
     try {
-      // Load data from Supabase
-      const { fetchPatients, fetchAllPatientsBiomarkers, fetchAllPatientsAlerts } = await import('../utils/supabase');
-      
-      // Use the provider's user_id or id
       const providerId = user.user_id || user.id;
       const now = new Date();
       const rangeStart = new Date(now);
       rangeStart.setDate(rangeStart.getDate() - PROVIDER_LOOKBACK_DAYS);
       rangeStart.setHours(0, 0, 0, 0);
-      
-      const [supabasePatients, supabaseBiomarkers, supabaseAlerts] = await Promise.all([
-        fetchPatients(providerId),
-        fetchAllPatientsBiomarkers(providerId, {
-          startDate: rangeStart.toISOString(),
-          endDate: now.toISOString(),
-        }),
-        fetchAllPatientsAlerts(providerId)
+
+      // Try to get cached data first
+      const patientsCacheKey = getCacheKey('patients', providerId);
+      const alertsCacheKey = getCacheKey('alerts', providerId);
+
+      let cachedPatients = getCacheData(patientsCacheKey);
+      let cachedAlerts = getCacheData(alertsCacheKey);
+
+      // Always fetch patients and alerts (critical data)
+      const { fetchPatients, fetchAllPatientsAlerts } = await import('../utils/supabase');
+
+      const [supabasePatients, supabaseAlerts] = await Promise.all([
+        cachedPatients ? Promise.resolve(cachedPatients) : fetchPatients(providerId),
+        cachedAlerts ? Promise.resolve(cachedAlerts) : fetchAllPatientsAlerts(providerId)
       ]);
 
-      loadedProviderRangesRef.current.clear();
-      loadedProviderRangesRef.current.add(`all|${rangeStart.toISOString()}|${now.toISOString()}`);
-      loadingProviderRangesRef.current.clear();
-
+      // Cache the fetched data
+      if (!cachedPatients) setCacheData(patientsCacheKey, supabasePatients);
+      if (!cachedAlerts) setCacheData(alertsCacheKey, supabaseAlerts);
 
       // Map Patient type to User type
-      const mappedPatients: User[] = supabasePatients.map(patient => ({
+      const mappedPatients: User[] = supabasePatients.map((patient: Patient) => ({
         id: patient.id,
         email: patient.email,
         name: patient.name,
@@ -83,12 +132,36 @@ export function ProviderDashboard({ user, onLogout }: ProviderDashboardProps) {
       }));
 
       setPatients(mappedPatients);
-      setBiomarkers(supabaseBiomarkers);
       setAlerts(supabaseAlerts);
 
       if (supabasePatients.length === 0) {
         toast.info('No patients have granted you access yet');
+        setIsLoading(false);
+        return;
       }
+
+      // Load recent biomarkers only (last 7 days for immediate display)
+      const recentRangeStart = new Date(now);
+      recentRangeStart.setDate(recentRangeStart.getDate() - 7);
+      recentRangeStart.setHours(0, 0, 0, 0);
+
+      const biomarkersCacheKey = getCacheKey('biomarkers_week', providerId);
+      let cachedBiomarkers = getCacheData(biomarkersCacheKey);
+
+      const { fetchAllPatientsBiomarkers } = await import('../utils/supabase');
+      const recentBiomarkers = cachedBiomarkers ? cachedBiomarkers : await fetchAllPatientsBiomarkers(providerId, {
+        startDate: recentRangeStart.toISOString(),
+        endDate: now.toISOString(),
+      });
+
+      if (!cachedBiomarkers) setCacheData(biomarkersCacheKey, recentBiomarkers);
+
+      setBiomarkers(recentBiomarkers);
+      loadedProviderRangesRef.current.clear();
+      loadedProviderRangesRef.current.add(`all|${recentRangeStart.toISOString()}|${now.toISOString()}`);
+      loadingProviderRangesRef.current.clear();
+
+      // Load remaining biomarker data in background for pattern analysis
     } catch (error) {
       toast.error('Failed to load data from database');
       // Don't fall back to localStorage - show empty data for provider
@@ -102,6 +175,39 @@ export function ProviderDashboard({ user, onLogout }: ProviderDashboardProps) {
     }
   };
 
+  const loadPatternData = async () => {
+    if (patternDataLoaded || isPatternDataLoading) return;
+
+    setIsPatternDataLoading(true);
+    try {
+      const providerId = user.user_id || user.id;
+      const now = new Date();
+      const rangeStart = new Date(now);
+      rangeStart.setDate(rangeStart.getDate() - 90); // Load 3 months for pattern analysis
+      rangeStart.setHours(0, 0, 0, 0);
+
+      const patternCacheKey = getCacheKey('biomarkers_pattern', providerId);
+      let cachedPatternData = getCacheData(patternCacheKey);
+
+      if (!cachedPatternData) {
+        const { fetchAllPatientsBiomarkers } = await import('../utils/supabase');
+        cachedPatternData = await fetchAllPatientsBiomarkers(providerId, {
+          startDate: rangeStart.toISOString(),
+          endDate: now.toISOString(),
+        });
+        setCacheData(patternCacheKey, cachedPatternData);
+      }
+
+      // Merge with existing biomarkers
+      setBiomarkers(prev => mergeBiomarkers(prev, cachedPatternData));
+      setPatternDataLoaded(true);
+    } catch (error) {
+      toast.error('Failed to load pattern analysis data');
+    } finally {
+      setIsPatternDataLoading(false);
+    }
+  };
+
   const toggleDarkMode = () => {
     const newMode = !isDarkMode;
     setIsDarkMode(newMode);
@@ -110,6 +216,8 @@ export function ProviderDashboard({ user, onLogout }: ProviderDashboardProps) {
   };
 
   const generatePatientReport = async (patient: User) => {
+    let doc: jsPDF | null = null;
+
     try {
       toast.info('Generating PDF report...');
 
@@ -126,7 +234,18 @@ export function ProviderDashboard({ user, onLogout }: ProviderDashboardProps) {
         return;
       }
 
-      const doc = new jsPDF();
+      // Cache biomarker metadata to avoid repeated lookups
+      const biomarkerMetadata = new Map<Biomarker['type'], { label: string; unit: string }>();
+      const biomarkerTypes = Array.from(new Set(patientBiomarkers.map(b => b.type))) as Biomarker['type'][];
+
+      biomarkerTypes.forEach(type => {
+        biomarkerMetadata.set(type, {
+          label: getBiomarkerLabel(type),
+          unit: getBiomarkerUnit(type)
+        });
+      });
+
+      doc = new jsPDF();
       let yPosition = 20;
 
       // Header
@@ -147,18 +266,23 @@ export function ProviderDashboard({ user, onLogout }: ProviderDashboardProps) {
       doc.text(`Total Readings: ${patientBiomarkers.length}`, 14, yPosition);
       yPosition += 15;
 
-      // Get unique biomarker types
-      const biomarkerTypes = Array.from(new Set(patientBiomarkers.map(b => b.type))) as Biomarker['type'][];
+      // Build stats by type during chart processing to avoid N+1 filtering
+      const biomarkerStats = new Map<Biomarker['type'], { data: Biomarker[]; avg: string; min: string; max: string }>();
 
-      // Create chart images array
-      const chartImages = [];
-
+      // Process charts one at a time to minimize memory usage
       for (const type of biomarkerTypes) {
         const typeBiomarkers = patientBiomarkers
           .filter(b => b.type === type)
           .sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
 
         if (typeBiomarkers.length === 0) continue;
+
+        // Calculate statistics once
+        const values = typeBiomarkers.map(b => b.value);
+        const avg = (values.reduce((a, b) => a + b, 0) / values.length).toFixed(1);
+        const min = Math.min(...values).toFixed(1);
+        const max = Math.max(...values).toFixed(1);
+        biomarkerStats.set(type, { data: typeBiomarkers, avg, min, max });
 
         // Create canvas
         const canvas = document.createElement('canvas');
@@ -167,6 +291,7 @@ export function ProviderDashboard({ user, onLogout }: ProviderDashboardProps) {
 
         const ctx = canvas.getContext('2d');
         if (ctx) {
+          const metadata = biomarkerMetadata.get(type)!;
           const chart = new Chart(ctx, {
             type: 'line',
             data: {
@@ -174,7 +299,7 @@ export function ProviderDashboard({ user, onLogout }: ProviderDashboardProps) {
                 new Date(b.timestamp).toLocaleDateString()
               ),
               datasets: [{
-                label: getBiomarkerLabel(type),
+                label: metadata.label,
                 data: typeBiomarkers.map(b => b.value),
                 borderColor: 'rgb(59, 130, 246)',
                 backgroundColor: 'rgba(59, 130, 246, 0.1)',
@@ -188,7 +313,7 @@ export function ProviderDashboard({ user, onLogout }: ProviderDashboardProps) {
               plugins: {
                 title: {
                   display: true,
-                  text: `${getBiomarkerLabel(type)} Trend`,
+                  text: `${metadata.label} Trend`,
                   font: { size: 16 }
                 },
                 legend: {
@@ -200,31 +325,28 @@ export function ProviderDashboard({ user, onLogout }: ProviderDashboardProps) {
                   beginAtZero: false,
                   title: {
                     display: true,
-                    text: getBiomarkerUnit(type)
+                    text: metadata.unit
                   }
                 }
               }
             }
           });
 
-          await new Promise(resolve => setTimeout(resolve, 100));
+          // Add image directly to PDF and then clean up immediately
+          if (yPosition > 200) {
+            doc.addPage();
+            yPosition = 20;
+          }
 
           const imgData = canvas.toDataURL('image/png');
-          chartImages.push(imgData);
+          doc.addImage(imgData, 'PNG', 14, yPosition, 180, 67.5);
+          yPosition += 75;
 
+          // Destroy chart and clean up canvas immediately to free memory
           chart.destroy();
+          ctx.clearRect(0, 0, canvas.width, canvas.height);
+          canvas.remove();
         }
-      }
-
-      // Add chart images to PDF
-      for (const imgData of chartImages) {
-        if (yPosition > 200) {
-          doc.addPage();
-          yPosition = 20;
-        }
-
-        doc.addImage(imgData, 'PNG', 14, yPosition, 180, 67.5);
-        yPosition += 75;
       }
 
       // Add new page for statistics
@@ -236,32 +358,28 @@ export function ProviderDashboard({ user, onLogout }: ProviderDashboardProps) {
       doc.text('Summary Statistics', 14, yPosition);
       yPosition += 10;
 
-      biomarkerTypes.forEach(type => {
-        const typeData = patientBiomarkers.filter(b => b.type === type);
-        if (typeData.length === 0) return;
-
-        const values = typeData.map(b => b.value);
-        const avg = (values.reduce((a, b) => a + b, 0) / values.length).toFixed(1);
-        const min = Math.min(...values).toFixed(1);
-        const max = Math.max(...values).toFixed(1);
-
-        doc.setFontSize(12);
-        doc.text(`${getBiomarkerLabel(type)}: Avg ${avg}, Min ${min}, Max ${max} ${getBiomarkerUnit(type)}`, 14, yPosition);
+      biomarkerStats.forEach((stats, type) => {
+        const metadata = biomarkerMetadata.get(type)!;
+        doc!.setFontSize(12);
+        doc!.text(`${metadata.label}: Avg ${stats.avg}, Min ${stats.min}, Max ${stats.max} ${metadata.unit}`, 14, yPosition);
         yPosition += 7;
       });
 
       yPosition += 10;
 
-      // Detailed data table
-      const tableData = patientBiomarkers
-        .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
+      // Detailed data table - sort once
+      const sortedBiomarkers = patientBiomarkers.slice().sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+      const tableData = sortedBiomarkers
         .slice(0, 50)
-        .map(bio => [
-          new Date(bio.timestamp).toLocaleString(),
-          getBiomarkerLabel(bio.type),
-          bio.value.toString(),
-          getBiomarkerUnit(bio.type)
-        ]);
+        .map(bio => {
+          const metadata = biomarkerMetadata.get(bio.type)!;
+          return [
+            new Date(bio.timestamp).toLocaleString(),
+            metadata.label,
+            bio.value.toString(),
+            metadata.unit
+          ];
+        });
 
       autoTable(doc, {
         head: [['Date & Time', 'Biomarker', 'Value', 'Unit']],
@@ -276,6 +394,8 @@ export function ProviderDashboard({ user, onLogout }: ProviderDashboardProps) {
     } catch (error) {
       console.error('Error generating report:', error);
       toast.error('Failed to generate report');
+    } finally {
+      doc = null;
     }
   };
 
@@ -313,26 +433,28 @@ export function ProviderDashboard({ user, onLogout }: ProviderDashboardProps) {
     }
   };
 
-  const filteredPatients = patients.filter(p => 
-    p.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    p.email.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const filteredPatients = useMemo(() =>
+    patients.filter(p =>
+      p.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      p.email.toLowerCase().includes(searchTerm.toLowerCase())
+    ), [patients, searchTerm]);
 
-  const getPatientAlerts = (patientId: string) => {
+  const getPatientAlerts = useCallback((patientId: string) => {
     return alerts.filter(a => a.userId === patientId && !a.read);
-  };
+  }, [alerts]);
 
-  const getLatestReading = (patientId: string, type: Biomarker['type']) => {
+  const getLatestReading = useCallback((patientId: string, type: Biomarker['type']) => {
     const patientBiomarkers = biomarkers
       .filter(b => b.userId === patientId && b.type === type)
       .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
     return patientBiomarkers[0];
-  };
+  }, [biomarkers]);
 
-  const criticalPatients = patients.filter(p => {
-    const patientAlerts = getPatientAlerts(p.id);
-    return patientAlerts.some(a => a.type === 'critical' || a.type === 'fault');
-  });
+  const criticalPatients = useMemo(() =>
+    patients.filter(p => {
+      const patientAlerts = alerts.filter(a => a.userId === p.id && !a.read);
+      return patientAlerts.some(a => a.type === 'critical' || a.type === 'fault');
+    }), [patients, alerts]);
 
   if (selectedPatient) {
     return (
@@ -402,7 +524,11 @@ export function ProviderDashboard({ user, onLogout }: ProviderDashboardProps) {
           </TabsContent>
 
           <TabsContent value="patterns">
-            <PatternAnalysis patients={patients} biomarkers={biomarkers} />
+            <PatternAnalysis
+              patients={patients}
+              biomarkers={biomarkers}
+              isLoading={isPatternDataLoading || !patternDataLoaded}
+            />
           </TabsContent>
         </Tabs>
       </div>

@@ -5,18 +5,45 @@ import ReactApexChart from 'react-apexcharts';
 import { ApexOptions } from 'apexcharts';
 import { Biomarker, User, getBiomarkerLabel } from '../../utils/mockData';
 import { TrendingUp, TrendingDown, Activity, Users } from 'lucide-react';
-import { useState } from 'react';
+import { useState, useMemo, useEffect, useRef } from 'react';
 
 interface PatternAnalysisProps {
   patients: User[];
   biomarkers: Biomarker[];
+  isLoading?: boolean;
 }
 
-export function PatternAnalysis({ patients, biomarkers }: PatternAnalysisProps) {
+export function PatternAnalysis({ patients, biomarkers, isLoading = false }: PatternAnalysisProps) {
   const [selectedMetric, setSelectedMetric] = useState<Biomarker['type']>('heartRate');
 
-  // Analyze correlation between metrics
-  const getCorrelationData = () => {
+  // Refs to track chart instances for proper cleanup
+  const trendChartRef = useRef<any>(null);
+  const correlationChartRef = useRef<any>(null);
+
+  // Cleanup charts on unmount or when data changes
+  useEffect(() => {
+    return () => {
+      if (trendChartRef.current) {
+        trendChartRef.current.destroy();
+      }
+      if (correlationChartRef.current) {
+        correlationChartRef.current.destroy();
+      }
+    };
+  }, []);
+
+  // Cleanup and recreate charts when data changes significantly
+  useEffect(() => {
+    if (trendChartRef.current) {
+      trendChartRef.current.updateOptions({}, false, true);
+    }
+    if (correlationChartRef.current) {
+      correlationChartRef.current.updateOptions({}, false, true);
+    }
+  }, [patients.length, biomarkers.length, selectedMetric]);
+
+  // Analyze correlation between metrics - memoized for performance
+  const correlationData = useMemo(() => {
     const heartRateData: { [key: string]: number[] } = {};
     const glucoseData: { [key: string]: number[] } = {};
 
@@ -29,7 +56,7 @@ export function PatternAnalysis({ patients, biomarkers }: PatternAnalysisProps) 
       glucoseData[patient.id] = glucoseLevels.map(b => b.value);
     });
 
-    const correlationData = patients.map(patient => {
+    const correlationResult = patients.map(patient => {
       const hr = heartRateData[patient.id] || [];
       const gl = glucoseData[patient.id] || [];
 
@@ -44,11 +71,11 @@ export function PatternAnalysis({ patients, biomarkers }: PatternAnalysisProps) 
       };
     }).filter(d => d.heartRate > 0 && d.glucose > 0);
 
-    return correlationData;
-  };
+    return correlationResult;
+  }, [patients, biomarkers]);
 
-  // Get population statistics
-  const getPopulationStats = () => {
+  // Get population statistics - memoized for performance
+  const populationStats = useMemo(() => {
     const stats: { [key: string]: { avg: number; min: number; max: number; count: number } } = {};
 
     const types: Biomarker['type'][] = ['heartRate', 'bloodPressure', 'glucose', 'oxygen'];
@@ -66,10 +93,10 @@ export function PatternAnalysis({ patients, biomarkers }: PatternAnalysisProps) 
     });
 
     return stats;
-  };
+  }, [biomarkers]);
 
-  // Identify high-risk patients
-  const getHighRiskPatients = () => {
+  // Identify high-risk patients - memoized for performance
+  const highRiskPatients = useMemo(() => {
     return patients.filter(patient => {
       const patientBiomarkers = biomarkers.filter(b => b.userId === patient.id);
       const recentHR = patientBiomarkers
@@ -82,20 +109,20 @@ export function PatternAnalysis({ patients, biomarkers }: PatternAnalysisProps) 
         .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
         .slice(0, 10);
 
-      const avgHR = recentHR.length > 0 
-        ? recentHR.reduce((sum, b) => sum + b.value, 0) / recentHR.length 
+      const avgHR = recentHR.length > 0
+        ? recentHR.reduce((sum, b) => sum + b.value, 0) / recentHR.length
         : 0;
-      
-      const avgGL = recentGL.length > 0 
-        ? recentGL.reduce((sum, b) => sum + b.value, 0) / recentGL.length 
+
+      const avgGL = recentGL.length > 0
+        ? recentGL.reduce((sum, b) => sum + b.value, 0) / recentGL.length
         : 0;
 
       return avgHR > 100 || avgGL > 130 || avgGL < 70;
     });
-  };
+  }, [patients, biomarkers]);
 
-  // Get trend over time for selected metric
-  const getTrendOverTime = () => {
+  // Get trend over time for selected metric - memoized for performance
+  const trendData = useMemo(() => {
     const last30Days = biomarkers.filter(b => {
       const date = new Date(b.timestamp);
       const cutoff = new Date();
@@ -119,15 +146,19 @@ export function PatternAnalysis({ patients, biomarkers }: PatternAnalysisProps) 
       min: Math.min(...values),
       max: Math.max(...values),
     })).sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()).slice(-14);
-  };
-
-  const correlationData = getCorrelationData();
-  const populationStats = getPopulationStats();
-  const highRiskPatients = getHighRiskPatients();
-  const trendData = getTrendOverTime();
+  }, [biomarkers, selectedMetric]);
 
   return (
     <div className="space-y-6">
+      {isLoading && (
+        <Card className="p-6">
+          <div className="flex items-center justify-center space-x-2">
+            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600"></div>
+            <span className="text-sm text-gray-600">Loading pattern analysis data...</span>
+          </div>
+        </Card>
+      )}
+
       {/* Population Overview */}
       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
         {Object.entries(populationStats).map(([type, stats]) => (
@@ -188,21 +219,12 @@ export function PatternAnalysis({ patients, biomarkers }: PatternAnalysisProps) 
 
         <div className="h-80">
           <ReactApexChart
+            ref={trendChartRef}
             options={{
               chart: {
                 type: 'line',
                 animations: {
-                  enabled: true,
-                  easing: 'easeinout',
-                  speed: 800,
-                  animateGradually: {
-                    enabled: true,
-                    delay: 150
-                  },
-                  dynamicAnimation: {
-                    enabled: true,
-                    speed: 350
-                  }
+                  enabled: false, // Disable animations for better performance
                 },
                 toolbar: {
                   show: false
@@ -284,17 +306,12 @@ export function PatternAnalysis({ patients, biomarkers }: PatternAnalysisProps) 
 
         <div className="h-80">
           <ReactApexChart
+            ref={correlationChartRef}
             options={{
               chart: {
                 type: 'scatter',
                 animations: {
-                  enabled: true,
-                  easing: 'easeinout',
-                  speed: 800,
-                  animateGradually: {
-                    enabled: true,
-                    delay: 150
-                  }
+                  enabled: false, // Disable animations for better performance
                 },
                 toolbar: {
                   show: false
