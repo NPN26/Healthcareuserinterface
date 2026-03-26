@@ -16,32 +16,6 @@ interface PatternAnalysisProps {
 export function PatternAnalysis({ patients, biomarkers, isLoading = false }: PatternAnalysisProps) {
   const [selectedMetric, setSelectedMetric] = useState<Biomarker['type']>('heartRate');
 
-  // Refs to track chart instances for proper cleanup
-  const trendChartRef = useRef<any>(null);
-  const correlationChartRef = useRef<any>(null);
-
-  // Cleanup charts on unmount or when data changes
-  useEffect(() => {
-    return () => {
-      if (trendChartRef.current) {
-        trendChartRef.current.destroy();
-      }
-      if (correlationChartRef.current) {
-        correlationChartRef.current.destroy();
-      }
-    };
-  }, []);
-
-  // Cleanup and recreate charts when data changes significantly
-  useEffect(() => {
-    if (trendChartRef.current) {
-      trendChartRef.current.updateOptions({}, false, true);
-    }
-    if (correlationChartRef.current) {
-      correlationChartRef.current.updateOptions({}, false, true);
-    }
-  }, [patients.length, biomarkers.length, selectedMetric]);
-
   // Analyze correlation between metrics - memoized for performance
   const correlationData = useMemo(() => {
     const heartRateData: { [key: string]: number[] } = {};
@@ -140,12 +114,15 @@ export function PatternAnalysis({ patients, biomarkers, isLoading = false }: Pat
       dayGroups[day].push(b.value);
     });
 
-    return Object.entries(dayGroups).map(([day, values]) => ({
-      date: day,
-      average: values.reduce((sum, v) => sum + v, 0) / values.length,
-      min: Math.min(...values),
-      max: Math.max(...values),
-    })).sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()).slice(-14);
+    return Object.entries(dayGroups)
+      .map(([day, values]) => ({
+        date: day,
+        average: values.length > 0 ? values.reduce((sum, v) => sum + v, 0) / values.length : 0,
+        min: values.length > 0 ? Math.min(...values) : 0,
+        max: values.length > 0 ? Math.max(...values) : 0,
+      }))
+      .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
+      .slice(-14);
   }, [biomarkers, selectedMetric]);
 
   return (
@@ -217,84 +194,89 @@ export function PatternAnalysis({ patients, biomarkers, isLoading = false }: Pat
           </Select>
         </div>
 
-        <div className="h-80">
-          <ReactApexChart
-            ref={trendChartRef}
-            options={{
-              chart: {
-                type: 'line',
-                animations: {
-                  enabled: false, // Disable animations for better performance
-                },
-                toolbar: {
-                  show: false
-                },
-                zoom: {
-                  enabled: false
-                }
-              },
-              stroke: {
-                curve: 'smooth',
-                width: [2, 1, 1],
-                dashArray: [0, 5, 5]
-              },
-              colors: ['#3b82f6', '#ef4444', '#10b981'],
-              xaxis: {
-                categories: trendData.map(d => d.date),
-                labels: {
-                  rotate: -45,
-                  style: {
-                    colors: '#9ca3af',
-                    fontSize: '12px'
+        {trendData.length > 0 ? (
+          <div className="h-80">
+            <ReactApexChart
+              options={{
+                chart: {
+                  type: 'line',
+                  animations: {
+                    enabled: false,
+                  },
+                  toolbar: {
+                    show: false
+                  },
+                  zoom: {
+                    enabled: false
                   }
-                }
-              },
-              yaxis: {
-                labels: {
-                  style: {
-                    colors: '#9ca3af'
+                },
+                stroke: {
+                  curve: 'smooth',
+                  width: [2, 1, 1],
+                  dashArray: [0, 5, 5]
+                },
+                colors: ['#3b82f6', '#ef4444', '#10b981'],
+                xaxis: {
+                  categories: trendData.map(d => d.date),
+                  labels: {
+                    rotate: -45,
+                    style: {
+                      colors: '#9ca3af',
+                      fontSize: '12px'
+                    }
                   }
+                },
+                yaxis: {
+                  labels: {
+                    style: {
+                      colors: '#9ca3af'
+                    }
+                  }
+                },
+                grid: {
+                  borderColor: '#e5e7eb',
+                  strokeDashArray: 3
+                },
+                markers: {
+                  size: [4, 0, 0],
+                  strokeWidth: 0,
+                  hover: {
+                    size: 6
+                  }
+                },
+                tooltip: {
+                  shared: true,
+                  intersect: false
+                },
+                legend: {
+                  show: true,
+                  position: 'top',
+                  horizontalAlign: 'right'
                 }
-              },
-              grid: {
-                borderColor: '#e5e7eb',
-                strokeDashArray: 3
-              },
-              markers: {
-                size: [4, 0, 0],
-                strokeWidth: 0,
-                hover: {
-                  size: 6
+              } as ApexOptions}
+              series={[
+                {
+                  name: 'Average',
+                  data: trendData.map(d => d.average)
+                },
+                {
+                  name: 'Max',
+                  data: trendData.map(d => d.max)
+                },
+                {
+                  name: 'Min',
+                  data: trendData.map(d => d.min)
                 }
-              },
-              tooltip: {
-                shared: true,
-                intersect: false
-              },
-              legend: {
-                show: true,
-                position: 'top',
-                horizontalAlign: 'right'
-              }
-            } as ApexOptions}
-            series={[
-              {
-                name: 'Average',
-                data: trendData.map(d => d.average)
-              },
-              {
-                name: 'Max',
-                data: trendData.map(d => d.max)
-              },
-              {
-                name: 'Min',
-                data: trendData.map(d => d.min)
-              }
-            ]}
-            type="line"
-            height="100%"
-          />
-        </div>
+              ]}
+              type="line"
+              height="100%"
+            />
+          </div>
+        ) : (
+          <div className="h-80 flex items-center justify-center text-gray-500">
+            <p>No data available for the selected metric</p>
+          </div>
+        )}
       </Card>
 
       {/* Correlation Analysis */}
@@ -304,105 +286,113 @@ export function PatternAnalysis({ patients, biomarkers, isLoading = false }: Pat
           <p className="text-sm text-gray-600">Scatter plot showing relationship between metrics</p>
         </div>
 
-        <div className="h-80">
-          <ReactApexChart
-            ref={correlationChartRef}
-            options={{
-              chart: {
-                type: 'scatter',
-                animations: {
-                  enabled: false, // Disable animations for better performance
+        {correlationData.length > 0 ? (
+          <div className="h-80">
+            <ReactApexChart
+              options={{
+                chart: {
+                  type: 'scatter',
+                  animations: {
+                    enabled: false,
+                  },
+                  toolbar: {
+                    show: false
+                  },
+                  zoom: {
+                    enabled: true,
+                    type: 'xy'
+                  }
                 },
-                toolbar: {
+                colors: ['#8b5cf6'],
+                xaxis: {
+                  title: {
+                    text: 'Heart Rate (bpm)',
+                    style: {
+                      color: '#9ca3af'
+                    }
+                  },
+                  labels: {
+                    style: {
+                      colors: '#9ca3af'
+                    }
+                  }
+                },
+                yaxis: {
+                  title: {
+                    text: 'Glucose (mg/dL)',
+                    style: {
+                      color: '#9ca3af'
+                    }
+                  },
+                  labels: {
+                    style: {
+                      colors: '#9ca3af'
+                    }
+                  }
+                },
+                grid: {
+                  borderColor: '#e5e7eb',
+                  strokeDashArray: 3
+                },
+                markers: {
+                  size: (seriesIndex, dataPointIndex) => {
+                    const reading = correlationData[dataPointIndex]?.readings || 50;
+                    return Math.min(Math.max(reading / 10, 5), 20);
+                  },
+                  strokeWidth: 0,
+                  hover: {
+                    size: undefined,
+                    sizeOffset: 3
+                  }
+                },
+                tooltip: {
+                  custom: ({ series, seriesIndex, dataPointIndex, w }) => {
+                    const data = correlationData[dataPointIndex];
+                    if (!data) return '';
+                    return `
+                      <div class="bg-white p-3 border border-gray-200 rounded-lg shadow-lg">
+                        <p class="text-sm font-medium text-gray-900 mb-2">${data.name}</p>
+                        <p class="text-sm">Heart Rate: <span class="font-semibold">${data.heartRate.toFixed(1)} bpm</span></p>
+                        <p class="text-sm">Glucose: <span class="font-semibold">${data.glucose.toFixed(1)} mg/dL</span></p>
+                        <p class="text-xs text-gray-500 mt-2">Readings: ${data.readings}</p>
+                      </div>
+                    `;
+                  }
+                },
+                legend: {
                   show: false
-                },
-                zoom: {
-                  enabled: true,
-                  type: 'xy'
                 }
-              },
-              colors: ['#8b5cf6'],
-              xaxis: {
-                title: {
-                  text: 'Heart Rate (bpm)',
-                  style: {
-                    color: '#9ca3af'
-                  }
-                },
-                labels: {
-                  style: {
-                    colors: '#9ca3af'
-                  }
+              } as ApexOptions}
+              series={[
+                {
+                  name: 'Patients',
+                  data: correlationData.map(d => ({
+                    x: d.heartRate,
+                    y: d.glucose
+                  }))
                 }
-              },
-              yaxis: {
-                title: {
-                  text: 'Glucose (mg/dL)',
-                  style: {
-                    color: '#9ca3af'
-                  }
-                },
-                labels: {
-                  style: {
-                    colors: '#9ca3af'
-                  }
-                }
-              },
-              grid: {
-                borderColor: '#e5e7eb',
-                strokeDashArray: 3
-              },
-              markers: {
-                size: (seriesIndex, dataPointIndex) => {
-                  const reading = correlationData[dataPointIndex]?.readings || 50;
-                  return Math.min(Math.max(reading / 10, 5), 20);
-                },
-                strokeWidth: 0,
-                hover: {
-                  size: undefined,
-                  sizeOffset: 3
-                }
-              },
-              tooltip: {
-                custom: ({ series, seriesIndex, dataPointIndex, w }) => {
-                  const data = correlationData[dataPointIndex];
-                  return `
-                    <div class="bg-white p-3 border border-gray-200 rounded-lg shadow-lg">
-                      <p class="text-sm font-medium text-gray-900 mb-2">${data.name}</p>
-                      <p class="text-sm">Heart Rate: <span class="font-semibold">${data.heartRate.toFixed(1)} bpm</span></p>
-                      <p class="text-sm">Glucose: <span class="font-semibold">${data.glucose.toFixed(1)} mg/dL</span></p>
-                      <p class="text-xs text-gray-500 mt-2">Readings: ${data.readings}</p>
-                    </div>
-                  `;
-                }
-              },
-              legend: {
-                show: false
-              }
-            } as ApexOptions}
-            series={[
-              {
-                name: 'Patients',
-                data: correlationData.map(d => ({
-                  x: d.heartRate,
-                  y: d.glucose
-                }))
-              }
-            ]}
-            type="scatter"
-            height="100%"
-          />
-        </div>
+              ]}
+              type="scatter"
+              height="100%"
+            />
+          </div>
+        ) : (
+          <div className="h-80 flex items-center justify-center text-gray-500">
+            <p>No correlation data available</p>
+          </div>
+        )}
 
-        <div className="mt-4 p-4 bg-purple-50 dark:bg-purple-950 rounded-lg">
-          <h4 className="text-sm text-gray-900 mb-2">Pattern Insights</h4>
-          <ul className="space-y-1 text-sm text-gray-600">
-            <li>• {correlationData.length} patients analyzed</li>
-            <li>• Average heart rate: {(correlationData.reduce((sum, d) => sum + d.heartRate, 0) / correlationData.length).toFixed(1)} bpm</li>
-            <li>• Average glucose: {(correlationData.reduce((sum, d) => sum + d.glucose, 0) / correlationData.length).toFixed(1)} mg/dL</li>
-            <li>• Total readings: {correlationData.reduce((sum, d) => sum + d.readings, 0)}</li>
-          </ul>
-        </div>
+        {correlationData.length > 0 && (
+          <div className="mt-4 p-4 bg-purple-50 dark:bg-purple-950 rounded-lg">
+            <h4 className="text-sm text-gray-900 mb-2">Pattern Insights</h4>
+            <ul className="space-y-1 text-sm text-gray-600">
+              <li>• {correlationData.length} patients analyzed</li>
+              <li>• Average heart rate: {(correlationData.reduce((sum, d) => sum + d.heartRate, 0) / correlationData.length).toFixed(1)} bpm</li>
+              <li>• Average glucose: {(correlationData.reduce((sum, d) => sum + d.glucose, 0) / correlationData.length).toFixed(1)} mg/dL</li>
+              <li>• Total readings: {correlationData.reduce((sum, d) => sum + d.readings, 0)}</li>
+            </ul>
+          </div>
+        )}
       </Card>
 
       {/* Key Findings */}
@@ -427,7 +417,7 @@ export function PatternAnalysis({ patients, biomarkers, isLoading = false }: Pat
               <div>
                 <p className="text-sm text-gray-900 mb-1">Engagement</p>
                 <p className="text-sm text-gray-600">
-                  {biomarkers.length} total readings recorded, averaging {Math.round(biomarkers.length / patients.length)} readings per patient.
+                  {biomarkers.length} total readings recorded, averaging {Math.round(biomarkers.length / Math.max(patients.length, 1))} readings per patient.
                 </p>
               </div>
             </div>
