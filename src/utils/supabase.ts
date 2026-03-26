@@ -1873,9 +1873,20 @@ export async function updateUserRole(userId: string, newRole: 'END_USER' | 'PROV
     const auth = await requireAdmin()
     if (!auth.authorized) return { success: false, message: auth.error! }
 
+    // Prepare update data
+    const updateData: any = { role: newRole }
+
+    // If changing to PROVIDER, set default provider fields to satisfy constraints
+    if (newRole === 'PROVIDER') {
+      updateData.speciality = 'General Practice'  // Note: British spelling
+      updateData.practice_name = 'To Be Assigned'
+      updateData.practice_id = 'PENDING'  // Required by provider_fields_check constraint
+      updateData.is_verified = false
+    }
+
     const { error } = await supabase
       .from('users')
-      .update({ role: newRole })
+      .update(updateData)
       .eq('user_id', userId)
 
     if (error) {
@@ -1902,7 +1913,9 @@ export async function deleteUserAndData(userId: string): Promise<{ success: bool
     const auth = await requireAdmin()
     if (!auth.authorized) return { success: false, message: auth.error! }
 
-    // Note: Cascade delete should handle related data through foreign key constraints
+    // Delete the user record from the database
+    // Note: A database trigger will automatically delete the auth user
+    // Cascade delete should handle related data through foreign key constraints
     // This includes: data_points, data_sources, notifications, goals, etc.
     const { error } = await supabase
       .from('users')
