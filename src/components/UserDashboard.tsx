@@ -164,12 +164,18 @@ export function UserDashboard({ user, onLogout }: UserDashboardProps) {
       return; // Don't set up interval if no devices yet
     }
 
-    // Simulate real-time updates
-    const interval = setInterval(() => {
-      simulateNewReading();
-    }, 5000); // Every 5 seconds
+    let timeoutId: NodeJS.Timeout;
+    const scheduleNext = () => {
+      // Random interval between 1 and 5 minutes (in ms)
+      const randomMs = Math.floor(Math.random() * (300000 - 60000 + 1)) + 60000;
+      timeoutId = setTimeout(async () => {
+        await simulateNewReading();
+        scheduleNext();
+      }, randomMs);
+    };
+    scheduleNext();
 
-    return () => clearInterval(interval);
+    return () => clearTimeout(timeoutId);
   }, [devices]);
 
   // Persist active view to localStorage
