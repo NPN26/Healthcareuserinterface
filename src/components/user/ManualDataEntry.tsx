@@ -145,6 +145,7 @@ export function ManualDataEntry({ isOpen, onClose, userId, onDataAdded }: Manual
     const newReading: Biomarker = {
       id: `biomarker-${Date.now()}`,
       userId,
+      deviceId: 'manual-entry', // Manual entries don't have a device source
       type: dataType,
       value: dataType === 'bloodPressure' ? parseInt(systolic) : parseFloat(value),
       systolic: dataType === 'bloodPressure' ? parseInt(systolic) : undefined,

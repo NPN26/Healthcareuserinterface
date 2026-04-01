@@ -25,7 +25,7 @@ export interface Biomarker {
   systolic?: number; // For blood pressure
   diastolic?: number; // For blood pressure
   timestamp: string;
-  deviceId: string;
+  deviceId?: string;
   isFaulty?: boolean;
   notes?: string;
 }
