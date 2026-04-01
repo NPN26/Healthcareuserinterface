@@ -298,6 +298,7 @@ export function getBiomarkerLabel(type: Biomarker['type']): string {
     sleep: 'Sleep Duration',
     temperature: 'Body Temperature',
     weight: 'Weight',
+    calories: 'Calories Burned',
   };
   return labels[type];
 }
@@ -312,6 +313,7 @@ export function getBiomarkerUnit(type: Biomarker['type']): string {
     sleep: 'hours',
     temperature: '°C',
     weight: 'kg',
+    calories: 'kcal',
   };
   return units[type];
 }
@@ -326,6 +328,7 @@ export function getBiomarkerColor(type: Biomarker['type']): string {
     sleep: '#6366f1',
     temperature: '#f59e0b',
     weight: '#ec4899',
+    calories: '#14b8a6',
   };
   return colors[type];
 }
@@ -477,6 +480,21 @@ export const PHYSIOLOGICAL_RANGES: Record<
       borderline: 'Slightly outside expected range',
       warning: 'Significant weight anomaly',
       critical: 'Extreme weight value - verify reading',
+    },
+  },
+  calories: {
+    unit: 'kcal',
+    criticalLow: 100,
+    warningLow: 200,
+    normalLow: 300,
+    normalHigh: 2000,
+    warningHigh: 2500,
+    criticalHigh: 3000,
+    labels: {
+      normal: 'Normal calorie intake',
+      borderline: 'Slightly outside target range',
+      warning: 'Significant calorie anomaly',
+      critical: 'Extreme calorie value - verify reading',
     },
   },
 };
