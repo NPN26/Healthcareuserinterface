@@ -4,7 +4,7 @@ import { Button } from '../ui/button';
 import { Input } from '../ui/input';
 import { Label } from '../ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
-import { Plus, Heart, Activity, Droplet, Wind, Footprints, Moon, Scale, Flame } from 'lucide-react';
+import { Plus, Heart, Activity, Droplet, Wind, Footprints, Moon, Scale, Flame, Loader2, CheckCircle2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Biomarker } from '../../utils/mockData';
 import { secureGetItem, secureSetItem } from '../../utils/secureStorage';
@@ -21,12 +21,13 @@ interface ManualDataEntryProps {
   isOpen: boolean;
   onClose: () => void;
   userId: string;
-  deviceId?: string;
   onDataAdded: (newReading: Biomarker) => void | Promise<void>;
 }
 
-export function ManualDataEntry({ isOpen, onClose, userId, deviceId, onDataAdded }: ManualDataEntryProps) {
+export function ManualDataEntry({ isOpen, onClose, userId, onDataAdded }: ManualDataEntryProps) {
   const [dataType, setDataType] = useState<Biomarker['type']>('heartRate');
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [showSuccess, setShowSuccess] = useState(false);
   const [value, setValue] = useState('');
   const [systolic, setSystolic] = useState('');
   const [diastolic, setDiastolic] = useState('');
@@ -56,6 +57,8 @@ export function ManualDataEntry({ isOpen, onClose, userId, deviceId, onDataAdded
   ];
 
   const handleSubmit = async () => {
+    if (isSubmitting) return;
+    
     const validDataTypes = ['heartRate', 'bloodPressure', 'glucose', 'oxygen', 'steps', 'sleep', 'weight', 'calories'] as const;
     const dataTypeValidation = validateEnum(dataType, validDataTypes);
     if (!dataTypeValidation.isValid) {
@@ -142,7 +145,6 @@ export function ManualDataEntry({ isOpen, onClose, userId, deviceId, onDataAdded
     const newReading: Biomarker = {
       id: `biomarker-${Date.now()}`,
       userId,
-      deviceId,
       type: dataType,
       value: dataType === 'bloodPressure' ? parseInt(systolic) : parseFloat(value),
       systolic: dataType === 'bloodPressure' ? parseInt(systolic) : undefined,
@@ -153,6 +155,7 @@ export function ManualDataEntry({ isOpen, onClose, userId, deviceId, onDataAdded
     };
 
     // Save to database
+    setIsSubmitting(true);
     try {
       const { supabase } = await import('../../utils/supabase');
       
@@ -181,10 +184,9 @@ export function ManualDataEntry({ isOpen, onClose, userId, deviceId, onDataAdded
         'calories': 'kcal'
       };
 
-      // First, create data_point
+      // First, create data_point - manual entries don't have a device source
       const dataPointPayload: {
         user_id: string;
-        source_id?: string | null;
         timestamp: string;
         data_type: 'MANUAL';
       } = {
@@ -192,10 +194,6 @@ export function ManualDataEntry({ isOpen, onClose, userId, deviceId, onDataAdded
         timestamp: newReading.timestamp,
         data_type: 'MANUAL'
       };
-
-      if (deviceId) {
-        dataPointPayload.source_id = deviceId;
-      }
 
       const { data: dataPoint, error: dataPointError } = await supabase
         .from('data_points')
@@ -249,6 +247,7 @@ export function ManualDataEntry({ isOpen, onClose, userId, deviceId, onDataAdded
       if (manualError) {
       }
     } catch (error) {
+      setIsSubmitting(false);
       toast.error('Failed to save reading. Please try again.');
       return;
     }
@@ -258,9 +257,17 @@ export function ManualDataEntry({ isOpen, onClose, userId, deviceId, onDataAdded
     await secureSetItem('healthApp_biomarkers', JSON.stringify(updatedBiomarkers));
 
     await onDataAdded(newReading);
+    
+    // Show success state briefly before closing
+    setIsSubmitting(false);
+    setShowSuccess(true);
     toast.success('Data logged successfully!');
-    resetForm();
-    onClose();
+    
+    setTimeout(() => {
+      setShowSuccess(false);
+      resetForm();
+      onClose();
+    }, 1000);
   };
 
   const resetForm = () => {
@@ -379,10 +386,27 @@ export function ManualDataEntry({ isOpen, onClose, userId, deviceId, onDataAdded
           </div>
 
           <div className="flex gap-2 pt-4">
-            <Button type="button" onClick={handleSubmit} className="flex-1">
-              Log Data
+            <Button 
+              type="button" 
+              onClick={handleSubmit} 
+              className="flex-1"
+              disabled={isSubmitting || showSuccess}
+            >
+              {isSubmitting ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  Saving...
+                </>
+              ) : showSuccess ? (
+                <>
+                  <CheckCircle2 className="w-4 h-4 mr-2 text-green-500" />
+                  Saved!
+                </>
+              ) : (
+                'Log Data'
+              )}
             </Button>
-            <Button type="button" variant="outline" onClick={onClose}>
+            <Button type="button" variant="outline" onClick={onClose} disabled={isSubmitting}>
               Cancel
             </Button>
           </div>

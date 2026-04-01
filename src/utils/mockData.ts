@@ -20,7 +20,7 @@ export interface User {
 export interface Biomarker {
   id: string;
   userId: string;
-  type: 'heartRate' | 'bloodPressure' | 'glucose' | 'oxygen' | 'steps' | 'sleep' | 'temperature' | 'weight';
+  type: 'heartRate' | 'bloodPressure' | 'glucose' | 'oxygen' | 'steps' | 'sleep' | 'temperature' | 'weight' | 'calories';
   value: number;
   systolic?: number; // For blood pressure
   diastolic?: number; // For blood pressure
@@ -83,6 +83,7 @@ export function generateBiomarkerData(
     sleep: { min: 5, max: 9 },
     temperature: { min: 36.1, max: 37.2 },
     weight: { min: 65, max: 85 },
+    calories: { min: 100, max: 300 },
   };
 
   let value = Math.random() * (baseValues[type].max - baseValues[type].min) + baseValues[type].min;

@@ -1525,7 +1525,6 @@ export function UserDashboard({ user, onLogout }: UserDashboardProps) {
         isOpen={showManualEntry}
         onClose={() => setShowManualEntry(false)}
         userId={dashboardUserId}
-        deviceId={devices.find(d => d.status === 'active')?.id || devices[0]?.id}
         onDataAdded={handleManualDataAdded}
       />
 
