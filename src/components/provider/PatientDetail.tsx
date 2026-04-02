@@ -1,3 +1,4 @@
+import { useState, useEffect } from 'react';
 import { Card } from '../ui/card';
 import { Button } from '../ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
@@ -15,12 +16,31 @@ interface PatientDetailProps {
   patient: UserType;
   biomarkers: Biomarker[];
   alerts: Alert[];
+  providerId: string;
   isBiomarkersLoading?: boolean;
   onRequestRange?: (range: { startDate: string; endDate: string }) => Promise<void> | void;
   onBack: () => void;
 }
 
-export function PatientDetail({ patient, biomarkers, alerts, isBiomarkersLoading = false, onRequestRange, onBack }: PatientDetailProps) {
+export function PatientDetail({ patient, biomarkers, alerts, providerId, isBiomarkersLoading = false, onRequestRange, onBack }: PatientDetailProps) {
+  const [totalReadingsCount, setTotalReadingsCount] = useState<number>(biomarkers.length);
+
+  // Fetch accurate total count on mount
+  useEffect(() => {
+    const fetchStats = async () => {
+      try {
+        const { fetchSinglePatientBiomarkerStats } = await import('../../utils/supabase');
+        const stats = await fetchSinglePatientBiomarkerStats(providerId, patient.id);
+        setTotalReadingsCount(stats.totalReadings);
+      } catch (error) {
+        console.error('Error fetching patient stats:', error);
+        // Fallback to loaded biomarkers count
+        setTotalReadingsCount(biomarkers.length);
+      }
+    };
+    
+    fetchStats();
+  }, [providerId, patient.id, biomarkers.length]);
   const biomarkerTypes: Biomarker['type'][] = ['heartRate', 'bloodPressure', 'glucose', 'oxygen', 'steps', 'sleep'];
 
   const getAverageByType = (type: Biomarker['type'], days: number = 7) => {
@@ -282,8 +302,8 @@ export function PatientDetail({ patient, biomarkers, alerts, isBiomarkersLoading
           <Card className="p-6">
             <div>
               <p className="text-sm text-gray-600">Total Readings</p>
-              <p className="text-2xl text-gray-900">{biomarkers.length}</p>
-              <p className="text-xs text-gray-500 mt-1">Loaded range</p>
+              <p className="text-2xl text-gray-900">{totalReadingsCount.toLocaleString()}</p>
+              <p className="text-xs text-gray-500 mt-1">All time</p>
             </div>
           </Card>
 

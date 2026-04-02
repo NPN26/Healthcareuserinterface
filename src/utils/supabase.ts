@@ -1133,6 +1133,46 @@ export async function fetchPatientBiomarkerStats(providerId: string): Promise<{ 
 }
 
 /**
+ * Fetch biomarker stats for a single patient
+ * @param providerId - The provider's user ID
+ * @param patientId - The patient's user ID
+ */
+export async function fetchSinglePatientBiomarkerStats(
+  providerId: string,
+  patientId: string
+): Promise<{ totalReadings: number; earliestReading: string | null; latestReading: string | null }> {
+  try {
+    const auth = await requireProvider()
+    if (!auth.authorized) return { totalReadings: 0, earliestReading: null, latestReading: null }
+    if (auth.userId !== providerId) return { totalReadings: 0, earliestReading: null, latestReading: null }
+
+    const { data, error } = await supabase
+      .rpc('get_single_patient_biomarkers_stats_for_provider', {
+        provider_uuid: auth.userId,
+        patient_uuid: patientId
+      })
+
+    if (error) {
+      console.error('Error fetching single patient biomarker stats:', error)
+      return { totalReadings: 0, earliestReading: null, latestReading: null }
+    }
+
+    if (!data || data.length === 0) {
+      return { totalReadings: 0, earliestReading: null, latestReading: null }
+    }
+
+    return {
+      totalReadings: Number(data[0].total_readings) || 0,
+      earliestReading: data[0].earliest_reading || null,
+      latestReading: data[0].latest_reading || null
+    }
+  } catch (error) {
+    console.error('Error in fetchSinglePatientBiomarkerStats:', error)
+    return { totalReadings: 0, earliestReading: null, latestReading: null }
+  }
+}
+
+/**
  * Fetch alerts for patients who have granted consent to the authenticated provider
  * Verifies the authenticated user is the provider to prevent IDOR
  * For provider dashboard only - respects access_consents table

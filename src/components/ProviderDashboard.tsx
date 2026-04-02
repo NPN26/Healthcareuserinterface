@@ -450,6 +450,7 @@ export function ProviderDashboard({ user, onLogout }: ProviderDashboardProps) {
         patient={selectedPatient}
         biomarkers={biomarkers.filter(b => b.userId === selectedPatient.id)}
         alerts={alerts.filter(a => a.userId === selectedPatient.id)}
+        providerId={user.user_id || user.id}
         isBiomarkersLoading={isBiomarkerRangeLoading}
         onRequestRange={(range) => requestProviderPatientRange(selectedPatient.id, range)}
         onBack={() => setSelectedPatient(null)}
