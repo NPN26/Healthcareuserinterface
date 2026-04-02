@@ -25,6 +25,7 @@ export function ProviderDashboard({ user, onLogout }: ProviderDashboardProps) {
   const [isLoading, setIsLoading] = useState(true);
   const [isBiomarkerRangeLoading, setIsBiomarkerRangeLoading] = useState(false);
   const [patternDataLoaded, setPatternDataLoaded] = useState(false);
+  const [totalReadingsCount, setTotalReadingsCount] = useState(0);
   const [showAccessRequest, setShowAccessRequest] = useState(false);
   const [showPatientSelect, setShowPatientSelect] = useState(false);
   const [activeTab, setActiveTab] = useState<string>(() => {
@@ -128,14 +129,19 @@ export function ProviderDashboard({ user, onLogout }: ProviderDashboardProps) {
 
       // Load all critical data at once for comprehensive stats display
       // Fetch ALL biomarkers without date filter to get accurate total counts
-      const { fetchPatients, fetchAllPatientsAlerts, fetchAllPatientsBiomarkers } = await import('../utils/supabase');
+      const { fetchPatients, fetchAllPatientsAlerts, fetchAllPatientsBiomarkers, fetchPatientBiomarkerStats } = await import('../utils/supabase');
 
-      const [supabasePatients, supabaseAlerts, supabaseBiomarkers] = await Promise.all([
+      const [supabasePatients, supabaseAlerts, supabaseBiomarkers, biomarkerStats] = await Promise.all([
         cachedPatients ? Promise.resolve(cachedPatients) : fetchPatients(providerId),
         cachedAlerts ? Promise.resolve(cachedAlerts) : fetchAllPatientsAlerts(providerId),
         // No date filter - fetch all biomarkers for accurate stats
-        cachedBiomarkers ? Promise.resolve(cachedBiomarkers) : fetchAllPatientsBiomarkers(providerId)
+        cachedBiomarkers ? Promise.resolve(cachedBiomarkers) : fetchAllPatientsBiomarkers(providerId),
+        // Fetch stats separately for accurate total count
+        fetchPatientBiomarkerStats(providerId)
       ]);
+
+      // Set total readings from stats (accurate count from DB)
+      setTotalReadingsCount(biomarkerStats.totalReadings);
 
       // Cache the fetched data
       if (!cachedPatients) setCacheData(patientsCacheKey, supabasePatients);
@@ -476,7 +482,7 @@ export function ProviderDashboard({ user, onLogout }: ProviderDashboardProps) {
           criticalPatients={criticalPatients.length}
           criticalAlerts={totalCriticalAlerts}
           activeMonitoring={patients.length}
-          totalReadings={biomarkers.length}
+          totalReadings={totalReadingsCount}
         />
 
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">

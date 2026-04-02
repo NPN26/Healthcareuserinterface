@@ -1029,6 +1029,7 @@ export async function fetchAllPatientsBiomarkers(providerId: string, options?: P
       .rpc('get_patient_biomarkers_for_provider', {
         provider_uuid: auth.userId
       })
+      .limit(50000)  // Add this line
 
     if (error) {
       console.error('Error fetching patient biomarkers:', error)
@@ -1093,6 +1094,41 @@ export async function fetchAllPatientsBiomarkers(providerId: string, options?: P
   } catch (error) {
     console.error('Error in fetchAllPatientsBiomarkers:', error)
     return []
+  }
+}
+
+/**
+ * Fetch biomarker stats (counts) for patients who have granted consent to the authenticated provider
+ * Lightweight alternative to fetching all biomarkers - use for dashboard stats
+ * @param providerId - The provider's user ID
+ */
+export async function fetchPatientBiomarkerStats(providerId: string): Promise<{ totalReadings: number; patientsWithData: number }> {
+  try {
+    const auth = await requireProvider()
+    if (!auth.authorized) return { totalReadings: 0, patientsWithData: 0 }
+    if (auth.userId !== providerId) return { totalReadings: 0, patientsWithData: 0 }
+
+    const { data, error } = await supabase
+      .rpc('get_patient_biomarkers_stats_for_provider', {
+        provider_uuid: auth.userId
+      })
+
+    if (error) {
+      console.error('Error fetching patient biomarker stats:', error)
+      return { totalReadings: 0, patientsWithData: 0 }
+    }
+
+    if (!data || data.length === 0) {
+      return { totalReadings: 0, patientsWithData: 0 }
+    }
+
+    return {
+      totalReadings: Number(data[0].total_readings) || 0,
+      patientsWithData: Number(data[0].patients_with_data) || 0
+    }
+  } catch (error) {
+    console.error('Error in fetchPatientBiomarkerStats:', error)
+    return { totalReadings: 0, patientsWithData: 0 }
   }
 }
 
