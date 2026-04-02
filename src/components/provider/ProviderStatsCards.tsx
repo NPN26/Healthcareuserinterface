@@ -1,18 +1,20 @@
 import { Card } from '../ui/card';
-import { Users, TrendingUp, AlertTriangle, FileText } from 'lucide-react';
+import { Users, TrendingUp, AlertTriangle, Activity } from 'lucide-react';
 
 interface ProviderStatsCardsProps {
   totalPatients: number;
   criticalPatients: number;
+  criticalAlerts: number;
   activeMonitoring: number;
-  totalReports: number;
+  totalReadings: number;
 }
 
 export function ProviderStatsCards({
   totalPatients,
   criticalPatients,
+  criticalAlerts,
   activeMonitoring,
-  totalReports,
+  totalReadings,
 }: ProviderStatsCardsProps) {
   return (
     <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
@@ -35,7 +37,10 @@ export function ProviderStatsCards({
           </div>
           <div>
             <p className="text-sm text-gray-600">Critical Alerts</p>
-            <p className="text-2xl text-gray-900">{criticalPatients}</p>
+            <p className="text-2xl text-gray-900">{criticalAlerts}</p>
+            {criticalPatients > 0 && (
+              <p className="text-xs text-red-600 mt-1">{criticalPatients} patient{criticalPatients > 1 ? 's' : ''} affected</p>
+            )}
           </div>
         </div>
       </Card>
@@ -55,11 +60,11 @@ export function ProviderStatsCards({
       <Card className="p-6">
         <div className="flex items-center gap-3">
           <div className="p-3 rounded-xl bg-purple-100 dark:bg-purple-900">
-            <FileText className="w-6 h-6 text-purple-600" />
+            <Activity className="w-6 h-6 text-purple-600" />
           </div>
           <div>
-            <p className="text-sm text-gray-600">Reports</p>
-            <p className="text-2xl text-gray-900">{totalReports}</p>
+            <p className="text-sm text-gray-600">Total Readings</p>
+            <p className="text-2xl text-gray-900">{totalReadings.toLocaleString()}</p>
           </div>
         </div>
       </Card>

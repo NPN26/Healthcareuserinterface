@@ -16,7 +16,6 @@ interface ProviderDashboardProps {
 }
 
 export function ProviderDashboard({ user, onLogout }: ProviderDashboardProps) {
-  const PROVIDER_LOOKBACK_DAYS = 90; // Load 90 days for comprehensive patient data
   const [patients, setPatients] = useState<User[]>([]);
   const [selectedPatient, setSelectedPatient] = useState<User | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
@@ -52,7 +51,8 @@ export function ProviderDashboard({ user, onLogout }: ProviderDashboardProps) {
       const keysToRemove: string[] = [];
       for (let i = 0; i < sessionStorage.length; i++) {
         const key = sessionStorage.key(i);
-        if (key && key.startsWith('provider_') && !key.includes(`${PROVIDER_LOOKBACK_DAYS}d`)) {
+        // Clear all old provider cache entries to ensure fresh data
+        if (key && key.startsWith('provider_')) {
           keysToRemove.push(key);
         }
       }
@@ -69,9 +69,9 @@ export function ProviderDashboard({ user, onLogout }: ProviderDashboardProps) {
     }
   }, [biomarkers, patternDataLoaded]);
 
-  // Generate cache key for data - include lookback days to invalidate when range changes
+  // Generate cache key for data - unique per provider per day
   const getCacheKey = (type: string, providerId: string) => {
-    return `provider_${type}_${providerId}_${PROVIDER_LOOKBACK_DAYS}d_${new Date().toDateString()}`;
+    return `provider_${type}_${providerId}_all_${new Date().toDateString()}`;
   };
 
   // Cache data in sessionStorage with expiry
@@ -116,10 +116,6 @@ export function ProviderDashboard({ user, onLogout }: ProviderDashboardProps) {
     setIsLoading(true);
     try {
       const providerId = user.user_id || user.id;
-      const now = new Date();
-      const rangeStart = new Date(now);
-      rangeStart.setDate(rangeStart.getDate() - PROVIDER_LOOKBACK_DAYS);
-      rangeStart.setHours(0, 0, 0, 0);
 
       // Try to get cached data first
       const patientsCacheKey = getCacheKey('patients', providerId);
@@ -131,15 +127,14 @@ export function ProviderDashboard({ user, onLogout }: ProviderDashboardProps) {
       let cachedBiomarkers = getCacheData(biomarkersCacheKey);
 
       // Load all critical data at once for comprehensive stats display
+      // Fetch ALL biomarkers without date filter to get accurate total counts
       const { fetchPatients, fetchAllPatientsAlerts, fetchAllPatientsBiomarkers } = await import('../utils/supabase');
 
       const [supabasePatients, supabaseAlerts, supabaseBiomarkers] = await Promise.all([
         cachedPatients ? Promise.resolve(cachedPatients) : fetchPatients(providerId),
         cachedAlerts ? Promise.resolve(cachedAlerts) : fetchAllPatientsAlerts(providerId),
-        cachedBiomarkers ? Promise.resolve(cachedBiomarkers) : fetchAllPatientsBiomarkers(providerId, {
-          startDate: rangeStart.toISOString(),
-          endDate: now.toISOString(),
-        })
+        // No date filter - fetch all biomarkers for accurate stats
+        cachedBiomarkers ? Promise.resolve(cachedBiomarkers) : fetchAllPatientsBiomarkers(providerId)
       ]);
 
       // Cache the fetched data
@@ -165,9 +160,9 @@ export function ProviderDashboard({ user, onLogout }: ProviderDashboardProps) {
         return;
       }
 
-      // Mark the full range as loaded
+      // Mark all data as loaded (no date range restriction)
       loadedProviderRangesRef.current.clear();
-      loadedProviderRangesRef.current.add(`all|${rangeStart.toISOString()}|${now.toISOString()}`);
+      loadedProviderRangesRef.current.add(`all|all|all`);
       loadingProviderRangesRef.current.clear();
 
     } catch (error) {
@@ -438,6 +433,11 @@ export function ProviderDashboard({ user, onLogout }: ProviderDashboardProps) {
       return patientAlerts.some(a => a.type === 'critical' || a.type === 'fault');
     }), [patients, alerts]);
 
+  // Count total critical/fault alerts (not just patients with them)
+  const totalCriticalAlerts = useMemo(() => 
+    alerts.filter(a => !a.read && (a.type === 'critical' || a.type === 'fault')).length
+  , [alerts]);
+
   if (selectedPatient) {
     return (
       <PatientDetail 
@@ -474,8 +474,9 @@ export function ProviderDashboard({ user, onLogout }: ProviderDashboardProps) {
         <ProviderStatsCards
           totalPatients={patients.length}
           criticalPatients={criticalPatients.length}
+          criticalAlerts={totalCriticalAlerts}
           activeMonitoring={patients.length}
-          totalReports={biomarkers.length}
+          totalReadings={biomarkers.length}
         />
 
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">

@@ -1024,82 +1024,33 @@ export async function fetchAllPatientsBiomarkers(providerId: string, options?: P
     // IDOR protection: only allow fetching patients' biomarkers for self
     if (auth.userId !== providerId) return []
 
-    // First, get the list of patient IDs who have granted active consent to this provider
-    const { data: consents, error: consentError } = await supabase
-      .from('access_consents')
-      .select('patient_id')
-      .eq('provider_id', auth.userId)
-      .eq('status', 'ACTIVE')
-      .is('revoked_at', null)
+    // Use RPC function to bypass RLS and fetch patient biomarkers
+    const { data, error } = await supabase
+      .rpc('get_patient_biomarkers_for_provider', {
+        provider_uuid: auth.userId
+      })
 
-    if (consentError) {
+    if (error) {
+      console.error('Error fetching patient biomarkers:', error)
       return []
     }
 
-    if (!consents || consents.length === 0) {
+    if (!data || data.length === 0) {
       return []
     }
 
-    // Extract patient IDs
-    const patientIds = consents.map(c => c.patient_id)
-
-    if (options?.patientId && !patientIds.includes(options.patientId)) {
-      return []
+    // Apply optional filters
+    let filteredData = data
+    if (options?.patientId) {
+      filteredData = filteredData.filter((item: any) => item.user_id === options.patientId)
     }
-
-    const pageSize = 1000
-    const allData: any[] = []
-    let from = 0
-
-    while (true) {
-      let query = supabase
-        .from('data_points')
-        .select(`
-          data_point_id,
-          user_id,
-          timestamp,
-          source_id,
-          biomarker_data (
-            type,
-            value,
-            secondary_value,
-            unit
-          )
-        `)
-        .in('data_type', ['BIOMARKER', 'MANUAL'])
-        .order('timestamp', { ascending: false })
-        .order('data_point_id', { ascending: false })
-        .range(from, from + pageSize - 1)
-
-      if (options?.patientId) {
-        query = query.eq('user_id', options.patientId)
-      } else {
-        query = query.in('user_id', patientIds)
-      }
-      if (options?.startDate) {
-        query = query.gte('timestamp', options.startDate)
-      }
-      if (options?.endDate) {
-        query = query.lte('timestamp', options.endDate)
-      }
-
-      const { data, error } = await query
-
-      if (error) {
-        return []
-      }
-
-      if (!data || data.length === 0) {
-        break
-      }
-
-      allData.push(...data)
-
-      if (data.length < pageSize) {
-        break
-      }
-
-      from += pageSize
+    if (options?.startDate) {
+      const startDate = new Date(options.startDate)
+      filteredData = filteredData.filter((item: any) => new Date(item.timestamp) >= startDate)
+    }
+    if (options?.endDate) {
+      const endDate = new Date(options.endDate)
+      filteredData = filteredData.filter((item: any) => new Date(item.timestamp) <= endDate)
     }
 
     // Map database format to frontend format
@@ -1114,36 +1065,33 @@ export async function fetchAllPatientsBiomarkers(providerId: string, options?: P
       'WEIGHT': 'weight'
     }
 
-    return allData
-      .filter(item => item.biomarker_data)
-      .map(item => {
-        const biomarkerData = Array.isArray(item.biomarker_data)
-          ? item.biomarker_data[0]
-          : item.biomarker_data
-
-        const frontendType = typeMapping[biomarkerData.type] || 'heartRate';
+    return filteredData
+      .filter((item: any) => item.biomarker_type)
+      .map((item: any) => {
+        const frontendType = typeMapping[item.biomarker_type] || 'heartRate';
 
         const biomarker: Biomarker = {
           id: item.data_point_id,
           userId: item.user_id,
           deviceId: item.source_id || 'deleted-device',
           type: frontendType,
-          value: biomarkerData.value,
+          value: item.biomarker_value,
           timestamp: normalizeTimestamp(item.timestamp),
           isFaulty: false
         };
 
         // Add blood pressure specific fields
         if (frontendType === 'bloodPressure') {
-          biomarker.systolic = biomarkerData.value;
-          biomarker.diastolic = biomarkerData.secondary_value;
-        } else if (biomarkerData.secondary_value) {
-          biomarker.diastolic = biomarkerData.secondary_value;
+          biomarker.systolic = item.biomarker_value;
+          biomarker.diastolic = item.secondary_value;
+        } else if (item.secondary_value) {
+          biomarker.diastolic = item.secondary_value;
         }
 
         return biomarker;
       })
   } catch (error) {
+    console.error('Error in fetchAllPatientsBiomarkers:', error)
     return []
   }
 }
@@ -1163,62 +1111,43 @@ export async function fetchAllPatientsAlerts(providerId: string): Promise<Alert[
     // IDOR protection: only allow fetching patients' alerts for self
     if (auth.userId !== providerId) return []
 
-    // First, get the list of patient IDs who have granted active consent to this provider
-    const { data: consents, error: consentError } = await supabase
-      .from('access_consents')
-      .select('patient_id')
-      .eq('provider_id', auth.userId)
-      .eq('status', 'ACTIVE')
-      .is('revoked_at', null)
+    // Use RPC function to bypass RLS and fetch patient alerts
+    const { data, error } = await supabase
+      .rpc('get_patient_alerts_for_provider', {
+        provider_uuid: auth.userId
+      })
 
-    if (consentError) {
+    if (error) {
+      console.error('Error fetching patient alerts:', error)
       return []
     }
 
-    if (!consents || consents.length === 0) {
+    if (!data || data.length === 0) {
       return []
-    }
-
-    // Extract patient IDs
-    const patientIds = consents.map(c => c.patient_id)
-
-    const pageSize = 1000
-    const allData: any[] = []
-    let from = 0
-
-    while (true) {
-      const { data, error } = await supabase
-        .from('notifications')
-        .select('notification_id, user_id, type, content, timestamp, is_read')
-        .eq('type', 'ALERT')
-        .in('user_id', patientIds)
-        .order('timestamp', { ascending: false })
-        .order('notification_id', { ascending: false })
-        .range(from, from + pageSize - 1)
-
-      if (error) {
-        return []
-      }
-
-      if (!data || data.length === 0) {
-        break
-      }
-
-      allData.push(...data)
-
-      if (data.length < pageSize) {
-        break
-      }
-
-      from += pageSize
     }
 
     // Map database format to frontend format
-    return allData.map(notification => {
+    return data.map((notification: any) => {
+      // Determine alert type based on content keywords
+      const content = (notification.content || '').toLowerCase()
+      let alertType: 'warning' | 'critical' | 'info' | 'fault' = notification.is_read ? 'info' : 'warning'
+      
+      // Check for critical keywords in content
+      const criticalKeywords = ['critical', 'urgent', 'emergency', 'immediate', 'severe', 'dangerous', 'crisis', 'hypertensive']
+      const faultKeywords = ['fault', 'faulty', 'malfunction', 'error', 'invalid', 'implausible']
+      
+      if (!notification.is_read) {
+        if (criticalKeywords.some(keyword => content.includes(keyword))) {
+          alertType = 'critical'
+        } else if (faultKeywords.some(keyword => content.includes(keyword))) {
+          alertType = 'fault'
+        }
+      }
+      
       return {
         id: notification.notification_id,
         userId: notification.user_id,
-        type: notification.is_read ? 'info' : 'warning',
+        type: alertType,
         message: notification.content,
         timestamp: normalizeTimestamp(notification.timestamp),
         biomarkerType: undefined,
@@ -1226,6 +1155,7 @@ export async function fetchAllPatientsAlerts(providerId: string): Promise<Alert[
       } as Alert
     })
   } catch (error) {
+    console.error('Error in fetchAllPatientsAlerts:', error)
     return []
   }
 }
