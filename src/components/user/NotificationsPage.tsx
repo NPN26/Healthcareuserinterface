@@ -6,6 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../ui
 import { ScrollArea } from '../ui/scroll-area';
 import { Input } from '../ui/input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
+import { HeartbeatLoader } from '../ui/HeartbeatLoader';
 import {
   Select,
   SelectContent,
@@ -35,6 +36,7 @@ interface NotificationsPageProps {
   onDelete: (notificationId: string) => Promise<void>;
   onDeleteAll: () => Promise<void>;
   onRefresh: () => Promise<void>;
+  isLoading?: boolean;
 }
 
 const notificationTypeConfig = {
@@ -74,6 +76,7 @@ export function NotificationsPage({
   onDelete,
   onDeleteAll,
   onRefresh,
+  isLoading = false,
 }: NotificationsPageProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const [filterType, setFilterType] = useState<string>('all');
@@ -267,7 +270,11 @@ export function NotificationsPage({
       <div className="flex-1 overflow-hidden">
         <ScrollArea className="h-full">
           <div className="h-full">
-            {filteredNotifications.length === 0 ? (
+            {isLoading ? (
+              <div className="flex flex-col items-center justify-center py-20 px-4 text-center">
+                <HeartbeatLoader label="Loading notifications…" size="md" />
+              </div>
+            ) : filteredNotifications.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-20 px-4 text-center">
             <Bell className="w-16 h-16 text-muted-foreground/40 mb-4" />
             <p className="text-lg font-medium text-muted-foreground">

@@ -16,7 +16,7 @@ interface ProviderDashboardProps {
 }
 
 export function ProviderDashboard({ user, onLogout }: ProviderDashboardProps) {
-  const PROVIDER_LOOKBACK_DAYS = 30;
+  const PROVIDER_LOOKBACK_DAYS = 90; // Load 90 days for comprehensive patient data
   const [patients, setPatients] = useState<User[]>([]);
   const [selectedPatient, setSelectedPatient] = useState<User | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
@@ -25,7 +25,6 @@ export function ProviderDashboard({ user, onLogout }: ProviderDashboardProps) {
   const [isDarkMode, setIsDarkMode] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [isBiomarkerRangeLoading, setIsBiomarkerRangeLoading] = useState(false);
-  const [isPatternDataLoading, setIsPatternDataLoading] = useState(false);
   const [patternDataLoaded, setPatternDataLoaded] = useState(false);
   const [showAccessRequest, setShowAccessRequest] = useState(false);
   const [showPatientSelect, setShowPatientSelect] = useState(false);
@@ -36,6 +35,8 @@ export function ProviderDashboard({ user, onLogout }: ProviderDashboardProps) {
   const loadingProviderRangesRef = useRef<Set<string>>(new Set());
 
   useEffect(() => {
+    // Clear old provider cache entries to ensure fresh data load
+    clearOldProviderCache();
     loadData();
     // Check for dark mode preference
     const darkMode = localStorage.getItem('healthApp_darkMode') === 'true';
@@ -45,16 +46,32 @@ export function ProviderDashboard({ user, onLogout }: ProviderDashboardProps) {
     }
   }, []);
 
-  // Lazy load pattern analysis data when user switches to that tab
-  useEffect(() => {
-    if (activeTab === 'patterns' && !patternDataLoaded && !isPatternDataLoading) {
-      loadPatternData();
+  // Clear old provider cache entries that might have stale data
+  const clearOldProviderCache = () => {
+    try {
+      const keysToRemove: string[] = [];
+      for (let i = 0; i < sessionStorage.length; i++) {
+        const key = sessionStorage.key(i);
+        if (key && key.startsWith('provider_') && !key.includes(`${PROVIDER_LOOKBACK_DAYS}d`)) {
+          keysToRemove.push(key);
+        }
+      }
+      keysToRemove.forEach(key => sessionStorage.removeItem(key));
+    } catch (error) {
+      // Silently fail on cache cleanup errors
     }
-  }, [activeTab, patternDataLoaded, isPatternDataLoading]);
+  };
 
-  // Generate cache key for data
+  // Pattern data is now loaded upfront, so mark it as ready when data loads
+  useEffect(() => {
+    if (biomarkers.length > 0 && !patternDataLoaded) {
+      setPatternDataLoaded(true);
+    }
+  }, [biomarkers, patternDataLoaded]);
+
+  // Generate cache key for data - include lookback days to invalidate when range changes
   const getCacheKey = (type: string, providerId: string) => {
-    return `provider_${type}_${providerId}_${new Date().toDateString()}`;
+    return `provider_${type}_${providerId}_${PROVIDER_LOOKBACK_DAYS}d_${new Date().toDateString()}`;
   };
 
   // Cache data in sessionStorage with expiry
@@ -107,21 +124,28 @@ export function ProviderDashboard({ user, onLogout }: ProviderDashboardProps) {
       // Try to get cached data first
       const patientsCacheKey = getCacheKey('patients', providerId);
       const alertsCacheKey = getCacheKey('alerts', providerId);
+      const biomarkersCacheKey = getCacheKey('biomarkers_all', providerId);
 
       let cachedPatients = getCacheData(patientsCacheKey);
       let cachedAlerts = getCacheData(alertsCacheKey);
+      let cachedBiomarkers = getCacheData(biomarkersCacheKey);
 
-      // Always fetch patients and alerts (critical data)
-      const { fetchPatients, fetchAllPatientsAlerts } = await import('../utils/supabase');
+      // Load all critical data at once for comprehensive stats display
+      const { fetchPatients, fetchAllPatientsAlerts, fetchAllPatientsBiomarkers } = await import('../utils/supabase');
 
-      const [supabasePatients, supabaseAlerts] = await Promise.all([
+      const [supabasePatients, supabaseAlerts, supabaseBiomarkers] = await Promise.all([
         cachedPatients ? Promise.resolve(cachedPatients) : fetchPatients(providerId),
-        cachedAlerts ? Promise.resolve(cachedAlerts) : fetchAllPatientsAlerts(providerId)
+        cachedAlerts ? Promise.resolve(cachedAlerts) : fetchAllPatientsAlerts(providerId),
+        cachedBiomarkers ? Promise.resolve(cachedBiomarkers) : fetchAllPatientsBiomarkers(providerId, {
+          startDate: rangeStart.toISOString(),
+          endDate: now.toISOString(),
+        })
       ]);
 
       // Cache the fetched data
       if (!cachedPatients) setCacheData(patientsCacheKey, supabasePatients);
       if (!cachedAlerts) setCacheData(alertsCacheKey, supabaseAlerts);
+      if (!cachedBiomarkers) setCacheData(biomarkersCacheKey, supabaseBiomarkers);
 
       // Map Patient type to User type
       const mappedPatients: User[] = supabasePatients.map((patient: Patient) => ({
@@ -133,6 +157,7 @@ export function ProviderDashboard({ user, onLogout }: ProviderDashboardProps) {
 
       setPatients(mappedPatients);
       setAlerts(supabaseAlerts);
+      setBiomarkers(supabaseBiomarkers);
 
       if (supabasePatients.length === 0) {
         toast.info('No patients have granted you access yet');
@@ -140,28 +165,11 @@ export function ProviderDashboard({ user, onLogout }: ProviderDashboardProps) {
         return;
       }
 
-      // Load recent biomarkers only (last 7 days for immediate display)
-      const recentRangeStart = new Date(now);
-      recentRangeStart.setDate(recentRangeStart.getDate() - 7);
-      recentRangeStart.setHours(0, 0, 0, 0);
-
-      const biomarkersCacheKey = getCacheKey('biomarkers_week', providerId);
-      let cachedBiomarkers = getCacheData(biomarkersCacheKey);
-
-      const { fetchAllPatientsBiomarkers } = await import('../utils/supabase');
-      const recentBiomarkers = cachedBiomarkers ? cachedBiomarkers : await fetchAllPatientsBiomarkers(providerId, {
-        startDate: recentRangeStart.toISOString(),
-        endDate: now.toISOString(),
-      });
-
-      if (!cachedBiomarkers) setCacheData(biomarkersCacheKey, recentBiomarkers);
-
-      setBiomarkers(recentBiomarkers);
+      // Mark the full range as loaded
       loadedProviderRangesRef.current.clear();
-      loadedProviderRangesRef.current.add(`all|${recentRangeStart.toISOString()}|${now.toISOString()}`);
+      loadedProviderRangesRef.current.add(`all|${rangeStart.toISOString()}|${now.toISOString()}`);
       loadingProviderRangesRef.current.clear();
 
-      // Load remaining biomarker data in background for pattern analysis
     } catch (error) {
       toast.error('Failed to load data from database');
       // Don't fall back to localStorage - show empty data for provider
@@ -176,36 +184,10 @@ export function ProviderDashboard({ user, onLogout }: ProviderDashboardProps) {
   };
 
   const loadPatternData = async () => {
-    if (patternDataLoaded || isPatternDataLoading) return;
-
-    setIsPatternDataLoading(true);
-    try {
-      const providerId = user.user_id || user.id;
-      const now = new Date();
-      const rangeStart = new Date(now);
-      rangeStart.setDate(rangeStart.getDate() - 90); // Load 3 months for pattern analysis
-      rangeStart.setHours(0, 0, 0, 0);
-
-      const patternCacheKey = getCacheKey('biomarkers_pattern', providerId);
-      let cachedPatternData = getCacheData(patternCacheKey);
-
-      if (!cachedPatternData) {
-        const { fetchAllPatientsBiomarkers } = await import('../utils/supabase');
-        cachedPatternData = await fetchAllPatientsBiomarkers(providerId, {
-          startDate: rangeStart.toISOString(),
-          endDate: now.toISOString(),
-        });
-        setCacheData(patternCacheKey, cachedPatternData);
-      }
-
-      // Merge with existing biomarkers
-      setBiomarkers(prev => mergeBiomarkers(prev, cachedPatternData));
-      setPatternDataLoaded(true);
-    } catch (error) {
-      toast.error('Failed to load pattern analysis data');
-    } finally {
-      setIsPatternDataLoading(false);
-    }
+    // Pattern data is now loaded upfront in loadData(), so this is a no-op
+    // Kept for backwards compatibility but does nothing
+    if (patternDataLoaded) return;
+    setPatternDataLoaded(true);
   };
 
   const toggleDarkMode = () => {
@@ -527,7 +509,7 @@ export function ProviderDashboard({ user, onLogout }: ProviderDashboardProps) {
             <PatternAnalysis
               patients={patients}
               biomarkers={biomarkers}
-              isLoading={isPatternDataLoading || !patternDataLoaded}
+              isLoading={!patternDataLoaded}
             />
           </TabsContent>
         </Tabs>

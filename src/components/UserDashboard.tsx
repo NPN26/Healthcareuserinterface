@@ -5,6 +5,7 @@ import autoTable from 'jspdf-autotable';
 import { Chart } from 'chart.js/auto';
 import { Checkbox } from './ui/checkbox';
 import { Activity, Flame, Droplet, Settings, User, Heart, Wind, Footprints, Moon, Plus, Scale, Zap, Target, Trophy, Star, Crown, Sparkles, Award, RefreshCw, Edit2, Check, X } from 'lucide-react';
+import { HeartbeatLoader } from './ui/HeartbeatLoader';
 import {
   BiomarkerChart,
   DeviceCard,
@@ -203,25 +204,25 @@ export function UserDashboard({ user, onLogout }: UserDashboardProps) {
     if (biomarkers.length === 0) {
       setIsDataLoading(true);
     }
-    let supabaseBiomarkers: Biomarker[] = [];
+    let supabaseRecentBiomarkers: Biomarker[] = [];
     let supabaseDevices: Device[] = [];
     let supabaseAlerts: Alert[] = [];
     let supabaseNotifications: Notification[] = [];
     let dbLoadSuccess = false;
 
     try {
-      // Always try to load from Supabase first
+      // Stage 1: Load recent data (last 7 days) for quick display
       const { fetchBiomarkers, fetchDevices, fetchAlerts, fetchNotifications } = await import('../utils/supabase');
 
       const now = new Date();
-      const rangeStart = new Date(now);
-      rangeStart.setDate(rangeStart.getDate() - BIOMARKER_LOOKBACK_DAYS);
-      rangeStart.setHours(0, 0, 0, 0);
-      const rangeKey = `${rangeStart.toISOString()}|${now.toISOString()}`;
+      const recentRangeStart = new Date(now);
+      recentRangeStart.setDate(recentRangeStart.getDate() - 7);
+      recentRangeStart.setHours(0, 0, 0, 0);
+      const recentRangeKey = `${recentRangeStart.toISOString()}|${now.toISOString()}`;
 
-      [supabaseBiomarkers, supabaseDevices, supabaseAlerts, supabaseNotifications] = await Promise.all([
+      [supabaseRecentBiomarkers, supabaseDevices, supabaseAlerts, supabaseNotifications] = await Promise.all([
         fetchBiomarkers(user.user_id || user.id, {
-          startDate: rangeStart.toISOString(),
+          startDate: recentRangeStart.toISOString(),
           endDate: now.toISOString(),
         }),
         fetchDevices(user.user_id || user.id),
@@ -231,18 +232,22 @@ export function UserDashboard({ user, onLogout }: UserDashboardProps) {
 
       dbLoadSuccess = true;
       loadedBiomarkerRangesRef.current.clear();
-      loadedBiomarkerRangesRef.current.add(rangeKey);
+      loadedBiomarkerRangesRef.current.add(recentRangeKey);
       loadingBiomarkerRangesRef.current.clear();
     } catch (error) {
     }
 
     // If database load was successful, use that data
     if (dbLoadSuccess) {
-      setBiomarkers(prev => mergeBiomarkers(prev, supabaseBiomarkers));
+      setBiomarkers(prev => mergeBiomarkers(prev, supabaseRecentBiomarkers));
       setDevices(supabaseDevices);
       setAlerts(supabaseAlerts);
       setNotifications(supabaseNotifications);
       setUnreadNotificationsCount(supabaseNotifications.filter(n => !n.is_read).length);
+      setIsDataLoading(false);
+
+      // Stage 2: Load remaining data (8-30 days) in background
+      loadOlderBiomarkers();
     } else {
       // Fallback to localStorage only if database fails completely
       const { secureGetItem } = await import('../utils/secureStorage');
@@ -261,9 +266,41 @@ export function UserDashboard({ user, onLogout }: UserDashboardProps) {
       setUnreadNotificationsCount(0);
       loadedBiomarkerRangesRef.current.clear();
       loadingBiomarkerRangesRef.current.clear();
+      setIsDataLoading(false);
     }
+  };
 
-    setIsDataLoading(false);
+  const loadOlderBiomarkers = async () => {
+    try {
+      const { fetchBiomarkers } = await import('../utils/supabase');
+      
+      const now = new Date();
+      const olderRangeStart = new Date(now);
+      olderRangeStart.setDate(olderRangeStart.getDate() - BIOMARKER_LOOKBACK_DAYS);
+      olderRangeStart.setHours(0, 0, 0, 0);
+      
+      const recentRangeStart = new Date(now);
+      recentRangeStart.setDate(recentRangeStart.getDate() - 7);
+      recentRangeStart.setHours(0, 0, 0, 0);
+      
+      const olderRangeKey = `${olderRangeStart.toISOString()}|${recentRangeStart.toISOString()}`;
+
+      // Check if we already loaded this range
+      if (loadedBiomarkerRangesRef.current.has(olderRangeKey)) {
+        return;
+      }
+
+      const olderBiomarkers = await fetchBiomarkers(user.user_id || user.id, {
+        startDate: olderRangeStart.toISOString(),
+        endDate: recentRangeStart.toISOString(),
+      });
+
+      setBiomarkers(prev => mergeBiomarkers(prev, olderBiomarkers));
+      loadedBiomarkerRangesRef.current.add(olderRangeKey);
+    } catch (error) {
+      // Silently fail - older data is nice to have but not critical
+      console.warn('Failed to load older biomarkers:', error);
+    }
   };
 
   const mergeBiomarkers = (existing: Biomarker[], incoming: Biomarker[]) => {
@@ -1176,7 +1213,13 @@ export function UserDashboard({ user, onLogout }: UserDashboardProps) {
                 </Button>
               </div>
             </div>
-            {devices.length === 0 ? (
+            {isDataLoading ? (
+              <Card className="p-8 text-center">
+                <div className="flex flex-col items-center justify-center">
+                  <HeartbeatLoader label="Loading devices…" size="md" />
+                </div>
+              </Card>
+            ) : devices.length === 0 ? (
               <Card className="p-8 text-center border-dashed">
                 <h3 className="text-lg font-semibold text-foreground mb-2">No devices connected yet</h3>
                 <p className="text-muted-foreground mb-5">Add your first device to start tracking biometrics automatically.</p>
@@ -1540,6 +1583,7 @@ export function UserDashboard({ user, onLogout }: UserDashboardProps) {
             onDelete={handleDeleteNotification}
             onDeleteAll={handleDeleteAllNotifications}
             onRefresh={handleRefreshNotifications}
+            isLoading={isDataLoading}
           />
         </div>
       )}
