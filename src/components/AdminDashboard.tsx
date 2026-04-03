@@ -133,39 +133,6 @@ export function AdminDashboard({ user, onLogout }: AdminDashboardProps) {
     document.documentElement.classList.toggle('dark', newMode);
   };
 
-  const simulateFaultForAllDevices = async () => {
-    try {
-      // Rate-limit admin bulk operations
-      const rateCheck = checkRateLimit('adminBulk', user.user_id || user.id);
-      if (!rateCheck.allowed) {
-        toast.error(rateCheck.message);
-        return;
-      }
-
-      const result = await updateAllDevicesStatus('faulty');
-      
-      if (result.success) {
-        // Log the audit event
-        await logAuditEvent(
-          user.user_id || user.id,
-          'SYSTEM_ACTION',
-          undefined,
-          'devices',
-          { action: 'simulate_fault', deviceCount: result.count, performedBy: user.name }
-        );
-        
-        // Reload devices to reflect changes
-        const updatedDevices = await fetchAllDevices();
-        setDevices(updatedDevices);
-        toast.success(`Fault simulation activated for ${result.count} devices`);
-      } else {
-        toast.error(result.message);
-      }
-    } catch (error) {
-      toast.error('Failed to simulate device faults');
-    }
-  };
-
   const resetAllDevices = async () => {
     try {
       // Rate-limit admin bulk operations
@@ -176,7 +143,7 @@ export function AdminDashboard({ user, onLogout }: AdminDashboardProps) {
       }
 
       const result = await updateAllDevicesStatus('active');
-      
+
       if (result.success) {
         // Log the audit event
         await logAuditEvent(
@@ -186,7 +153,7 @@ export function AdminDashboard({ user, onLogout }: AdminDashboardProps) {
           'devices',
           { action: 'reset_devices', deviceCount: result.count, performedBy: user.name }
         );
-        
+
         // Reload devices to reflect changes
         const updatedDevices = await fetchAllDevices();
         setDevices(updatedDevices);
@@ -197,12 +164,6 @@ export function AdminDashboard({ user, onLogout }: AdminDashboardProps) {
     } catch (error) {
       toast.error('Failed to reset devices');
     }
-  };
-
-  const generateBulkData = () => {
-    // TODO: Implement bulk data generation with Supabase
-    // This would require inserting into data_points and biomarker_data tables
-    toast.info('Bulk data generation not yet implemented with Supabase');
   };
 
   const clearAllAlerts = async () => {
@@ -527,8 +488,6 @@ export function AdminDashboard({ user, onLogout }: AdminDashboardProps) {
         />
 
         <QuickActionsCard
-          onGenerateData={generateBulkData}
-          onSimulateFaults={simulateFaultForAllDevices}
           onResetDevices={resetAllDevices}
           onClearAlerts={clearAllAlerts}
         />

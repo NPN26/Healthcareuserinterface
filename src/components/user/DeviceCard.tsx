@@ -148,17 +148,17 @@ export function DeviceCard({ device, onUpdate }: DeviceCardProps) {
   const syncDevice = async () => {
     setIsSyncing(true);
     const syncTime = new Date().toISOString();
-    
+
     // Generate new biomarker readings based on device's supported biomarkers
     if (device.supportedBiomarkers && device.supportedBiomarkers.length > 0) {
       try {
         const { generateBiomarkerData } = await import('../../utils/mockData');
         const { supabase } = await import('../../utils/supabase');
-        
+
         // Get current user
         const storedUsers = JSON.parse(await secureGetItem('healthApp_users') || '[]');
         const currentUser = storedUsers.find((u: any) => u.id === device.userId);
-        
+
         if (currentUser) {
           // Map frontend type to database enum
           const typeMapping: Record<string, string> = {
@@ -175,7 +175,7 @@ export function DeviceCard({ device, onUpdate }: DeviceCardProps) {
           // Generate readings for each supported biomarker
           for (const biomarkerType of device.supportedBiomarkers) {
             const newReading = generateBiomarkerData(currentUser.id, device.id, biomarkerType, new Date());
-            
+
             // First, create data_point
             const { data: dataPoint, error: dataPointError } = await supabase
               .from('data_points')
@@ -201,7 +201,7 @@ export function DeviceCard({ device, onUpdate }: DeviceCardProps) {
                   type: typeMapping[biomarkerType] || 'HEART_RATE',
                   value: newReading.value,
                   secondary_value: newReading.diastolic,
-                  unit: newReading.type === 'bloodPressure' ? 'mmHg' : 
+                  unit: newReading.type === 'bloodPressure' ? 'mmHg' :
                         newReading.type === 'heartRate' ? 'bpm' :
                         newReading.type === 'oxygen' ? '%' :
                         newReading.type === 'glucose' ? 'mg/dL' :
@@ -214,12 +214,12 @@ export function DeviceCard({ device, onUpdate }: DeviceCardProps) {
               if (biomarkerError) {
               }
             }
-            
+
             const allBiomarkers = JSON.parse(await secureGetItem('healthApp_biomarkers') || '[]');
             allBiomarkers.push(newReading);
             await secureSetItem('healthApp_biomarkers', JSON.stringify(allBiomarkers));
           }
-          
+
           toast.success(`Synced ${device.supportedBiomarkers.length} biomarker reading(s)`);
         }
       } catch (error) {
@@ -227,7 +227,7 @@ export function DeviceCard({ device, onUpdate }: DeviceCardProps) {
         setIsSyncing(false);
       }
     }
-    
+
     // Update device sync time in database with ownership verification
     try {
       const { supabase } = await import('../../utils/supabase');
@@ -254,49 +254,6 @@ export function DeviceCard({ device, onUpdate }: DeviceCardProps) {
     await secureSetItem('healthApp_devices', JSON.stringify(updated));
     setIsSyncing(false);
     await onUpdate();
-  };
-
-  const simulateFault = async () => {
-    // Update database with ownership verification
-    try {
-      const { supabase } = await import('../../utils/supabase');
-
-      // Get current metadata (with ownership check)
-      const { data: currentData } = await supabase
-        .from('data_sources')
-        .select('metadata')
-        .eq('source_id', device.id)
-        .eq('user_id', device.userId) // Ownership check
-        .single();
-
-      const currentMetadata = currentData?.metadata || {};
-
-      const { error } = await supabase
-        .from('data_sources')
-        .update({
-          status: 'ERROR',
-          metadata: {
-            ...currentMetadata,
-            status: 'faulty'
-          }
-        })
-        .eq('source_id', device.id)
-        .eq('user_id', device.userId); // Ownership check: only update if user owns this device
-
-      if (error) {
-      }
-    } catch (error) {
-    }
-
-    const devices = JSON.parse(await secureGetItem('healthApp_devices') || '[]');
-    const updated = devices.map((d: Device) =>
-      d.id === device.id
-        ? { ...d, status: 'faulty' }
-        : d
-    );
-    await secureSetItem('healthApp_devices', JSON.stringify(updated));
-    await onUpdate();
-    toast.error('Device fault detected!');
   };
 
   const deleteDevice = async () => {
@@ -494,17 +451,17 @@ export function DeviceCard({ device, onUpdate }: DeviceCardProps) {
       </div>
 
       <div className="pt-2 border-t flex gap-2">
-        <Button 
-          size="sm" 
-          variant="outline" 
+        <Button
+          size="sm"
+          variant="outline"
           className="flex-1"
           onClick={toggleDeviceStatus}
         >
           <Power className="w-4 h-4 mr-2" />
           {device.status === 'active' ? 'Turn Off' : 'Turn On'}
         </Button>
-        <Button 
-          size="sm" 
+        <Button
+          size="sm"
           className="flex-1"
           onClick={syncDevice}
           disabled={device.status !== 'active' || isSyncing}
@@ -518,20 +475,9 @@ export function DeviceCard({ device, onUpdate }: DeviceCardProps) {
         </Button>
       </div>
 
-      {device.status === 'active' && (
-        <Button 
-          size="sm" 
-          variant="destructive" 
-          className="w-full"
-          onClick={simulateFault}
-        >
-          Simulate Fault
-        </Button>
-      )}
-
-      <Button 
-        size="sm" 
-        variant="outline" 
+      <Button
+        size="sm"
+        variant="outline"
         className="w-full text-red-600 hover:text-red-700 hover:bg-red-50"
         onClick={() => setShowDeleteDialog(true)}
       >

@@ -67,13 +67,12 @@ export function generateBiomarkerData(
   userId: string,
   deviceId: string,
   type: Biomarker['type'],
-  date?: Date,
-  includeFault: boolean = false
+  date?: Date
 ): Biomarker {
   // Use provided date or current time
   const timestamp = date ? date.toISOString() : new Date().toISOString();
   const dateObj = date || new Date();
-  
+
   const baseValues: Record<Biomarker['type'], { min: number; max: number }> = {
     heartRate: { min: 60, max: 100 },
     bloodPressure: { min: 110, max: 130 },
@@ -87,7 +86,6 @@ export function generateBiomarkerData(
   };
 
   let value = Math.random() * (baseValues[type].max - baseValues[type].min) + baseValues[type].min;
-  let isFaulty = false;
   let notes: string | undefined;
 
   // Special handling for sleep to differentiate naps from nighttime sleep
@@ -104,17 +102,6 @@ export function generateBiomarkerData(
     }
   }
 
-  // Simulate fault (0.1% chance or forced)
-  if (includeFault || Math.random() < 0.001) {
-    if (type === 'steps') {
-      value = 50000; // Unrealistically high step increment
-      isFaulty = true;
-    } else if (type === 'heartRate') {
-      value = 250; // Impossibly high
-      isFaulty = true;
-    }
-  }
-
   const biomarker: Biomarker = {
     id: `${type}-${Date.now()}-${Math.random()}`,
     userId,
@@ -122,7 +109,6 @@ export function generateBiomarkerData(
     value: Math.round(value * 10) / 10,
     timestamp: timestamp,
     deviceId,
-    isFaulty,
     notes,
   };
 
