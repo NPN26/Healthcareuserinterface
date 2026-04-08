@@ -74,12 +74,12 @@ export function generateBiomarkerData(
   const dateObj = date || new Date();
 
   const baseValues: Record<Biomarker['type'], { min: number; max: number }> = {
-    heartRate: { min: 60, max: 100 },
-    bloodPressure: { min: 110, max: 130 },
-    glucose: { min: 70, max: 120 },
-    oxygen: { min: 95, max: 100 },
+    heartRate: { min: 40, max: 130 },
+    bloodPressure: { min: 95, max: 125 },
+    glucose: { min: 70, max: 150 },
+    oxygen: { min: 93, max: 100 },
     steps: { min: 10, max: 100 },
-    sleep: { min: 5, max: 9 },
+    sleep: { min: 5, max: 10 },
     temperature: { min: 36.1, max: 37.2 },
     weight: { min: 65, max: 85 },
     calories: { min: 100, max: 300 },
@@ -114,8 +114,25 @@ export function generateBiomarkerData(
 
   // Add blood pressure specific fields
   if (type === 'bloodPressure') {
-    biomarker.systolic = Math.round(value);
-    biomarker.diastolic = Math.round(value - 40 - Math.random() * 10);
+    const systolic = Math.round(value);
+
+    // Base ratio depending on systolic level
+    let ratio;
+    if (systolic < 120) ratio = 0.65;
+    else if (systolic < 140) ratio = 0.6;
+    else if (systolic < 160) ratio = 0.55;
+    else ratio = 0.5;
+
+    // Slight variation
+    const noise = (Math.random() - 0.5) * 0.1;
+
+    let diastolic = systolic * (ratio + noise);
+
+    // Clamp to realistic bounds
+    diastolic = Math.max(60, Math.min(diastolic, 120));
+
+    biomarker.systolic = systolic;
+    biomarker.diastolic = Math.round(diastolic);
   }
 
   return biomarker;

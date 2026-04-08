@@ -5,6 +5,7 @@ import { initializeMockData, User } from './utils/mockData';
 import { Toaster } from './components/ui/sonner';
 import { toast } from 'sonner';
 import { supabase } from './utils/supabase';
+import { signOut } from './utils/auth';
 import { initSecureStorage, clearSecureStorage, secureGetItem, secureSetItem, secureRemoveItem } from './utils/secureStorage';
 import { HeartbeatLoader } from './components/ui/HeartbeatLoader';
 
@@ -147,7 +148,13 @@ export default function App() {
     secureSetItem('healthApp_currentUser', JSON.stringify({ user_id: user.id }));
   };
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    const { error } = await signOut();
+    if (error) {
+      toast.error('Failed to log out. Please try again.');
+      return;
+    }
+
     setCurrentUser(null);
     secureRemoveItem('healthApp_currentUser');
     clearSecureStorage();
