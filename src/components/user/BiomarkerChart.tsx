@@ -381,7 +381,7 @@ export function BiomarkerChart({ biomarkers, type, showDetails, devices = [], is
             shape: 'circle',
           },
           label: {
-            text: result.severity === 'critical' ? '⚠ Critical' : result.severity === 'warning' ? '⚠ Warning' : '! Borderline',
+            text: result.severity === 'critical' ? '⚠ Critical' : result.severity === 'warning' ? '⚠ Warning' : 'Borderline',
             borderColor: result.severity === 'critical' ? '#ef4444' : '#f59e0b',
             style: { background: result.severity === 'critical' ? '#fef2f2' : '#fffbeb', color: '#111', fontSize: '10px', padding: { left: 4, right: 4, top: 2, bottom: 2 } },
             offsetY: -15,

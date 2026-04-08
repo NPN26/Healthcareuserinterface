@@ -1,12 +1,12 @@
 import { useState, useEffect, lazy, Suspense } from 'react';
 import type { Session } from '@supabase/supabase-js';
 import { AuthScreen } from './components/AuthScreen';
-import { initializeMockData, User } from './utils/mockData';
+import { User } from './utils/mockData';
 import { Toaster } from './components/ui/sonner';
 import { toast } from 'sonner';
 import { supabase } from './utils/supabase';
 import { signOut } from './utils/auth';
-import { initSecureStorage, clearSecureStorage, secureGetItem, secureSetItem, secureRemoveItem } from './utils/secureStorage';
+import { initSecureStorage, clearSecureStorage, secureSetItem, secureRemoveItem } from './utils/secureStorage';
 import { HeartbeatLoader } from './components/ui/HeartbeatLoader';
 
 const UserDashboard = lazy(() =>
@@ -29,7 +29,6 @@ function DashboardFallback() {
 
 export default function App() {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
-  const [users, setUsers] = useState<User[]>([]);
   const [isValidatingSession, setIsValidatingSession] = useState(true);
 
   useEffect(() => {
@@ -90,17 +89,6 @@ export default function App() {
         completeInitialValidation();
       }
     };
-
-    // Initialize mock data
-    initializeMockData();
-
-    // Load users from secure storage immediately
-    const loadUsers = async () => {
-      const rawUsers = await secureGetItem('healthApp_users');
-      const storedUsers = JSON.parse(rawUsers || '[]');
-      setUsers(storedUsers);
-    };
-    loadUsers();
 
     // Set up auth state change listener to handle session restoration
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
@@ -175,7 +163,7 @@ export default function App() {
   if (!currentUser) {
     return (
       <>
-        <AuthScreen onLogin={handleLogin} users={users} setUsers={setUsers} />
+        <AuthScreen onLogin={handleLogin} />
         <Toaster />
       </>
     );

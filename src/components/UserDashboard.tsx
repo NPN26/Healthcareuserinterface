@@ -261,7 +261,14 @@ export function UserDashboard({ user, onLogout }: UserDashboardProps) {
 
       setBiomarkers(storedBiomarkers.filter((b: Biomarker) => b.userId === user.id));
       setDevices(storedDevices.filter((d: Device) => d.userId === user.id));
-      setAlerts(storedAlerts.filter((a: Alert) => a.userId === user.id && !a.read));
+      setAlerts(
+        storedAlerts.filter(
+          (a: Alert) =>
+            a.userId === user.id &&
+            !a.read &&
+            (a.type === 'critical' || a.type === 'warning')
+        )
+      );
       setNotifications([]);
       setUnreadNotificationsCount(0);
       loadedBiomarkerRangesRef.current.clear();
@@ -547,17 +554,52 @@ export function UserDashboard({ user, onLogout }: UserDashboardProps) {
     }
 
     // Check for abnormal reading (using user's custom thresholds if set)
+    // Sleep is handled differently: alert only once per day if total sleep is below 7 hours.
     const userThresholds = currentUser.alertThresholds || undefined;
-    if (isAbnormalReading(type, newReading.value, userThresholds) || newReading.isFaulty) {
+    const nowDate = new Date();
+    const isSameLocalDay = (timestamp: string) => {
+      const d = new Date(timestamp);
+      return (
+        d.getFullYear() === nowDate.getFullYear() &&
+        d.getMonth() === nowDate.getMonth() &&
+        d.getDate() === nowDate.getDate()
+      );
+    };
+    const belongsToCurrentUser = (ownerId: string) => ownerId === user.id || ownerId === dashboardUserId;
+
+    const todaysSleepTotal = type === 'sleep'
+      ? [...biomarkers, newReading]
+          .filter(b => belongsToCurrentUser(b.userId) && b.type === 'sleep' && isSameLocalDay(b.timestamp))
+          .reduce((sum, b) => sum + b.value, 0)
+      : 0;
+
+    const hasSleepWarningToday = type === 'sleep'
+      ? alerts.some(a =>
+          belongsToCurrentUser(a.userId) &&
+          a.biomarkerType === 'sleep' &&
+          a.type === 'warning' &&
+          isSameLocalDay(a.timestamp)
+        )
+      : false;
+
+    const shouldTriggerAlert = newReading.isFaulty || (
+      type === 'sleep'
+        ? todaysSleepTotal < 7 && !hasSleepWarningToday
+        : isAbnormalReading(type, newReading.value, userThresholds)
+    );
+
+    if (shouldTriggerAlert) {
       // Import UUID generator
       const { generateUUID } = await import('../utils/supabase');
       
       const newAlert: Alert = {
         id: generateUUID(), // Generate proper UUID for database compatibility
-        userId: user.id,
+        userId: dashboardUserId,
         type: newReading.isFaulty ? 'fault' : 'warning',
         message: newReading.isFaulty 
           ? `Faulty reading detected: ${getBiomarkerLabel(type)} shows ${newReading.value} ${getBiomarkerUnit(type)}`
+          : type === 'sleep'
+          ? `Low sleep today: ${todaysSleepTotal.toFixed(1)} ${getBiomarkerUnit(type)}. Aim for at least 7 hours.`
           : `${getBiomarkerLabel(type)} is ${newReading.value > 100 ? 'high' : 'low'}: ${newReading.value} ${getBiomarkerUnit(type)}`,
         timestamp: new Date().toISOString(),
         biomarkerType: type,
@@ -590,8 +632,9 @@ export function UserDashboard({ user, onLogout }: UserDashboardProps) {
       });
 
       // Check if this reading is critically dangerous → show full-screen modal
+      // Sleep is intentionally excluded from critical flow.
       const readingValue = type === 'bloodPressure' ? (newReading.systolic || newReading.value) : newReading.value;
-      if (isCriticalReading(type, readingValue)) {
+      if (type !== 'sleep' && isCriticalReading(type, readingValue)) {
         const critical: CriticalAlert = {
           id: newAlert.id,
           type: type as CriticalAlert['type'],
@@ -620,7 +663,11 @@ export function UserDashboard({ user, onLogout }: UserDashboardProps) {
           setCriticalAlert(critical);
         }
       } else {
-        toast.error(newAlert.message);
+        if (newAlert.type === 'fault') {
+          toast.error(newAlert.message);
+        } else {
+          toast.warning(newAlert.message);
+        }
       }
     }
 
@@ -880,6 +927,9 @@ export function UserDashboard({ user, onLogout }: UserDashboardProps) {
   const selectedDateStr = selectedDate.toDateString();
   const filteredBiomarkers = biomarkers.filter(b =>
     new Date(b.timestamp).toDateString() === selectedDateStr
+  );
+  const activeSeverityAlerts = alerts.filter(
+    alert => alert.type === 'critical' || alert.type === 'warning'
   );
 
   const getFilteredLatestBiomarker = (type: Biomarker['type']) => {
@@ -1490,7 +1540,7 @@ export function UserDashboard({ user, onLogout }: UserDashboardProps) {
             </SidebarGroup>
           </SidebarContent>
 
-          <SidebarFooterAlerts alerts={alerts} />
+          <SidebarFooterAlerts alerts={activeSeverityAlerts} />
         </Sidebar>
 
         <SidebarInset>
@@ -1501,7 +1551,7 @@ export function UserDashboard({ user, onLogout }: UserDashboardProps) {
               onSearchChange={setSearchQuery}
               isDarkMode={isDarkMode}
               onToggleDarkMode={toggleDarkMode}
-              alertCount={alerts.length}
+              alertCount={activeSeverityAlerts.length}
               onProfileClick={() => { setProfileInitialTab('personal'); setShowProfile(true); }}
               onSettingsClick={() => { setProfileInitialTab('personal'); setShowProfile(true); }}
               onLogout={handleLogout}

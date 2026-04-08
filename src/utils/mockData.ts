@@ -152,13 +152,28 @@ export function generateHistoricalData(
     const date = new Date(now);
     date.setDate(date.getDate() - i);
 
-    // Generate multiple readings per day for some types
-    const readingsPerDay = ['heartRate', 'glucose'].includes(type) ? 4 : 1;
+    if (type === 'sleep') {
+      // One nighttime sleep entry (e.g., 4 AM)
+      const nightSleepDate = new Date(date);
+      nightSleepDate.setHours(4, 0, 0, 0);
+      data.push(generateBiomarkerData(userId, deviceId, type, nightSleepDate));
 
-    for (let j = 0; j < readingsPerDay; j++) {
-      const readingDate = new Date(date);
-      readingDate.setHours(6 + j * 4);
-      data.push(generateBiomarkerData(userId, deviceId, type, readingDate));
+      // 0-2 naps per day at random times between 9 AM and 5 PM
+      const napCount = Math.floor(Math.random() * 3); // 0, 1, or 2 naps
+      for (let n = 0; n < napCount; n++) {
+        const napHour = 9 + Math.floor(Math.random() * 8); // 9-16
+        const napDate = new Date(date);
+        napDate.setHours(napHour, Math.floor(Math.random() * 60), 0, 0);
+        data.push(generateBiomarkerData(userId, deviceId, type, napDate));
+      }
+    } else {
+      // Generate multiple readings per day for some types
+      const readingsPerDay = ['heartRate', 'glucose', 'oxygen', 'bloodPressure'].includes(type) ? 4 : 1;
+      for (let j = 0; j < readingsPerDay; j++) {
+        const readingDate = new Date(date);
+        readingDate.setHours(6 + j * 4);
+        data.push(generateBiomarkerData(userId, deviceId, type, readingDate));
+      }
     }
   }
 

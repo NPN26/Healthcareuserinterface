@@ -33,6 +33,34 @@ export function QuickStatsGrid({ biomarkers, getLatestBiomarker, getTrend, onCar
     { type: 'sleep' as const, icon: Moon, color: 'text-indigo-500' },
   ];
 
+  // Helper to get today's total steps
+  function getTodaysTotalSteps(): number {
+    const today = new Date();
+    const yyyy = today.getFullYear();
+    const mm = today.getMonth();
+    const dd = today.getDate();
+    return biomarkers
+      .filter(b => b.type === 'steps' && (() => {
+        const d = new Date(b.timestamp);
+        return d.getFullYear() === yyyy && d.getMonth() === mm && d.getDate() === dd;
+      })())
+      .reduce((sum, b) => sum + b.value, 0);
+  }
+
+  // Helper to get today's total sleep
+  function getTodaysTotalSleep(): number {
+    const today = new Date();
+    const yyyy = today.getFullYear();
+    const mm = today.getMonth();
+    const dd = today.getDate();
+    return biomarkers
+      .filter(b => b.type === 'sleep' && (() => {
+        const d = new Date(b.timestamp);
+        return d.getFullYear() === yyyy && d.getMonth() === mm && d.getDate() === dd;
+      })())
+      .reduce((sum, b) => sum + b.value, 0);
+  }
+
   return (
     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
       {biomarkerCards.map(({ type, icon: Icon, color }) => {
@@ -57,7 +85,9 @@ export function QuickStatsGrid({ biomarkers, getLatestBiomarker, getTrend, onCar
                     {type === 'bloodPressure' && latest 
                       ? `${latest.systolic}/${latest.diastolic}`
                       : type === 'steps' 
-                      ? Math.round(latest?.value || 0)
+                      ? Math.round(getTodaysTotalSteps())
+                      : type === 'sleep'
+                      ? Math.round(getTodaysTotalSleep()) + ' hrs'
                       : latest?.value.toFixed(1) || '--'}
                     <span className="text-sm text-muted-foreground ml-1">
                       {getBiomarkerUnit(type)}

@@ -302,9 +302,23 @@ export function ProfilePage({ user, onBack, onUpdate, initialTab = 'personal' }:
   const loadAlertHistory = async () => {
     setIsAlertHistoryLoading(true);
     try {
-      const { fetchAlerts } = await import('../../utils/supabase');
+      const { fetchNotifications } = await import('../../utils/supabase');
       const userId = user.user_id || user.id;
-      const alerts = await fetchAlerts(userId);
+      const notifications = await fetchNotifications(userId);
+      const criticalKeywords = ['critical', 'urgent', 'emergency', 'immediate', 'severe', 'dangerous', 'crisis'];
+      const alerts = notifications
+        .filter((n: any) => n.type === 'ALERT')
+        .map((n: any) => {
+          const content = (n.content || '').toLowerCase();
+          const severity = criticalKeywords.some((keyword) => content.includes(keyword)) ? 'critical' : 'warning';
+          return {
+            id: n.notification_id,
+            type: severity,
+            message: n.content,
+            timestamp: n.timestamp,
+            read: n.is_read,
+          };
+        });
       // Sort most recent first
       const sorted = [...alerts].sort(
         (a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()

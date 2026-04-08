@@ -310,6 +310,7 @@ export async function fetchAlerts(userId: string): Promise<Alert[]> {
       .from('notifications')
       .select('notification_id, user_id, type, content, timestamp, is_read')
       .eq('user_id', auth.userId)
+      .eq('type', 'ALERT')
       .eq('is_read', false)
       .order('timestamp', { ascending: false })
       .limit(100)
@@ -321,12 +322,18 @@ export async function fetchAlerts(userId: string): Promise<Alert[]> {
 
     if (!data) return []
 
+    const isCriticalAlertContent = (content: string) => {
+      const normalized = (content || '').toLowerCase()
+      const criticalKeywords = ['critical', 'urgent', 'emergency', 'immediate', 'severe', 'dangerous', 'crisis']
+      return criticalKeywords.some(keyword => normalized.includes(keyword))
+    }
+
     // Map database format to frontend format
     return data.map(notification => {
       return {
         id: notification.notification_id,
         userId: auth.userId,
-        type: notification.type === 'ALERT' ? 'warning' : 'info',
+        type: isCriticalAlertContent(notification.content) ? 'critical' : 'warning',
         message: notification.content,
         timestamp: notification.timestamp,
         biomarkerType: undefined,

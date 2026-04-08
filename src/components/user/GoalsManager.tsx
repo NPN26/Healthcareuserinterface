@@ -353,9 +353,9 @@ export function GoalsManager({ isOpen, onClose, userId, biomarkers }: GoalsManag
       return Math.round((systolicProgress + diastolicProgress) / 2);
     }
 
-    // For steps, sum all values in the period
-    // For weight and other metrics, use average
-    const current = goal.type === 'steps' 
+    // For steps, accumulate readings in the period.
+    // For weight and other metrics, use average.
+    const current = goal.type === 'steps'
       ? relevantData.reduce((sum, b) => sum + b.value, 0)
       : relevantData.reduce((sum, b) => sum + b.value, 0) / relevantData.length;
 

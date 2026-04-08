@@ -22,11 +22,13 @@ export function DailySummary({ biomarkers, selectedDate }: DailySummaryProps) {
     )[0];
   };
 
-  const steps = getLatestToday('steps');
+  const stepsReadings = todaysBiomarkers.filter(b => b.type === 'steps');
+  const stepsTotal = stepsReadings.reduce((sum, reading) => sum + reading.value, 0);
   const stepsGoal = 10000;
-  const stepsProgress = steps ? Math.min((steps.value / stepsGoal) * 100, 100) : 0;
+  const stepsProgress = stepsReadings.length > 0 ? Math.min((stepsTotal / stepsGoal) * 100, 100) : 0;
 
-  const sleep = getLatestToday('sleep');
+  const sleepreadings = todaysBiomarkers.filter(b => b.type === 'sleep');
+  const sleep = sleepreadings.length > 0 ? sleepreadings.reduce((acc, curr) => acc.value > curr.value ? acc : curr) : undefined;
   const sleepGoal = 8;
   const sleepProgress = sleep ? Math.min((sleep.value / sleepGoal) * 100, 100) : 0;
 
@@ -41,8 +43,8 @@ export function DailySummary({ biomarkers, selectedDate }: DailySummaryProps) {
   const healthScore = Math.round((normalCount / totalChecks) * 100);
 
   const recommendations = [];
-  if (steps && steps.value < stepsGoal) {
-    recommendations.push(`Walk ${Math.round(stepsGoal - steps.value).toLocaleString()} more steps to reach your goal`);
+  if (stepsReadings.length > 0 && stepsTotal < stepsGoal) {
+    recommendations.push(`Walk ${Math.round(stepsGoal - stepsTotal).toLocaleString()} more steps to reach your goal`);
   }
   if (sleep && sleep.value < 7) {
     recommendations.push('Try to get at least 7-8 hours of sleep tonight');
@@ -50,7 +52,7 @@ export function DailySummary({ biomarkers, selectedDate }: DailySummaryProps) {
   if (heartRate && heartRate.value > 100) {
     recommendations.push('Your heart rate is elevated. Consider some relaxation exercises');
   }
-  if (!steps) {
+  if (stepsReadings.length === 0) {
     recommendations.push('Start tracking your steps today');
   }
 
@@ -91,7 +93,7 @@ export function DailySummary({ biomarkers, selectedDate }: DailySummaryProps) {
             <div className="flex items-center justify-between mb-2">
               <p className="text-sm text-gray-600">Steps Goal</p>
               <Badge variant={stepsProgress >= 100 ? 'default' : 'secondary'}>
-                {steps ? `${Math.round(steps.value).toLocaleString()}/${stepsGoal.toLocaleString()}` : 'No data'}
+                {stepsReadings.length > 0 ? `${Math.round(stepsTotal).toLocaleString()}/${stepsGoal.toLocaleString()}` : 'No data'}
               </Badge>
             </div>
             <Progress value={stepsProgress} className="h-2 mb-2" />

@@ -21,8 +21,6 @@ import { supabase } from '../utils/supabase';
 
 interface AuthScreenProps {
   onLogin: (user: User) => void;
-  users: User[];
-  setUsers: (users: User[]) => void;
 }
 
 export function AuthScreen({ onLogin }: AuthScreenProps) {
